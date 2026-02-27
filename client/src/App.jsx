@@ -4,6 +4,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Applications from './pages/Applications';
+import Users from './pages/Users';
+import Franchises from './pages/Franchises';
 import Sidebar from './components/Sidebar';
 
 function ProtectedLayout({ children }) {
@@ -20,6 +22,12 @@ function ProtectedLayout({ children }) {
   );
 }
 
+function AdminOnly({ children }) {
+  const { user } = useAuth();
+  if (user?.role !== 'Admin') return <Navigate to="/" />;
+  return children;
+}
+
 function AppRoutes() {
   const { user } = useAuth();
   return (
@@ -28,6 +36,12 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />
+      <Route path="/users" element={
+        <ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>
+      } />
+      <Route path="/franchises" element={
+        <ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>
+      } />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );

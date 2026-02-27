@@ -23,3 +23,11 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 app.use('/api/documents', require('./routes/documents'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/franchises', require('./routes/franchises'));
+
+
+
+
+
+
