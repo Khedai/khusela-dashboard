@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
+import * as S from '../utils/styles';
 
 const EMPTY_FORM = { username: '', password: '', role: 'Consultant', franchise_id: '' };
 
@@ -18,181 +19,127 @@ export default function Users() {
 
   const fetchData = async () => {
     try {
-      const [usersRes, franchisesRes] = await Promise.all([
-        api.get('/users'),
-        api.get('/franchises')
-      ]);
-      setUsers(usersRes.data);
-      setFranchises(franchisesRes.data);
-    } catch (err) {
-      setError('Failed to load users.');
-    } finally {
-      setLoading(false);
-    }
+      const [u, f] = await Promise.all([api.get('/users'), api.get('/franchises')]);
+      setUsers(u.data); setFranchises(f.data);
+    } catch { setError('Failed to load.'); }
+    finally { setLoading(false); }
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError('');
+    e.preventDefault(); setSubmitting(true); setError('');
     try {
       await api.post('/users', form);
-      setSuccess(`User "${form.username}" created successfully.`);
-      setShowForm(false);
-      setForm(EMPTY_FORM);
+      setSuccess(`User "${form.username}" created.`);
+      setShowForm(false); setForm(EMPTY_FORM);
       fetchData();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create user.');
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
   const handleToggle = async (id) => {
-    try {
-      await api.patch(`/users/${id}/toggle`);
-      fetchData();
-    } catch (err) {
-      setError('Failed to update user.');
-    }
+    try { await api.patch(`/users/${id}/toggle`); fetchData(); }
+    catch { setError('Failed to update user.'); }
   };
 
   const handleResetPassword = async (id) => {
-    const newPassword = resetPasswords[id];
-    if (!newPassword || newPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
+    const pw = resetPasswords[id];
+    if (!pw || pw.length < 6) { setError('Password must be at least 6 characters.'); return; }
     try {
-      await api.patch(`/users/${id}/password`, { password: newPassword });
-      setSuccess('Password reset successfully.');
-      setResetPasswords(prev => ({ ...prev, [id]: '' }));
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to reset password.');
-    }
-  };
-
-  const roleColors = {
-    Admin: 'bg-purple-100 text-purple-700',
-    HR: 'bg-blue-100 text-blue-700',
-    Consultant: 'bg-green-100 text-green-700'
+      await api.patch(`/users/${id}/password`, { password: pw });
+      setSuccess('Password reset.'); setResetPasswords(p => ({ ...p, [id]: '' }));
+    } catch (err) { setError(err.response?.data?.error || 'Failed.'); }
   };
 
   return (
-    <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-3">User Management</h2>
-        <button
-          onClick={() => { setShowForm(!showForm); setError(''); setSuccess(''); }}
-          className="text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
-          style={{ backgroundColor: '#2563eb' }}
-        >
-          {showForm ? 'Cancel' : '+ Create New User'}
+    <div style={{ maxWidth: '1100px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={S.pageTitle}>User Management</h2>
+        <button onClick={() => { setShowForm(!showForm); setError(''); setSuccess(''); }} style={S.primaryBtn}>
+          {showForm ? 'Cancel' : '+ New User'}
         </button>
       </div>
 
-      {error && <Alert type="error" message={error} />}
-      {success && <Alert type="success" message={success} />}
+      {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13.5px', marginBottom: '16px' }}>{error}</div>}
+      {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13.5px', marginBottom: '16px' }}>{success}</div>}
 
-      {/* Create User Form */}
       {showForm && (
-        <div className="bg-white rounded-xl shadow p-6 mb-6 max-w-lg">
-          <h3 className="font-semibold text-gray-700 mb-4">New User</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Field label="Username *" name="username" value={form.username}
-              onChange={e => setForm(p => ({ ...p, username: e.target.value }))} required />
-            <Field label="Password *" name="password" value={form.password} type="password"
-              onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required />
+        <div style={{ ...S.card, marginBottom: '20px', overflow: 'visible' }}>
+          <div style={{ padding: '18px 22px', borderBottom: '1px solid #f1f5f9' }}>
+            <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Create New User</h3>
+          </div>
+          <form onSubmit={handleSubmit} style={{ padding: '20px 22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
-              <select
-                value={form.role}
-                onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Username *</label>
+              <input value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
+                required style={S.input} />
+            </div>
+            <div>
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Password *</label>
+              <input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                required style={S.input} />
+            </div>
+            <div>
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Role *</label>
+              <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} style={S.input}>
                 <option value="Consultant">Consultant</option>
                 <option value="HR">HR</option>
                 <option value="Admin">Admin</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
-              <select
-                value={form.franchise_id}
-                onChange={e => setForm(p => ({ ...p, franchise_id: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">— No franchise assigned —</option>
-                {franchises.map(f => (
-                  <option key={f.id} value={f.id}>{f.franchise_name}</option>
-                ))}
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Franchise</label>
+              <select value={form.franchise_id} onChange={e => setForm(p => ({ ...p, franchise_id: e.target.value }))} style={S.input}>
+                <option value="">— None —</option>
+                {franchises.map(f => <option key={f.id} value={f.id}>{f.franchise_name}</option>)}
               </select>
             </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full text-white font-medium py-2 px-4 rounded-lg disabled:opacity-50"
-              style={{ backgroundColor: '#2563eb' }}
-            >
-              {submitting ? 'Creating...' : 'Create User'}
-            </button>
+            <div style={{ gridColumn: 'span 2', display: 'flex', gap: '10px', marginTop: '4px' }}>
+              <button type="submit" disabled={submitting} style={S.primaryBtn}>
+                {submitting ? 'Creating...' : 'Create User'}
+              </button>
+              <button type="button" onClick={() => setShowForm(false)} style={S.ghostBtn}>Cancel</button>
+            </div>
           </form>
         </div>
       )}
 
-      {/* Users Table */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div style={S.card}>
         {loading ? (
-          <p className="p-6 text-gray-500 text-sm">Loading users...</p>
+          <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left">Username</th>
-                <th className="px-4 py-3 text-left">Role</th>
-                <th className="px-4 py-3 text-left">Franchise</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Reset Password</th>
-                <th className="px-4 py-3 text-left">Actions</th>
+                {['Username', 'Role', 'Franchise', 'Status', 'Reset Password', ''].map(h => (
+                  <th key={h} style={S.tableHeader}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {users.map(u => (
-                <tr key={u.id} className={`hover:bg-gray-50 ${!u.is_active ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-gray-800">{u.username}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${roleColors[u.role]}`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{u.franchise_name || '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {u.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="password"
-                        placeholder="New password"
+                <tr key={u.id} style={{ opacity: u.is_active ? 1 : 0.5 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <td style={{ ...S.tableCell, fontWeight: '500' }}>{u.username}</td>
+                  <td style={S.tableCell}><span style={S.badge(u.role)}>{u.role}</span></td>
+                  <td style={{ ...S.tableCell, color: '#64748b' }}>{u.franchise_name || '—'}</td>
+                  <td style={S.tableCell}><span style={S.badge(u.is_active ? 'Active' : 'Inactive')}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td style={S.tableCell}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="password" placeholder="New password"
                         value={resetPasswords[u.id] || ''}
-                        onChange={e => setResetPasswords(prev => ({ ...prev, [u.id]: e.target.value }))}
-                        className="border border-gray-300 rounded px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                      <button
-                        onClick={() => handleResetPassword(u.id)}
-                        className="text-xs text-blue-600 hover:underline font-medium"
-                      >
+                        onChange={e => setResetPasswords(p => ({ ...p, [u.id]: e.target.value }))}
+                        style={{ ...S.input, width: '140px', padding: '6px 10px', fontSize: '12px' }} />
+                      <button onClick={() => handleResetPassword(u.id)}
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0, whiteSpace: 'nowrap' }}>
                         Reset
                       </button>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleToggle(u.id)}
-                      className={`text-xs font-medium hover:underline ${u.is_active ? 'text-red-500' : 'text-green-600'}`}
-                    >
+                  <td style={S.tableCell}>
+                    <button onClick={() => handleToggle(u.id)}
+                      style={{ background: 'none', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0, color: u.is_active ? '#dc2626' : '#16a34a' }}>
                       {u.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                   </td>
@@ -204,21 +151,4 @@ export default function Users() {
       </div>
     </div>
   );
-}
-
-function Field({ label, name, value, onChange, type = 'text', required }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input type={type} name={name} value={value} onChange={onChange} required={required}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-    </div>
-  );
-}
-
-function Alert({ type, message }) {
-  const styles = type === 'error'
-    ? 'bg-red-50 border-red-200 text-red-700'
-    : 'bg-green-50 border-green-200 text-green-700';
-  return <div className={`border px-4 py-3 rounded-lg mb-4 text-sm ${styles}`}>{message}</div>;
 }

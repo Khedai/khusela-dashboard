@@ -2,15 +2,6 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
-const STAT_CARDS = [
-  { key: 'total', label: 'Total Applications', color: '#3b82f6', bg: '#eff6ff' },
-  { key: 'approved', label: 'Approved', color: '#16a34a', bg: '#f0fdf4' },
-  { key: 'pendingDocs', label: 'Pending Docs', color: '#d97706', bg: '#fffbeb' },
-  { key: 'submitted', label: 'Submitted', color: '#7c3aed', bg: '#f5f3ff' },
-  { key: 'draft', label: 'Draft', color: '#64748b', bg: '#f8fafc' },
-  { key: 'rejected', label: 'Rejected', color: '#dc2626', bg: '#fef2f2' },
-];
-
 const STATUS_STYLES = {
   Draft: { background: '#f1f5f9', color: '#64748b' },
   Submitted: { background: '#eff6ff', color: '#2563eb' },
@@ -18,6 +9,15 @@ const STATUS_STYLES = {
   Approved: { background: '#f0fdf4', color: '#16a34a' },
   Rejected: { background: '#fef2f2', color: '#dc2626' },
 };
+
+const CARDS = [
+  { key: 'total',       label: 'Total',        color: '#3b82f6' },
+  { key: 'approved',    label: 'Approved',     color: '#16a34a' },
+  { key: 'submitted',   label: 'Submitted',    color: '#7c3aed' },
+  { key: 'pendingDocs', label: 'Pending Docs', color: '#d97706' },
+  { key: 'draft',       label: 'Draft',        color: '#64748b' },
+  { key: 'rejected',    label: 'Rejected',     color: '#dc2626' },
+];
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -45,7 +45,7 @@ export default function Dashboard() {
       });
       setRecent(apps.slice(0, 6));
     } catch (err) {
-      console.error('Dashboard error:', err.message);
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -53,76 +53,45 @@ export default function Dashboard() {
 
   if (loading) return <p style={{ color: '#94a3b8', fontSize: '14px' }}>Loading...</p>;
 
-  const today = new Date().toLocaleDateString('en-ZA', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  });
+  const today = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
-    <div style={{ maxWidth: '1200px' }}>
-
+    <div style={{ maxWidth: '1100px' }}>
       {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <p style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '6px' }}>{today}</p>
-        <h2 style={{ fontFamily: 'Sora', fontSize: '28px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+      <div style={{ marginBottom: '28px' }}>
+        <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{today}</p>
+        <h2 style={{ fontFamily: 'Sora', fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
           Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
         </h2>
       </div>
 
       {/* Stat Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '16px',
-        marginBottom: '32px',
-      }}>
-        {STAT_CARDS.map(card => (
-          stats[card.key] !== undefined && (
-            <div key={card.key} style={{
-              background: 'white',
-              borderRadius: '14px',
-              padding: '24px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-              borderLeft: `4px solid ${card.color}`,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-            }}>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                background: card.bg,
-                marginBottom: '4px',
-              }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: card.color }} />
-              </div>
-              <p style={{ color: '#64748b', fontSize: '13px', fontWeight: '500', margin: 0 }}>{card.label}</p>
-              <p style={{ color: card.color, fontSize: '36px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
-                {stats[card.key]}
-              </p>
-            </div>
-          )
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
+        {CARDS.map(card => (
+          <div key={card.key} style={{
+            background: 'white',
+            borderRadius: '10px',
+            padding: '16px 18px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            borderTop: `3px solid ${card.color}`,
+          }}>
+            <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
+              {card.label}
+            </p>
+            <p style={{ color: '#0f172a', fontSize: '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
+              {stats[card.key]}
+            </p>
+          </div>
         ))}
         {user?.role !== 'Consultant' && (
           <div style={{
-            background: 'white',
-            borderRadius: '14px',
-            padding: '24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            borderLeft: '4px solid #0891b2',
+            background: 'white', borderRadius: '10px', padding: '16px 18px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: '3px solid #0891b2',
           }}>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '8px',
-              background: '#ecfeff', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', marginBottom: '12px',
-            }}>
-              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#0891b2' }} />
-            </div>
-            <p style={{ color: '#64748b', fontSize: '13px', fontWeight: '500', margin: '0 0 8px' }}>Total Employees</p>
-            <p style={{ color: '#0891b2', fontSize: '36px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
+            <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
+              Employees
+            </p>
+            <p style={{ color: '#0f172a', fontSize: '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
               {stats.employees}
             </p>
           </div>
@@ -130,70 +99,41 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Applications */}
-      <div style={{
-        background: 'white',
-        borderRadius: '14px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        overflow: 'hidden',
-      }}>
-        <div style={{
-          padding: '20px 24px',
-          borderBottom: '1px solid #f1f5f9',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: 0 }}>
-            Recent Applications
-          </h3>
-          <span style={{ color: '#94a3b8', fontSize: '12px' }}>Last {recent.length} entries</span>
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Recent Applications</h3>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>Latest {recent.length}</span>
         </div>
-
         {recent.length === 0 ? (
-          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
-            No applications yet. Create one to get started.
-          </div>
+          <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>No applications yet.</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
                 {['Client', 'Date', 'Nett Salary', 'Total Expenses', 'Status'].map(h => (
                   <th key={h} style={{
-                    padding: '12px 24px', textAlign: h === 'Nett Salary' || h === 'Total Expenses' ? 'right' : 'left',
+                    padding: '10px 22px', textAlign: ['Nett Salary','Total Expenses'].includes(h) ? 'right' : 'left',
                     color: '#94a3b8', fontSize: '11px', fontWeight: '600',
-                    textTransform: 'uppercase', letterSpacing: '0.06em',
-                  }}>
-                    {h}
-                  </th>
+                    textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap',
+                  }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {recent.map((app, i) => (
+              {recent.map(app => (
                 <tr key={app.id} style={{ borderTop: '1px solid #f1f5f9' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <td style={{ padding: '14px 24px', fontWeight: '500', color: '#0f172a' }}>
-                    {app.first_name} {app.last_name}
-                  </td>
-                  <td style={{ padding: '14px 24px', color: '#64748b' }}>
-                    {app.date?.split('T')[0]}
-                  </td>
-                  <td style={{ padding: '14px 24px', color: '#0f172a', textAlign: 'right', fontWeight: '500' }}>
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>{app.first_name} {app.last_name}</td>
+                  <td style={{ padding: '12px 22px', color: '#64748b' }}>{app.date?.split('T')[0]}</td>
+                  <td style={{ padding: '12px 22px', color: '#0f172a', textAlign: 'right' }}>
                     {app.nett_salary ? `R ${parseFloat(app.nett_salary).toLocaleString()}` : '—'}
                   </td>
-                  <td style={{ padding: '14px 24px', color: '#0f172a', textAlign: 'right' }}>
+                  <td style={{ padding: '12px 22px', color: '#0f172a', textAlign: 'right' }}>
                     {app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}
                   </td>
-                  <td style={{ padding: '14px 24px' }}>
-                    <span style={{
-                      ...STATUS_STYLES[app.status],
-                      padding: '4px 10px',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                    }}>
+                  <td style={{ padding: '12px 22px' }}>
+                    <span style={{ ...STATUS_STYLES[app.status], padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>
                       {app.status}
                     </span>
                   </td>
