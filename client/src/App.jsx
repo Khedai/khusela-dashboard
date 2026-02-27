@@ -10,12 +10,21 @@ import Sidebar from './components/Sidebar';
 
 function ProtectedLayout({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a' }}>
+      <div style={{ color: '#64748b', fontFamily: 'DM Sans', fontSize: '14px' }}>Loading...</div>
+    </div>
+  );
   if (!user) return <Navigate to="/login" />;
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <Sidebar />
-      <main className="flex-1 overflow-y-auto p-6">
+      <main style={{
+        flex: 1,
+        overflowY: 'auto',
+        background: '#f8fafc',
+        padding: '32px 36px',
+      }}>
         {children}
       </main>
     </div>
@@ -36,12 +45,8 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />
-      <Route path="/users" element={
-        <ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>
-      } />
-      <Route path="/franchises" element={
-        <ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>
-      } />
+      <Route path="/users" element={<ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>} />
+      <Route path="/franchises" element={<ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
