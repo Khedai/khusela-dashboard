@@ -114,3 +114,18 @@ export const formSectionTitle = {
   paddingBottom: '8px',
   borderBottom: '1px solid #f1f5f9',
 };
+
+export const responsiveGrid = (isMobile) => ({
+  display: 'grid',
+  gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+  gap: '14px',
+});
+
+export const pageHeader = (isMobile) => ({
+  display: 'flex',
+  flexDirection: isMobile ? 'column' : 'row',
+  justifyContent: isMobile ? 'flex-start' : 'space-between',
+  alignItems: isMobile ? 'flex-start' : 'center',
+  gap: '12px',
+  marginBottom: '24px',
+});

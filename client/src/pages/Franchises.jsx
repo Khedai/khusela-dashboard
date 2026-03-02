@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import * as S from '../utils/styles';
 
@@ -11,6 +12,7 @@ export default function Franchises() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const isMobile = useIsMobile();
 
   useEffect(() => { fetchFranchises(); }, []);
 
@@ -63,7 +65,7 @@ export default function Franchises() {
               {editing ? 'Edit Franchise' : 'New Franchise'}
             </h3>
           </div>
-          <form onSubmit={handleSubmit} style={{ padding: '20px 22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <form onSubmit={handleSubmit} style={{ padding: '20px 22px', ...S.responsiveGrid(isMobile) }}>
             <div>
               <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Franchise Name *</label>
               <input value={form.franchise_name} onChange={e => setForm(p => ({ ...p, franchise_name: e.target.value }))}
@@ -88,7 +90,7 @@ export default function Franchises() {
       ) : franchises.length === 0 ? (
         <p style={{ color: '#94a3b8', fontSize: '14px' }}>No franchises yet.</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '14px' }}>
           {franchises.map(f => (
             <div key={f.id} style={{ background: 'white', borderRadius: '12px', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px' }}>{f.franchise_name}</h3>

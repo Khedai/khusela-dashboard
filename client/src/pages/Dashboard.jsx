@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 
 const STATUS_STYLES = {
@@ -21,6 +22,7 @@ const CARDS = [
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,54 +46,48 @@ export default function Dashboard() {
         employees: empsRes.data.length,
       });
       setRecent(apps.slice(0, 6));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   if (loading) return <p style={{ color: '#94a3b8', fontSize: '14px' }}>Loading...</p>;
 
   const today = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const cols = isMobile ? '1fr 1fr' : 'repeat(4, 1fr)';
 
   return (
     <div style={{ maxWidth: '1100px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '28px' }}>
+      <div style={{ marginBottom: '24px' }}>
         <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{today}</p>
-        <h2 style={{ fontFamily: 'Sora', fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+        <h2 style={{ fontFamily: 'Sora', fontSize: isMobile ? '20px' : '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
           Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
         </h2>
       </div>
 
       {/* Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '10px', marginBottom: '20px' }}>
         {CARDS.map(card => (
           <div key={card.key} style={{
-            background: 'white',
-            borderRadius: '10px',
-            padding: '16px 18px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            borderTop: `3px solid ${card.color}`,
+            background: 'white', borderRadius: '10px', padding: isMobile ? '14px' : '16px 18px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: `3px solid ${card.color}`,
           }}>
-            <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
+            <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
               {card.label}
             </p>
-            <p style={{ color: '#0f172a', fontSize: '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
+            <p style={{ color: '#0f172a', fontSize: isMobile ? '22px' : '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
               {stats[card.key]}
             </p>
           </div>
         ))}
         {user?.role !== 'Consultant' && (
           <div style={{
-            background: 'white', borderRadius: '10px', padding: '16px 18px',
+            background: 'white', borderRadius: '10px', padding: isMobile ? '14px' : '16px 18px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: '3px solid #0891b2',
           }}>
-            <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
+            <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
               Employees
             </p>
-            <p style={{ color: '#0f172a', fontSize: '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
+            <p style={{ color: '#0f172a', fontSize: isMobile ? '22px' : '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
               {stats.employees}
             </p>
           </div>
@@ -100,47 +96,64 @@ export default function Dashboard() {
 
       {/* Recent Applications */}
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Recent Applications</h3>
           <span style={{ color: '#94a3b8', fontSize: '12px' }}>Latest {recent.length}</span>
         </div>
+
         {recent.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>No applications yet.</div>
+        ) : isMobile ? (
+          // Mobile: stacked cards instead of table
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {recent.map(app => (
+              <div key={app.id} style={{ padding: '14px 18px', borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                  <span style={{ fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>{app.first_name} {app.last_name}</span>
+                  <span style={{ ...STATUS_STYLES[app.status], padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>
+                    {app.status}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b' }}>
+                  <span>{app.date?.split('T')[0]}</span>
+                  {app.nett_salary && <span>R {parseFloat(app.nett_salary).toLocaleString()}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
-            <thead>
-              <tr style={{ background: '#f8fafc' }}>
-                {['Client', 'Date', 'Nett Salary', 'Total Expenses', 'Status'].map(h => (
-                  <th key={h} style={{
-                    padding: '10px 22px', textAlign: ['Nett Salary','Total Expenses'].includes(h) ? 'right' : 'left',
-                    color: '#94a3b8', fontSize: '11px', fontWeight: '600',
-                    textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap',
-                  }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map(app => (
-                <tr key={app.id} style={{ borderTop: '1px solid #f1f5f9' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>{app.first_name} {app.last_name}</td>
-                  <td style={{ padding: '12px 22px', color: '#64748b' }}>{app.date?.split('T')[0]}</td>
-                  <td style={{ padding: '12px 22px', color: '#0f172a', textAlign: 'right' }}>
-                    {app.nett_salary ? `R ${parseFloat(app.nett_salary).toLocaleString()}` : '—'}
-                  </td>
-                  <td style={{ padding: '12px 22px', color: '#0f172a', textAlign: 'right' }}>
-                    {app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}
-                  </td>
-                  <td style={{ padding: '12px 22px' }}>
-                    <span style={{ ...STATUS_STYLES[app.status], padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>
-                      {app.status}
-                    </span>
-                  </td>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc' }}>
+                  {['Client', 'Date', 'Nett Salary', 'Total Expenses', 'Status'].map(h => (
+                    <th key={h} style={{
+                      padding: '10px 22px', textAlign: ['Nett Salary', 'Total Expenses'].includes(h) ? 'right' : 'left',
+                      color: '#94a3b8', fontSize: '11px', fontWeight: '600',
+                      textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recent.map(app => (
+                  <tr key={app.id} style={{ borderTop: '1px solid #f1f5f9' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>{app.first_name} {app.last_name}</td>
+                    <td style={{ padding: '12px 22px', color: '#64748b' }}>{app.date?.split('T')[0]}</td>
+                    <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.nett_salary ? `R ${parseFloat(app.nett_salary).toLocaleString()}` : '—'}</td>
+                    <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}</td>
+                    <td style={{ padding: '12px 22px' }}>
+                      <span style={{ ...STATUS_STYLES[app.status], padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>
+                        {app.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

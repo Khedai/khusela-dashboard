@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import * as S from '../utils/styles';
+import { useIsMobile } from '../utils/useIsMobile';
 
 const EMPTY_FORM = {
   title: '', first_name: '', last_name: '', id_number: '', tax_number: '',
@@ -22,6 +23,7 @@ export default function Employees() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const isMobile = useIsMobile();
 
   useEffect(() => { fetchEmployees(); }, []);
 
@@ -151,7 +153,7 @@ export default function Employees() {
             ].map(section => (
               <div key={section.title} style={S.formSection}>
                 <p style={S.formSectionTitle}>{section.title}</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div style={S.responsiveGrid(isMobile)}>
                   {section.fields.map(f => (
                     <div key={f.name} style={{ gridColumn: f.span === 2 ? 'span 2' : 'span 1' }}>
                       <FormField field={f} value={form[f.name]}
@@ -185,7 +187,7 @@ export default function Employees() {
   // Directory list
   return (
     <div style={{ maxWidth: '1100px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={S.pageHeader(isMobile)}>
         <h2 style={S.pageTitle}>Employee Directory</h2>
         <button onClick={() => { setView('form'); setSuccess(''); setError(''); }} style={S.primaryBtn}>
           + Onboard Employee
@@ -207,7 +209,8 @@ export default function Employees() {
         ) : filtered.length === 0 ? (
           <p style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>No employees found.</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr>
                 {['Name', 'ID Number', 'Email', 'Phone', 'Marital Status', ''].map(h => (
@@ -234,7 +237,8 @@ export default function Employees() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </div>
     </div>

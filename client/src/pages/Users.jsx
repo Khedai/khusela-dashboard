@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import * as S from '../utils/styles';
 
@@ -14,6 +15,7 @@ export default function Users() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const isMobile = useIsMobile();
 
   useEffect(() => { fetchData(); }, []);
 
@@ -68,7 +70,7 @@ export default function Users() {
           <div style={{ padding: '18px 22px', borderBottom: '1px solid #f1f5f9' }}>
             <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Create New User</h3>
           </div>
-          <form onSubmit={handleSubmit} style={{ padding: '20px 22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <form onSubmit={handleSubmit} style={{ padding: '20px 22px', ...S.responsiveGrid(isMobile) }}>
             <div>
               <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Username *</label>
               <input value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
@@ -108,7 +110,8 @@ export default function Users() {
         {loading ? (
           <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr>
                 {['Username', 'Role', 'Franchise', 'Status', 'Reset Password', ''].map(h => (
@@ -146,7 +149,8 @@ export default function Users() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </div>
     </div>

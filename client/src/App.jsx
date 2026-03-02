@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useIsMobile } from './utils/useIsMobile';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
@@ -10,12 +11,15 @@ import Sidebar from './components/Sidebar';
 
 function ProtectedLayout({ children }) {
   const { user, loading } = useAuth();
+  const isMobile = useIsMobile();
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a' }}>
       <div style={{ color: '#64748b', fontFamily: 'DM Sans', fontSize: '14px' }}>Loading...</div>
     </div>
   );
   if (!user) return <Navigate to="/login" />;
+
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <Sidebar />
@@ -23,7 +27,7 @@ function ProtectedLayout({ children }) {
         flex: 1,
         overflowY: 'auto',
         background: '#f8fafc',
-        padding: '32px 36px',
+        padding: isMobile ? '72px 16px 24px' : '32px 36px',
       }}>
         {children}
       </main>
