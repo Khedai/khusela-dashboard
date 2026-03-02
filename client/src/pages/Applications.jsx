@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import * as S from '../utils/styles';
+import DocumentUpload from '../components/DocumentUpload';
 
 const EMPTY_FORM = {
   ext_number: '', branch: '',
@@ -210,6 +211,10 @@ export default function Applications() {
               <DR label="Payslip" value={a.has_payslip ? 'Yes' : 'No'} highlight={a.has_payslip} />
               <DR label="Proof of Address" value={a.has_proof_of_address ? 'Yes' : 'No'} highlight={a.has_proof_of_address} />
             </DetailSection>
+
+            <div style={{ marginTop: '8px' }}>
+              <DocumentUpload applicationId={a.id} />
+            </div>
 
             {creds.length > 0 && (
               <div style={S.formSection}>

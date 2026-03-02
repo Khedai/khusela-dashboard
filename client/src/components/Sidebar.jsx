@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
+import logo from '../assets/khusela-logo.png';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true, roles: ['Admin', 'HR', 'Consultant'] },
@@ -42,14 +43,7 @@ function SidebarContent({ user, onNavigate }) {
       {/* Logo */}
       <div style={{ padding: '24px 18px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '16px' }}>
-          <div style={{
-            width: '30px', height: '30px',
-            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-            borderRadius: '7px', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', flexShrink: 0,
-          }}>
-            <span style={{ color: 'white', fontWeight: '800', fontSize: '14px', fontFamily: 'Sora' }}>K</span>
-          </div>
+          <img src={logo} alt="Khusela" style={{ width: '30px', height: '30px', objectFit: 'contain', borderRadius: '6px', flexShrink: 0 }} />
           <span style={{ color: 'white', fontSize: '17px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '7px', padding: '9px 11px' }}>
@@ -134,13 +128,7 @@ export default function Sidebar() {
         justifyContent: 'space-between', height: '56px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '26px', height: '26px',
-            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-            borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{ color: 'white', fontWeight: '800', fontSize: '12px', fontFamily: 'Sora' }}>K</span>
-          </div>
+          <img src={logo} alt="Khusela" style={{ width: '26px', height: '26px', objectFit: 'contain', borderRadius: '6px' }} />
           <span style={{ color: 'white', fontSize: '16px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
         </div>
         <button onClick={() => setOpen(true)} style={{
