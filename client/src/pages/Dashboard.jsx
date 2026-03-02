@@ -51,6 +51,7 @@ export default function Dashboard() {
   };
 
   if (loading) return <p style={{ color: '#94a3b8', fontSize: '14px' }}>Loading...</p>;
+  if (!stats) return <p style={{ color: '#94a3b8', fontSize: '14px' }}>Unable to load dash</p>;
 
   const today = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const cols = isMobile ? '1fr 1fr' : 'repeat(4, 1fr)';
