@@ -25,7 +25,9 @@ app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/franchises', require('./routes/franchises'));
-
+app.use('/api/employee-documents', require('./routes/employeeDocuments'));
+app.use('/api/leave', require('./routes/leave'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 
 

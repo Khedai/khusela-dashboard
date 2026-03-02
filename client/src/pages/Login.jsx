@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
+import logo from '../assets/khusela-logo.png';
 
 export default function Login() {
   const { login } = useAuth();
@@ -37,13 +38,7 @@ export default function Login() {
         }}>
           <div style={{ maxWidth: '440px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '48px' }}>
-              <div style={{
-                width: '40px', height: '40px',
-                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{ color: 'white', fontWeight: '800', fontSize: '18px', fontFamily: 'Sora' }}>K</span>
-              </div>
+              <img src={logo} alt="Khusela" style={{ width: '64px', height: '64px', objectFit: 'contain', borderRadius: '10px', filter: 'brightness(0) invert(1)' }} />
               <span style={{ color: 'white', fontSize: '22px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
             </div>
             <h1 style={{ fontFamily: 'Sora', fontSize: '40px', fontWeight: '800', color: 'white', lineHeight: '1.15', marginBottom: '20px' }}>
@@ -73,13 +68,7 @@ export default function Login() {
       }}>
         {isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '40px', justifyContent: 'center' }}>
-            <div style={{
-              width: '38px', height: '38px',
-              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-              borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ color: 'white', fontWeight: '800', fontSize: '17px', fontFamily: 'Sora' }}>K</span>
-            </div>
+              <img src={logo} alt="Khusela" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '9px', filter: 'brightness(0) invert(1)' }} />
             <span style={{ color: 'white', fontSize: '20px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
           </div>
         )}

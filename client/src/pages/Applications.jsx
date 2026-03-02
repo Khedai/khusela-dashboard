@@ -511,7 +511,7 @@ export default function Applications() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr>
-                {['Client','Date','Type','Nett Salary','Total Expenses','Status',''].map(h => (
+                {['Client','Date','Branch','Type','Nett Salary','Total Expenses','Status',''].map(h => (
                   <th key={h} style={{ ...S.tableHeader, textAlign: ['Nett Salary','Total Expenses'].includes(h) ? 'right' : 'left' }}>{h}</th>
                 ))}
               </tr>
@@ -523,6 +523,7 @@ export default function Applications() {
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <td style={{ ...S.tableCell, fontWeight: '500' }}>{app.first_name} {app.last_name}</td>
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{app.date?.split('T')[0]}</td>
+                  <td style={{ ...S.tableCell, color: '#64748b' }}>{app.franchise_name || '—'}</td>
                   <td style={{ ...S.tableCell, color: '#64748b', fontSize: '12px' }}>
                     {[app.is_med && 'MED', app.is_dreview && 'D.Review', app.is_drr && 'DRR', app.is_3in1 && '3-in-1'].filter(Boolean).join(', ') || '—'}
                   </td>

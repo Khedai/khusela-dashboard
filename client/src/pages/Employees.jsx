@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import * as S from '../utils/styles';
 import { useIsMobile } from '../utils/useIsMobile';
+import { useAuth } from '../context/AuthContext';
+import EmployeeDocumentUpload from '../components/EmployeeDocumentUpload';
 
 const EMPTY_FORM = {
   title: '', first_name: '', last_name: '', id_number: '', tax_number: '',
@@ -24,6 +26,7 @@ export default function Employees() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const isMobile = useIsMobile();
+  const { user } = useAuth();
 
   useEffect(() => { fetchEmployees(); }, []);
 
@@ -99,6 +102,12 @@ export default function Employees() {
                 </div>
               </div>
             ))}
+
+            {(user?.role === 'Admin' || user?.role === 'HR') && (
+              <div style={{ marginTop: '8px' }}>
+                <EmployeeDocumentUpload employeeId={e.id} />
+              </div>
+            )}
           </div>
         </div>
       </div>

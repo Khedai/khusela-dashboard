@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Applications from './pages/Applications';
+import Leave from './pages/Leave';
 import Users from './pages/Users';
 import Franchises from './pages/Franchises';
 import Sidebar from './components/Sidebar';
@@ -49,6 +50,7 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />
+      <Route path="/leave" element={<ProtectedLayout><Leave /></ProtectedLayout>} />
       <Route path="/users" element={<ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>} />
       <Route path="/franchises" element={<ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>} />
       <Route path="*" element={<Navigate to="/" />} />
