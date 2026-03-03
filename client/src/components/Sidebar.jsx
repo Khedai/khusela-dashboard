@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/employees', label: 'Employees', roles: ['Admin', 'HR'] },
   { to: '/applications', label: 'Applications', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/leave', label: 'Leave', roles: ['Admin', 'HR', 'Consultant'] },
+  { to: '/inbox', label: 'Inbox', roles: ['Admin', 'HR', 'Consultant'] },
 ];
 
 const ADMIN_ITEMS = [
@@ -90,7 +91,18 @@ function SidebarContent({ user, onNavigate }) {
         {NAV_ITEMS.filter(i => i.roles.includes(user?.role)).map(item => (
           <NavLink key={item.to} to={item.to} end={item.end} onClick={onNavigate}
             style={({ isActive }) => linkStyle(isActive)}>
-            {item.label}
+            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {item.label}
+              {item.to === '/inbox' && unread > 0 && (
+                <span style={{
+                  background: '#dc2626', color: 'white', borderRadius: '10px',
+                  fontSize: '10px', fontWeight: '700', padding: '1px 6px',
+                  minWidth: '18px', textAlign: 'center', lineHeight: '16px',
+                }}>
+                  {unread}
+                </span>
+              )}
+            </span>
           </NavLink>
         ))}
 
@@ -109,62 +121,7 @@ function SidebarContent({ user, onNavigate }) {
         )}
       </nav>
 
-      {/* Notifications */}
-      <div style={{ padding: '10px 10px 0', position: 'relative' }}>
-        <button
-          onClick={() => setShowNotifs(!showNotifs)}
-          style={{
-            width: '100%', padding: '9px 14px', borderRadius: '7px',
-            border: 'none', background: showNotifs ? 'rgba(59,130,246,0.1)' : 'transparent',
-            color: '#64748b', fontSize: '13.5px', cursor: 'pointer',
-            textAlign: 'left', fontFamily: 'DM Sans',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          }}
-        >
-          <span>Notifications</span>
-          {unread > 0 && (
-            <span style={{
-              background: '#dc2626', color: 'white', borderRadius: '10px',
-              fontSize: '11px', fontWeight: '700', padding: '1px 7px', minWidth: '20px', textAlign: 'center',
-            }}>
-              {unread}
-            </span>
-          )}
-        </button>
-
-        {showNotifs && (
-          <div style={{
-            position: 'absolute', bottom: '100%', left: '10px', right: '10px',
-            background: 'white', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-            zIndex: 500, overflow: 'hidden', maxHeight: '360px', display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>Notifications</span>
-              {unread > 0 && (
-                <button onClick={markAllRead} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '11px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>
-                  Mark all read
-                </button>
-              )}
-            </div>
-            <div style={{ overflowY: 'auto' }}>
-              {notifications.length === 0 ? (
-                <p style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', margin: 0 }}>No notifications</p>
-              ) : notifications.map(n => (
-                <div key={n.id} style={{
-                  padding: '11px 14px', borderBottom: '1px solid #f8fafc',
-                  background: n.is_read ? 'white' : '#eff6ff',
-                }}>
-                  <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: '600', color: '#0f172a' }}>{n.title}</p>
-                  <p style={{ margin: '0 0 4px', fontSize: '12px', color: '#64748b', lineHeight: '1.4' }}>{n.message}</p>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>
-                    {new Date(n.created_at).toLocaleDateString('en-ZA')}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Inbox badge shown in nav; dropdown removed (Inbox page handles details) */}
 
       {/* Logout */}
       <div style={{ padding: '8px 10px 10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>

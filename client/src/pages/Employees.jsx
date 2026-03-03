@@ -4,6 +4,7 @@ import * as S from '../utils/styles';
 import { useIsMobile } from '../utils/useIsMobile';
 import { useAuth } from '../context/AuthContext';
 import EmployeeDocumentUpload from '../components/EmployeeDocumentUpload';
+import { generateEmployeeForm } from '../utils/pdfGenerator';
 
 const EMPTY_FORM = {
   title: '', first_name: '', last_name: '', id_number: '', tax_number: '',
@@ -88,6 +89,9 @@ export default function Employees() {
                   Profile incomplete — please fill in this employee's details.
                 </div>
               )}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button onClick={() => generateEmployeeForm(e)} style={S.ghostBtn}>Download PDF</button>
             </div>
           </div>
           <div style={{ padding: '24px 26px' }}>
@@ -252,9 +256,12 @@ export default function Employees() {
     <div style={{ maxWidth: '1100px' }}>
       <div style={S.pageHeader(isMobile)}>
         <h2 style={S.pageTitle}>Employee Directory</h2>
-        <button onClick={() => { setView('form'); setSuccess(''); setError(''); }} style={S.primaryBtn}>
-          + Onboard Employee
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button onClick={() => generateEmployeeForm(null)} style={S.ghostBtn}>Empty Template</button>
+          <button onClick={() => { setView('form'); setSuccess(''); setError(''); }} style={S.primaryBtn}>
+            + Onboard Employee
+          </button>
+        </div>
       </div>
 
       {success && <AlertBanner type="success" message={success} />}

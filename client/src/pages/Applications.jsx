@@ -3,6 +3,7 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import * as S from '../utils/styles';
 import DocumentUpload from '../components/DocumentUpload';
+import { generateApplicationForm } from '../utils/pdfGenerator';
 
 const EMPTY_FORM = {
   ext_number: '', branch: '',
@@ -168,7 +169,10 @@ export default function Applications() {
                 {a.date?.split('T')[0]} · {a.branch || 'No branch'} · Ext {a.ext_number || '—'}
               </p>
             </div>
-            <span style={S.badge(a.status)}>{a.status}</span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button onClick={() => generateApplicationForm(a, creds)} style={S.ghostBtn}>Download PDF</button>
+              <span style={S.badge(a.status)}>{a.status}</span>
+            </div>
           </div>
           <div style={{ padding: '24px 26px' }}>
 
@@ -491,9 +495,12 @@ export default function Applications() {
     <div style={{ maxWidth: '1100px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={S.pageTitle}>Applications</h2>
-        <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); }} style={S.primaryBtn}>
-          + New Application
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button onClick={() => generateApplicationForm(null, null)} style={S.ghostBtn}>Empty Template</button>
+          <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); }} style={S.primaryBtn}>
+            + New Application
+          </button>
+        </div>
       </div>
 
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13.5px', marginBottom: '16px' }}>{success}</div>}
