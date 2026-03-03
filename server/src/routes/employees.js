@@ -169,4 +169,27 @@ router.delete('/:id', requireRole('Admin'), async (req, res) => {
   }
 });
 
+// ─── LINK EMPLOYEE TO USER ACCOUNT ───────────────────────
+router.patch('/:id/link-user', requireRole('Admin', 'HR'), async (req, res) => {
+  const { user_id } = req.body;
+  try {
+    // Remove link from any other employee first (one user = one employee)
+    if (user_id) {
+      await pool.query(
+        'UPDATE employees SET user_id = NULL WHERE user_id = $1 AND id != $2',
+        [user_id, req.params.id]
+      );
+    }
+    const result = await pool.query(
+      'UPDATE employees SET user_id = $1 WHERE id = $2 RETURNING *',
+      [user_id || null, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Employee not found.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to link user.' });
+  }
+});
+
 module.exports = router;

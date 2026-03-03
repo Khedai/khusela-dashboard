@@ -17,6 +17,9 @@ const EMPTY_FORM = {
 
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [linkingUser, setLinkingUser] = useState(false);
+  const [linkSuccess, setLinkSuccess] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('list'); // 'list' | 'form' | 'detail'
@@ -28,7 +31,17 @@ export default function Employees() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
 
-  useEffect(() => { fetchEmployees(); }, []);
+  useEffect(() => {
+    fetchEmployees();
+    if (user?.role === 'Admin' || user?.role === 'HR') fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await api.get('/users');
+      setUsers(res.data);
+    } catch {}
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -66,6 +79,15 @@ export default function Employees() {
             <div>
               <h2 style={{ ...S.pageTitle, fontSize: '18px' }}>{e.title} {e.first_name} {e.last_name}</h2>
               <p style={{ color: '#64748b', fontSize: '13px', margin: '2px 0 0' }}>{e.email || 'No email'}</p>
+              {!e.last_name && (
+                <div style={{
+                  marginTop: '10px', padding: '10px 14px', borderRadius: '8px',
+                  background: '#fffbeb', border: '1px solid #fde68a',
+                  color: '#d97706', fontSize: '13px', fontWeight: '500',
+                }}>
+                  Profile incomplete — please fill in this employee's details.
+                </div>
+              )}
             </div>
           </div>
           <div style={{ padding: '24px 26px' }}>
@@ -104,9 +126,41 @@ export default function Employees() {
             ))}
 
             {(user?.role === 'Admin' || user?.role === 'HR') && (
-              <div style={{ marginTop: '8px' }}>
-                <EmployeeDocumentUpload employeeId={e.id} />
-              </div>
+              <>
+                <div style={S.formSection}>
+                  <p style={S.formSectionTitle}>Account Link</p>
+                  <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '12px' }}>
+                    Link this employee to a user account so they can submit leave requests.
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <select
+                      defaultValue={e.user_id || ''}
+                      onChange={async (ev) => {
+                        setLinkingUser(true); setLinkSuccess('');
+                        try {
+                          await api.patch(`/employees/${e.id}/link-user`, { user_id: ev.target.value || null });
+                          setLinkSuccess('Account linked successfully.');
+                          fetchEmployees();
+                        } catch {
+                          setError('Failed to link account.');
+                        } finally { setLinkingUser(false); }
+                      }}
+                      style={{ ...S.input, width: '240px' }}
+                    >
+                      <option value="">— No account linked —</option>
+                      {users.filter(u => u.role === 'Consultant' || u.role === 'HR').map(u => (
+                        <option key={u.id} value={u.id}>{u.username} ({u.role})</option>
+                      ))}
+                    </select>
+                    {linkingUser && <span style={{ color: '#94a3b8', fontSize: '13px' }}>Saving...</span>}
+                    {linkSuccess && <span style={{ color: '#16a34a', fontSize: '13px', fontWeight: '500' }}>{linkSuccess}</span>}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '8px' }}>
+                  <EmployeeDocumentUpload employeeId={e.id} />
+                </div>
+              </>
             )}
           </div>
         </div>

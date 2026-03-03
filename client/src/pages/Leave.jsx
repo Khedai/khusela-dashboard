@@ -47,30 +47,28 @@ export default function Leave() {
   });
 
   useEffect(() => { fetchData(); }, []);
-
   const fetchData = async () => {
     try {
       if (isManager) {
         const res = await api.get('/leave/requests');
         setRequests(res.data);
       } else {
-        // Find employee record linked to this user
-        const empsRes = await api.get('/employees');
-        // In a full implementation you'd match by user_id
-        // For now show all requests and let consultant pick
-        const myEmp = empsRes.data[0]; // placeholder
-        if (myEmp) {
-          setMyEmployee(myEmp);
-          const [reqRes, balRes] = await Promise.all([
-            api.get(`/leave/my-requests/${myEmp.id}`),
-            api.get(`/leave/balance/${myEmp.id}`)
-          ]);
-          setRequests(reqRes.data);
-          setBalance(balRes.data);
-        }
+        // Find the employee record linked to this login account
+        const empRes = await api.get('/leave/my-employee');
+        setMyEmployee(empRes.data);
+        const [reqRes, balRes] = await Promise.all([
+          api.get(`/leave/my-requests/${empRes.data.id}`),
+          api.get(`/leave/balance/${empRes.data.id}`)
+        ]);
+        setRequests(reqRes.data);
+        setBalance(balRes.data);
       }
     } catch (err) {
-      setError('Failed to load leave data.');
+      if (err.response?.status === 404 && !isManager) {
+        setError('Your account is not linked to an employee record. Ask your Admin to link your account in the Employees section.');
+      } else {
+        setError('Failed to load leave data.');
+      }
     } finally {
       setLoading(false);
     }

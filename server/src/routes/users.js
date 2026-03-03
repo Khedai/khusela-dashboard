@@ -40,21 +40,40 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters.' });
   }
 
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
+    const userResult = await client.query(
       `INSERT INTO users (username, password_hash, role, franchise_id)
        VALUES ($1, $2, $3, $4)
        RETURNING id, username, role, is_active, created_at`,
       [username, passwordHash, role, franchise_id || null]
     );
-    res.status(201).json(result.rows[0]);
+
+    const newUser = userResult.rows[0];
+
+    // Auto-create employee record for non-admin users
+    if (role !== 'Admin') {
+      await client.query(
+        `INSERT INTO employees (first_name, last_name, user_id, franchise_id)
+         VALUES ($1, $2, $3, $4)`,
+        [username, '', newUser.id, franchise_id || null]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json(newUser);
   } catch (err) {
+    await client.query('ROLLBACK');
     if (err.code === '23505') {
       return res.status(400).json({ error: 'Username already exists.' });
     }
     console.error('Create user error:', err.message);
     res.status(500).json({ error: 'Failed to create user.' });
+  } finally {
+    client.release();
   }
 });
 
