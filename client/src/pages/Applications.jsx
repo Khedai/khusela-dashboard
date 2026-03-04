@@ -6,7 +6,7 @@ import DocumentUpload from '../components/DocumentUpload';
 import { generateApplicationForm } from '../utils/pdfGenerator';
 
 const EMPTY_FORM = {
-  ext_number: '', branch: '',
+  ext_number: '', branch: '', franchise_id: '',
   is_med: false, is_dreview: false, is_drr: false,
   is_3in1: false, is_rent_to: false, other_type: '',
   client_first_name: '', client_last_name: '', client_id_number: '',
@@ -85,8 +85,10 @@ function validateStep(step, form, creditors) {
 }
 
 export default function Applications() {
-  const { user } = useAuth();
+  const { user, employeeId } = useAuth();
   const [applications, setApplications] = useState([]);
+  const [franchises, setFranchises] = useState([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('list'); // 'list' | 'form' | 'detail'
   const [selectedApp, setSelectedApp] = useState(null);
@@ -98,7 +100,7 @@ export default function Applications() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState('');
 
-  useEffect(() => { fetchApplications(); }, []);
+  useEffect(() => { fetchApplications(); fetchFranchises(); }, []);
 
   const fetchApplications = async () => {
     try {
@@ -106,6 +108,13 @@ export default function Applications() {
       setApplications(res.data);
     } catch { setError('Failed to load applications.'); }
     finally { setLoading(false); }
+  };
+
+  const fetchFranchises = async () => {
+    try {
+      const res = await api.get('/franchises');
+      setFranchises(res.data);
+    } catch {}
   };
 
   const handleChange = (e) => {
@@ -123,7 +132,7 @@ export default function Applications() {
   };
 
   const totalExpenses = () => {
-    return ['exp_groceries','exp_rent_bond','exp_transport','exp_school_fees','exp_rates','exp_water_elec']
+    return ['exp_groceries', 'exp_rent_bond', 'exp_transport', 'exp_school_fees', 'exp_rates', 'exp_water_elec']
       .reduce((sum, f) => sum + (parseFloat(form[f]) || 0), 0);
   };
 
@@ -144,7 +153,11 @@ export default function Applications() {
     if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
     setSubmitting(true); setError('');
     try {
-      await api.post('/applications', { ...form, creditors });
+      await api.post('/applications', {
+        ...form,
+        creditors,
+        consultant_id: employeeId || undefined,
+      });
       setSuccess('Application submitted successfully.');
       setView('list'); setForm(EMPTY_FORM);
       setCreditors([{ ...EMPTY_CREDITOR }]); setStep(0);
@@ -178,7 +191,7 @@ export default function Applications() {
 
             <DetailSection title="Application Type">
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', gridColumn: 'span 2' }}>
-                {[['is_med','MED'],['is_dreview','Debt Review'],['is_drr','DRR'],['is_3in1','3-in-1'],['is_rent_to','Rent To']].filter(([k]) => a[k]).map(([k,label]) => (
+                {[['is_med', 'MED'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR'], ['is_3in1', '3-in-1'], ['is_rent_to', 'Rent To']].filter(([k]) => a[k]).map(([k, label]) => (
                   <span key={k} style={{ ...S.badge('Submitted'), background: '#eff6ff', color: '#2563eb' }}>{label}</span>
                 ))}
                 {a.other_type && <span style={S.badge('Submitted')}>{a.other_type}</span>}
@@ -251,15 +264,19 @@ export default function Applications() {
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {['Draft','Submitted','Pending Docs','Approved','Rejected'].map(s => (
                     <button key={s} onClick={async () => {
+                      if (s === a.status) return;
+                      if (!window.confirm(`Change status to "${s}"? This will be logged.`)) return;
                       await api.patch(`/applications/${a.id}/status`, { status: s });
                       const res = await api.get(`/applications/${a.id}`);
-                      setSelectedApp(res.data); fetchApplications();
+                      setSelectedApp(res.data);
+                      fetchApplications();
                     }} style={{
                       padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '600',
-                      cursor: 'pointer', fontFamily: 'DM Sans',
+                      cursor: a.status === s ? 'default' : 'pointer', fontFamily: 'DM Sans',
                       background: a.status === s ? '#2563eb' : 'white',
                       color: a.status === s ? 'white' : '#64748b',
                       border: `1px solid ${a.status === s ? '#2563eb' : '#e2e8f0'}`,
+                      opacity: a.status === s ? 1 : 0.85,
                     }}>
                       {s}
                     </button>
@@ -319,9 +336,29 @@ export default function Applications() {
             {step === 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <WField label="Extension Number *" name="ext_number" value={form.ext_number} onChange={handleChange} error={fieldErrors.ext_number} />
-                  <WField label="Branch *" name="branch" value={form.branch} onChange={handleChange} error={fieldErrors.branch} />
+                  <WField label="Extension Number *" name="ext_number" value={form.ext_number}
+                    onChange={handleChange} error={fieldErrors.ext_number} />
+                  <WField label="Branch Name *" name="branch" value={form.branch}
+                    onChange={handleChange} error={fieldErrors.branch} />
+                  <div>
+                    <label style={{ display: 'block', color: fieldErrors.franchise_id ? '#dc2626' : '#64748b', fontSize: '12px', marginBottom: '5px' }}>
+                      Franchise / Office
+                    </label>
+                    <select
+                      name="franchise_id"
+                      value={form.franchise_id || ''}
+                      onChange={handleChange}
+                      style={{ ...S.input, borderColor: fieldErrors.franchise_id ? '#fca5a5' : '#e2e8f0' }}
+                    >
+                      <option value="">— Select Franchise —</option>
+                      {franchises.map(f => (
+                        <option key={f.id} value={f.id}>{f.franchise_name}</option>
+                      ))}
+                    </select>
+                    {fieldErrors.franchise_id && <p style={{ color: '#dc2626', fontSize: '11px', margin: '4px 0 0' }}>{fieldErrors.franchise_id}</p>}
+                  </div>
                 </div>
+
                 <div>
                   <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '8px', fontWeight: '500' }}>
                     Application Type * {fieldErrors.app_type && <ErrText msg={fieldErrors.app_type} />}
@@ -333,9 +370,11 @@ export default function Applications() {
                         padding: '10px 12px', borderRadius: '8px', cursor: 'pointer',
                         border: `1px solid ${form[name] ? '#2563eb' : '#e2e8f0'}`,
                         background: form[name] ? '#eff6ff' : 'white',
-                        fontSize: '13px', color: form[name] ? '#2563eb' : '#475569', fontWeight: form[name] ? '600' : '400',
+                        fontSize: '13px', color: form[name] ? '#2563eb' : '#475569',
+                        fontWeight: form[name] ? '600' : '400',
                       }}>
-                        <input type="checkbox" name={name} checked={form[name]} onChange={handleChange} style={{ accentColor: '#2563eb' }} />
+                        <input type="checkbox" name={name} checked={form[name]}
+                          onChange={handleChange} style={{ accentColor: '#2563eb' }} />
                         {label}
                       </label>
                     ))}
@@ -358,7 +397,7 @@ export default function Applications() {
                 <WField label="Email" name="client_email" value={form.client_email} onChange={handleChange} error={fieldErrors.client_email} type="email" />
                 <WField label="Employer *" name="client_employer" value={form.client_employer} onChange={handleChange} error={fieldErrors.client_employer} />
                 <WField label="Marital Status" name="client_marital_status" value={form.client_marital_status} onChange={handleChange}
-                  type="select" options={['','Single','Married','Divorced','Widowed']} />
+                  type="select" options={['', 'Single', 'Married', 'Divorced', 'Widowed']} />
                 <div style={{ gridColumn: 'span 2' }}>
                   <WField label="Address" name="client_address" value={form.client_address} onChange={handleChange} />
                 </div>
@@ -375,9 +414,9 @@ export default function Applications() {
                   <p style={S.formSectionTitle}>Monthly Expenses</p>
                 </div>
                 {[
-                  ['Groceries','exp_groceries'],['Rent / Bond','exp_rent_bond'],
-                  ['Transport','exp_transport'],['School Fees','exp_school_fees'],
-                  ['Rates','exp_rates'],['Water & Electricity','exp_water_elec'],
+                  ['Groceries', 'exp_groceries'], ['Rent / Bond', 'exp_rent_bond'],
+                  ['Transport', 'exp_transport'], ['School Fees', 'exp_school_fees'],
+                  ['Rates', 'exp_rates'], ['Water & Electricity', 'exp_water_elec'],
                 ].map(([label, name]) => (
                   <WField key={name} label={label} name={name} value={form[name]} onChange={handleChange} type="number" error={fieldErrors[name]} placeholder="0.00" />
                 ))}
@@ -393,7 +432,7 @@ export default function Applications() {
                 <WField label="Bank *" name="bank" value={form.bank} onChange={handleChange} error={fieldErrors.bank} />
                 <WField label="Account Number *" name="account_no" value={form.account_no} onChange={handleChange} error={fieldErrors.account_no} />
                 <WField label="Account Type *" name="account_type" value={form.account_type} onChange={handleChange}
-                  type="select" options={['','Cheque','Savings','Transmission']} error={fieldErrors.account_type} />
+                  type="select" options={['', 'Cheque', 'Savings', 'Transmission']} error={fieldErrors.account_type} />
                 <WField label="Debt Review Status" name="debt_review_status" value={form.debt_review_status} onChange={handleChange} />
                 <WField label="Debit Order Date" name="debit_order_date" value={form.debit_order_date} onChange={handleChange} />
                 <WField label="Debit Order Amount" name="debit_order_amount" value={form.debit_order_amount} onChange={handleChange} type="number" placeholder="0.00" />
@@ -445,7 +484,7 @@ export default function Applications() {
                 <p style={{ color: '#64748b', fontSize: '13.5px', marginBottom: '8px' }}>
                   Confirm which documents have been received from the applicant.
                 </p>
-                {[['has_id_copy','ID Copy'],['has_payslip','Payslip'],['has_proof_of_address','Proof of Address']].map(([name, label]) => (
+                {[['has_id_copy', 'ID Copy'], ['has_payslip', 'Payslip'], ['has_proof_of_address', 'Proof of Address']].map(([name, label]) => (
                   <label key={name} style={{
                     display: 'flex', alignItems: 'center', gap: '12px',
                     padding: '14px 16px', borderRadius: '10px', cursor: 'pointer',
@@ -463,7 +502,7 @@ export default function Applications() {
                 <div style={{ marginTop: '8px' }}>
                   <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Initial Status</label>
                   <select name="status" value={form.status} onChange={handleChange} style={{ ...S.input, width: '200px' }}>
-                    {['Draft','Submitted','Pending Docs'].map(s => <option key={s} value={s}>{s}</option>)}
+                    {['Draft', 'Submitted', 'Pending Docs'].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
@@ -491,7 +530,17 @@ export default function Applications() {
   }
 
   // ── Applications table ────────────────────────────────────
-  return (
+    const filteredApps = applications.filter(app => {
+      const q = search.toLowerCase();
+      return (
+        `${app.first_name} ${app.last_name}`.toLowerCase().includes(q) ||
+        (app.id_number || '').toLowerCase().includes(q) ||
+        (app.franchise_name || '').toLowerCase().includes(q) ||
+        (app.status || '').toLowerCase().includes(q)
+      );
+    });
+
+    return (
     <div style={{ maxWidth: '1100px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={S.pageTitle}>Applications</h2>
@@ -507,6 +556,15 @@ export default function Applications() {
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13.5px', marginBottom: '16px' }}>{error}</div>}
 
       <div style={S.card}>
+        <div style={{ padding: '12px 26px 0 26px' }}>
+          <input
+            type="text"
+            placeholder="Search by client name, ID or branch..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ ...S.input, width: '320px', marginBottom: '16px' }}
+          />
+        </div>
         {loading ? (
           <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
         ) : applications.length === 0 ? (
@@ -518,13 +576,13 @@ export default function Applications() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr>
-                {['Client','Date','Branch','Type','Nett Salary','Total Expenses','Status',''].map(h => (
-                  <th key={h} style={{ ...S.tableHeader, textAlign: ['Nett Salary','Total Expenses'].includes(h) ? 'right' : 'left' }}>{h}</th>
+                {['Client', 'Date', 'Branch', 'Type', 'Nett Salary', 'Total Expenses', 'Status', ''].map(h => (
+                  <th key={h} style={{ ...S.tableHeader, textAlign: ['Nett Salary', 'Total Expenses'].includes(h) ? 'right' : 'left' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {applications.map(app => (
+              {filteredApps.map(app => (
                 <tr key={app.id}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>

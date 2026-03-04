@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
-import logo from '../assets/khusela-logo.png';
 
 export default function Login() {
   const { login } = useAuth();
   const isMobile = useIsMobile();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,7 +19,7 @@ export default function Login() {
       const res = await api.post('/auth/login', { username, password });
       login(res.data.user, res.data.token);
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid credentials. Please try again.');
+      setError(err.response?.data?.error || 'Invalid username or password.');
     } finally { setLoading(false); }
   };
 
@@ -29,7 +29,7 @@ export default function Login() {
       flexDirection: isMobile ? 'column' : 'row',
       background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
     }}>
-      {/* Branding panel — hidden on mobile, shown on desktop */}
+      {/* Branding panel */}
       {!isMobile && (
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column',
@@ -38,7 +38,13 @@ export default function Login() {
         }}>
           <div style={{ maxWidth: '440px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '48px' }}>
-              <img src={logo} alt="Khusela" style={{ width: '64px', height: '64px', objectFit: 'contain', borderRadius: '10px', filter: 'brightness(0) invert(1)' }} />
+              <div style={{
+                width: '40px', height: '40px',
+                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ color: 'white', fontWeight: '800', fontSize: '18px', fontFamily: 'Sora' }}>K</span>
+              </div>
               <span style={{ color: 'white', fontSize: '22px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
             </div>
             <h1 style={{ fontFamily: 'Sora', fontSize: '40px', fontWeight: '800', color: 'white', lineHeight: '1.15', marginBottom: '20px' }}>
@@ -68,7 +74,13 @@ export default function Login() {
       }}>
         {isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '40px', justifyContent: 'center' }}>
-              <img src={logo} alt="Khusela" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '9px', filter: 'brightness(0) invert(1)' }} />
+            <div style={{
+              width: '38px', height: '38px',
+              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+              borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ color: 'white', fontWeight: '800', fontSize: '17px', fontFamily: 'Sora' }}>K</span>
+            </div>
             <span style={{ color: 'white', fontSize: '20px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
           </div>
         )}
@@ -80,47 +92,113 @@ export default function Login() {
           <p style={{ color: '#64748b', fontSize: '14px' }}>Enter your credentials to continue</p>
         </div>
 
+        {/* Persistent error — stays until user types again */}
         {error && (
           <div style={{
-            background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-            borderRadius: '10px', padding: '12px 16px', marginBottom: '20px',
-            color: '#fca5a5', fontSize: '14px',
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.4)',
+            borderRadius: '10px',
+            padding: '14px 16px',
+            marginBottom: '24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: '12px',
           }}>
-            {error}
+            <span style={{ color: '#fca5a5', fontSize: '14px', lineHeight: '1.4' }}>{error}</span>
+            <button
+              onClick={() => setError('')}
+              style={{
+                background: 'none', border: 'none', color: '#f87171',
+                cursor: 'pointer', fontSize: '16px', padding: 0, lineHeight: 1, flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {[
-            { label: 'Username', value: username, set: setUsername, type: 'text', placeholder: 'Enter your username' },
-            { label: 'Password', value: password, set: setPassword, type: 'password', placeholder: 'Enter your password' },
-          ].map(f => (
-            <div key={f.label}>
-              <label style={{ display: 'block', color: '#94a3b8', fontSize: '12px', fontWeight: '500', marginBottom: '7px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                {f.label}
-              </label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Username */}
+          <div>
+            <label style={{
+              display: 'block', color: '#94a3b8', fontSize: '12px',
+              fontWeight: '500', marginBottom: '7px', letterSpacing: '0.05em', textTransform: 'uppercase',
+            }}>
+              Username
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => { setUsername(e.target.value); setError(''); }}
+              required
+              placeholder="Enter your username"
+              style={{
+                width: '100%', background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
+                padding: '13px 15px', color: 'white', fontSize: '15px',
+                outline: 'none', fontFamily: 'DM Sans', boxSizing: 'border-box',
+              }}
+              onFocus={e => e.target.style.borderColor = '#3b82f6'}
+              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+            />
+          </div>
+
+          {/* Password with toggle */}
+          <div>
+            <label style={{
+              display: 'block', color: '#94a3b8', fontSize: '12px',
+              fontWeight: '500', marginBottom: '7px', letterSpacing: '0.05em', textTransform: 'uppercase',
+            }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
               <input
-                type={f.type} value={f.value} onChange={e => f.set(e.target.value)}
-                required placeholder={f.placeholder}
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                required
+                placeholder="Enter your password"
                 style={{
                   width: '100%', background: 'rgba(255,255,255,0.06)',
                   border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
-                  padding: '13px 15px', color: 'white', fontSize: '15px',
+                  padding: '13px 48px 13px 15px', color: 'white', fontSize: '15px',
                   outline: 'none', fontFamily: 'DM Sans', boxSizing: 'border-box',
                 }}
                 onFocus={e => e.target.style.borderColor = '#3b82f6'}
                 onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(p => !p)}
+                style={{
+                  position: 'absolute', right: '14px', top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#64748b', fontSize: '13px', fontFamily: 'DM Sans',
+                  fontWeight: '500', padding: '2px 4px', lineHeight: 1,
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = '#94a3b8'}
+                onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
             </div>
-          ))}
-          <button type="submit" disabled={loading} style={{
-            width: '100%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-            border: 'none', borderRadius: '10px', padding: '14px',
-            color: 'white', fontSize: '15px', fontWeight: '600',
-            fontFamily: 'DM Sans', cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.8 : 1, marginTop: '4px',
-            boxShadow: '0 4px 20px rgba(59,130,246,0.35)',
-          }}>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              background: loading ? '#1d4ed8' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+              border: 'none', borderRadius: '10px', padding: '14px',
+              color: 'white', fontSize: '15px', fontWeight: '600',
+              fontFamily: 'DM Sans', cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.8 : 1, marginTop: '4px',
+              boxShadow: '0 4px 20px rgba(59,130,246,0.35)',
+            }}
+          >
             {loading ? 'Signing in...' : 'Sign In →'}
           </button>
         </form>

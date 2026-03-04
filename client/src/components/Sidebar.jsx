@@ -55,14 +55,14 @@ function SidebarContent({ user, onNavigate }) {
     try {
       const res = await api.get('/notifications');
       setNotifications(res.data);
-    } catch {}
+    } catch { }
   };
 
   const markAllRead = async () => {
     try {
       await api.patch('/notifications/read-all');
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    } catch {}
+    } catch { }
   };
 
   return (

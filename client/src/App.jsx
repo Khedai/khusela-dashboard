@@ -8,7 +8,9 @@ import Applications from './pages/Applications';
 import Users from './pages/Users';
 import Franchises from './pages/Franchises';
 import Sidebar from './components/Sidebar';
+import SessionWarning from './components/SessionWarning';
 import Inbox from './pages/Inbox';
+import Leave from './pages/Leave';
 
 function ProtectedLayout({ children }) {
   const { user, loading } = useAuth();
@@ -32,6 +34,7 @@ function ProtectedLayout({ children }) {
       }}>
         {children}
       </main>
+      <SessionWarning />
     </div>
   );
 }
@@ -50,10 +53,12 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />
+      <Route path="/leave" element={<ProtectedLayout><Leave /></ProtectedLayout>} />
       <Route path="/users" element={<ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>} />
       <Route path="/franchises" element={<ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>} />
       <Route path="*" element={<Navigate to="/" />} />
       <Route path="/inbox" element={<ProtectedLayout><Inbox /></ProtectedLayout>} />
+
     </Routes>
   );
 }

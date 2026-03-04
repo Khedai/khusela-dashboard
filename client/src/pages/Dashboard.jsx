@@ -21,10 +21,11 @@ const CARDS = [
 ];
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, employeeId } = useAuth();
   const isMobile = useIsMobile();
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
@@ -46,6 +47,12 @@ export default function Dashboard() {
         employees: empsRes.data.length,
       });
       setRecent(apps.slice(0, 6));
+      if (user?.role === 'Consultant' && employeeId) {
+        try {
+          const balRes = await api.get(`/leave/balance/${employeeId}`);
+          setLeaveBalance(balRes.data);
+        } catch {}
+      }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -94,6 +101,39 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {user?.role === 'Consultant' && leaveBalance && (
+        <div style={{ marginBottom: '20px' }}>
+          <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '10px' }}>
+            My Leave Balance — {new Date().getFullYear()}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '10px' }}>
+            {[
+              { label: 'Annual Leave', total: leaveBalance.annual_total, used: leaveBalance.annual_used, color: '#2563eb' },
+              { label: 'Sick Leave', total: leaveBalance.sick_total, used: leaveBalance.sick_used, color: '#d97706' },
+              { label: 'Family Responsibility', total: leaveBalance.family_total, used: leaveBalance.family_used, color: '#16a34a' },
+            ].map(b => {
+              const remaining = b.total - b.used;
+              return (
+                <div key={b.label} style={{
+                  background: 'white', borderRadius: '10px', padding: '14px 16px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: `3px solid ${b.color}`,
+                }}>
+                  <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
+                    {b.label}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <span style={{ fontFamily: 'Sora', fontSize: '22px', fontWeight: '700', color: remaining <= 0 ? '#dc2626' : '#0f172a', lineHeight: 1 }}>
+                      {remaining}
+                    </span>
+                    <span style={{ color: '#94a3b8', fontSize: '11px' }}>/ {b.total} days</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Recent Applications */}
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>

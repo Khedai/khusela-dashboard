@@ -139,8 +139,8 @@ router.post('/request', async (req, res) => {
          VALUES ($1, $2, $3, $4)`,
         [
           manager.id,
-          'New Leave Request',
-          `${empName} has submitted a ${leave_type} leave request for ${days_requested} day(s) starting ${start_date}.`,
+          'New Leave Request — Pending',
+          `${empName} has submitted a ${leave_type} leave request for ${days_requested} day(s) starting ${start_date}. Action required.`,
           '/leave'
         ]
       );
@@ -212,6 +212,25 @@ router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
         ]
       );
     }
+
+    // Update manager notifications for this request
+    const dateStr = req_data.start_date instanceof Date
+      ? req_data.start_date.toISOString().split('T')[0]
+      : req_data.start_date?.split('T')[0];
+
+    await pool.query(
+      `UPDATE notifications
+       SET title = $1,
+           message = $2,
+           is_read = TRUE
+       WHERE title = 'New Leave Request — Pending'
+       AND message LIKE $3`,
+      [
+        `Leave ${status} — ${req_data.leave_type}`,
+        `${status}: ${req_data.leave_type} leave for ${req_data.days_requested} day(s) starting ${dateStr}.`,
+        `%starting ${dateStr}%`
+      ]
+    );
 
     res.json(result.rows[0]);
   } catch (err) {

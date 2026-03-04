@@ -7,7 +7,7 @@ import * as S from '../utils/styles';
 const LEAVE_TYPES = ['Annual', 'Sick', 'Family Responsibility', 'Unpaid', 'Study', 'Maternity/Paternity'];
 
 const STATUS_STYLES = {
-  Pending:  { background: '#fffbeb', color: '#d97706' },
+  Pending: { background: '#fffbeb', color: '#d97706' },
   Approved: { background: '#f0fdf4', color: '#16a34a' },
   Rejected: { background: '#fef2f2', color: '#dc2626' },
 };
@@ -25,7 +25,7 @@ function workingDays(start, end) {
 }
 
 export default function Leave() {
-  const { user } = useAuth();
+  const { user, employeeId } = useAuth();
   const isMobile = useIsMobile();
   const isManager = user?.role === 'Admin' || user?.role === 'HR';
 
@@ -48,27 +48,31 @@ export default function Leave() {
 
   useEffect(() => { fetchData(); }, []);
   const fetchData = async () => {
+    setLoading(true);
     try {
       if (isManager) {
         const res = await api.get('/leave/requests');
         setRequests(res.data);
       } else {
-        // Find the employee record linked to this login account
-        const empRes = await api.get('/leave/my-employee');
-        setMyEmployee(empRes.data);
-        const [reqRes, balRes] = await Promise.all([
-          api.get(`/leave/my-requests/${empRes.data.id}`),
-          api.get(`/leave/balance/${empRes.data.id}`)
-        ]);
-        setRequests(reqRes.data);
-        setBalance(balRes.data);
+        try {
+          const empRes = await api.get('/leave/my-employee');
+          setMyEmployee(empRes.data);
+          const [reqRes, balRes] = await Promise.all([
+            api.get(`/leave/my-requests/${empRes.data.id}`),
+            api.get(`/leave/balance/${empRes.data.id}`)
+          ]);
+          setRequests(reqRes.data);
+          setBalance(balRes.data);
+        } catch (empErr) {
+          if (empErr.response?.status === 404) {
+            setError('Your account is not linked to an employee record. Ask your Admin to link your account in the Employees section.');
+          } else {
+            setError('Failed to load your leave data.');
+          }
+        }
       }
     } catch (err) {
-      if (err.response?.status === 404 && !isManager) {
-        setError('Your account is not linked to an employee record. Ask your Admin to link your account in the Employees section.');
-      } else {
-        setError('Failed to load leave data.');
-      }
+      setError('Failed to load leave data.');
     } finally {
       setLoading(false);
     }
@@ -103,6 +107,10 @@ export default function Leave() {
   };
 
   const handleAction = async (id, status) => {
+    const msg = status === 'Approved'
+      ? 'Approve this leave request? Days will be deducted from their balance.'
+      : 'Reject this leave request?';
+    if (!window.confirm(msg)) return;
     try {
       await api.patch(`/leave/request/${id}`, { status, rejection_reason: rejectionReason });
       setRejecting(null); setRejectionReason('');
@@ -224,7 +232,16 @@ export default function Leave() {
         {loading ? (
           <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
         ) : allRequests.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>No leave requests yet.</div>
+          <div style={{ padding: '60px', textAlign: 'center' }}>
+            <p style={{ color: '#0f172a', fontSize: '15px', fontWeight: '600', fontFamily: 'Sora', margin: '0 0 8px' }}>
+              No leave requests yet
+            </p>
+            <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>
+              {isManager
+                ? 'Leave requests from your team will appear here.'
+                : 'Submit your first leave request using the button above.'}
+            </p>
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
