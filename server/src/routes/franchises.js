@@ -2,30 +2,21 @@ const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 
-router.use(verifyToken);
-
-// ─── GET ALL FRANCHISES ───────────────────────────────────
+// ─── PUBLIC: GET ALL FRANCHISES (used by signup) ──────────
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT f.*, 
-              COUNT(DISTINCT u.id) AS user_count,
-              COUNT(DISTINCT a.id) AS application_count
-       FROM franchises f
-       LEFT JOIN users u ON u.franchise_id = f.id
-       LEFT JOIN applications a ON a.franchise_id = f.id
-       GROUP BY f.id
-       ORDER BY f.created_at DESC`
+      `SELECT id, franchise_name, location FROM franchises ORDER BY franchise_name ASC`
     );
     res.json(result.rows);
   } catch (err) {
-    console.error('Get franchises error:', err.message);
+    console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch franchises.' });
   }
 });
 
-// ─── CREATE FRANCHISE ─────────────────────────────────────
-router.post('/', requireRole('Admin'), async (req, res) => {
+// All routes below require auth
+router.post('/', verifyToken, requireRole('Admin'), async (req, res) => {
   const { franchise_name, location } = req.body;
   if (!franchise_name) {
     return res.status(400).json({ error: 'Franchise name is required.' });
@@ -44,7 +35,7 @@ router.post('/', requireRole('Admin'), async (req, res) => {
 });
 
 // ─── UPDATE FRANCHISE ─────────────────────────────────────
-router.put('/:id', requireRole('Admin'), async (req, res) => {
+router.put('/:id', verifyToken, requireRole('Admin'), async (req, res) => {
   const { franchise_name, location } = req.body;
   try {
     const result = await pool.query(
@@ -63,7 +54,7 @@ router.put('/:id', requireRole('Admin'), async (req, res) => {
 });
 
 // ─── DELETE FRANCHISE ─────────────────────────────────────
-router.delete('/:id', requireRole('Admin'), async (req, res) => {
+router.delete('/:id', verifyToken, requireRole('Admin'), async (req, res) => {
   try {
     const result = await pool.query(
       'DELETE FROM franchises WHERE id = $1 RETURNING id',

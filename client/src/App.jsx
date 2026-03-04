@@ -11,6 +11,7 @@ import Sidebar from './components/Sidebar';
 import SessionWarning from './components/SessionWarning';
 import Inbox from './pages/Inbox';
 import Leave from './pages/Leave';
+import Signup from './pages/Signup';
 
 function ProtectedLayout({ children }) {
   const { user, loading } = useAuth();
@@ -50,15 +51,15 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />
       <Route path="/leave" element={<ProtectedLayout><Leave /></ProtectedLayout>} />
+      <Route path="/inbox" element={<ProtectedLayout><Inbox /></ProtectedLayout>} />
       <Route path="/users" element={<ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>} />
       <Route path="/franchises" element={<ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>} />
       <Route path="*" element={<Navigate to="/" />} />
-      <Route path="/inbox" element={<ProtectedLayout><Inbox /></ProtectedLayout>} />
-
     </Routes>
   );
 }

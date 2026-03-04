@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
+import { Link } from 'react-router-dom';
 
 export default function Login() {
   const { login } = useAuth();
@@ -11,6 +12,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,6 +31,8 @@ export default function Login() {
       minHeight: '100vh', width: '100%', display: 'flex',
       flexDirection: isMobile ? 'column' : 'row',
       background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+      boxSizing: 'border-box',
+      overflowX: 'hidden',
     }}>
       {/* Branding panel */}
       {!isMobile && (
@@ -68,9 +73,11 @@ export default function Login() {
       <div style={{
         width: isMobile ? '100%' : '440px',
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
-        padding: isMobile ? '40px 24px' : '64px 48px',
+        padding: isMobile ? '40px 20px' : '64px 48px',
         background: 'rgba(255,255,255,0.03)',
         flex: isMobile ? 1 : 'none',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
       }}>
         {isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '40px', justifyContent: 'center' }}>
@@ -201,6 +208,12 @@ export default function Login() {
           >
             {loading ? 'Signing in...' : 'Sign In →'}
           </button>
+          <p style={{ textAlign: 'center', color: '#475569', fontSize: '13px', margin: 0 }}>
+            Don't have an account?{' '}
+            <Link to="/signup" style={{ color: '#60a5fa', textDecoration: 'none', fontWeight: '600' }}>
+              Create one
+            </Link>
+          </p>
         </form>
       </div>
     </div>
