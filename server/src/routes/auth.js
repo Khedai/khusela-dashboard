@@ -7,61 +7,80 @@ require('dotenv').config();
 // ─── LOGIN ───────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
-  if (!username || !password) {
+  if (!username || !password)
     return res.status(400).json({ error: 'Username and password are required.' });
-  }
 
   try {
-    // Find user by username
     const result = await pool.query(
-      'SELECT * FROM users WHERE username = $1 AND is_active = true',
+      `SELECT u.*, f.franchise_name 
+       FROM users u
+       LEFT JOIN franchises f ON u.franchise_id = f.id
+       WHERE u.username = $1`,
       [username]
     );
 
+    if (result.rows.length === 0)
+      return res.status(401).json({ error: 'Invalid username or password.' });
+
     const user = result.rows[0];
 
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid username or password.' });
-    }
+    if (!user.is_active)
+      return res.status(403).json({ error: 'Your account has been deactivated.' });
 
-    // Check password
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) {
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid)
       return res.status(401).json({ error: 'Invalid username or password.' });
-    }
 
-    // Issue JWT
     const token = jwt.sign(
-      {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        franchise_id: user.franchise_id
-      },
+      { id: user.id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
+    // Set httpOnly cookie — JavaScript cannot read this
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 8 * 60 * 60 * 1000,
+    });
+
+    // Return user info but NOT the token
     res.json({
-      token,
       user: {
         id: user.id,
         username: user.username,
         role: user.role,
-        franchise_id: user.franchise_id
+        franchise_id: user.franchise_id,
+        franchise_name: user.franchise_name,
       }
     });
-
   } catch (err) {
     console.error('Login error:', err.message);
-    res.status(500).json({ error: 'Server error during login.' });
+    res.status(500).json({ error: 'Login failed.' });
   }
 });
 
-// ─── VERIFY TOKEN (frontend can call this to check if still logged in) ───
-router.get('/verify', require('../middleware/auth').verifyToken, (req, res) => {
-  res.json({ valid: true, user: req.user });
+// ─── LOGOUT ───────────────────────────────────────────────
+router.post('/logout', (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  });
+  res.json({ message: 'Logged out.' });
+});
+
+// ─── VERIFY (used by frontend on load) ───────────────────
+router.get('/verify', (req, res) => {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).json({ error: 'No session.' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    res.json({ valid: true, user: decoded });
+  } catch {
+    res.status(401).json({ error: 'Session expired.' });
+  }
 });
 
 module.exports = router;

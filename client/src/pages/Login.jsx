@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
+import axios from 'axios';
 import api from '../utils/api';
 import { Link } from 'react-router-dom';
 
@@ -19,8 +20,9 @@ export default function Login() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      const res = await api.post('/auth/login', { username, password });
-      login(res.data.user, res.data.token);
+      const publicApi = axios.create({ baseURL: import.meta.env.VITE_API_URL, withCredentials: true });
+      const res = await publicApi.post('/auth/login', { username, password });
+      login(res.data.user);
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid username or password.');
     } finally { setLoading(false); }
