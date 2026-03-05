@@ -28,18 +28,34 @@ router.get('/balance/:employee_id', async (req, res) => {
 });
 
 // ─── GET ALL LEAVE REQUESTS ───────────────────────────────
-router.get('/requests', async (req, res) => {
+router.get('/requests', requireRole('Admin', 'HR'), async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT 
+    let query = `
+      SELECT 
         lr.*,
-        e.first_name, e.last_name,
+        e.first_name, e.last_name, e.franchise_id AS employee_franchise_id,
         u.username AS approved_by_username
        FROM leave_requests lr
        LEFT JOIN employees e ON lr.employee_id = e.id
        LEFT JOIN users u ON lr.approved_by = u.id
-       ORDER BY lr.created_at DESC`
-    );
+    `;
+    const params = [];
+
+    // HR sees only their franchise's requests
+    if (req.user.role === 'HR') {
+      const hrUser = await pool.query(
+        'SELECT franchise_id FROM users WHERE id = $1',
+        [req.user.id]
+      );
+      const franchiseId = hrUser.rows[0]?.franchise_id;
+      if (franchiseId) {
+        query += ` WHERE e.franchise_id = $1`;
+        params.push(franchiseId);
+      }
+    }
+
+    query += ` ORDER BY lr.created_at DESC`;
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch requests.' });
@@ -161,6 +177,36 @@ router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
   }
 
   try {
+    // Fetch the request first
+    const reqResult = await pool.query(
+      `SELECT lr.*, e.franchise_id AS employee_franchise_id
+       FROM leave_requests lr
+       JOIN employees e ON lr.employee_id = e.id
+       WHERE lr.id = $1`,
+      [req.params.id]
+    );
+
+    if (reqResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+
+    const leaveReq = reqResult.rows[0];
+
+    // HR can only approve their own franchise's employees
+    if (req.user.role === 'HR') {
+      const hrUser = await pool.query(
+        'SELECT franchise_id FROM users WHERE id = $1',
+        [req.user.id]
+      );
+      const hrFranchiseId = hrUser.rows[0]?.franchise_id;
+      if (leaveReq.employee_franchise_id !== hrFranchiseId) {
+        return res.status(403).json({
+          error: 'You can only approve leave for employees in your franchise.'
+        });
+      }
+    }
+
+    // Update the request
     const result = await pool.query(
       `UPDATE leave_requests
        SET status = $1, approved_by = $2, approved_at = NOW(), rejection_reason = $3
@@ -168,11 +214,9 @@ router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
       [status, req.user.id, rejection_reason || null, req.params.id]
     );
 
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Request not found.' });
-
     const req_data = result.rows[0];
 
-    // If approved, deduct from balance
+    // Deduct balance if approved
     if (status === 'Approved') {
       const year = new Date(req_data.start_date).getFullYear();
       const typeMap = {
@@ -192,6 +236,19 @@ router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
       }
     }
 
+    // Update manager notifications
+    await pool.query(
+      `UPDATE notifications
+       SET title = $1, message = $2, is_read = TRUE
+       WHERE title = 'New Leave Request — Pending'
+       AND message LIKE $3`,
+      [
+        `Leave ${status} — ${req_data.leave_type}`,
+        `${status}: ${req_data.leave_type} leave for ${req_data.days_requested} day(s).`,
+        `%starting ${new Date(req_data.start_date).toISOString().split('T')[0]}%`
+      ]
+    );
+
     // Notify the employee
     const empUser = await pool.query(
       `SELECT u.id FROM users u
@@ -207,30 +264,11 @@ router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
         [
           empUser.rows[0].id,
           `Leave Request ${status}`,
-          `Your ${req_data.leave_type} leave request (${req_data.days_requested} days) has been ${status.toLowerCase()}.${rejection_reason ? ' Reason: ' + rejection_reason : ''}`,
-          '/leave'
+          `Your ${req_data.leave_type} leave (${req_data.days_requested} days) has been ${status.toLowerCase()}.${rejection_reason ? ' Reason: ' + rejection_reason : ''}`,
+          '/inbox'
         ]
       );
     }
-
-    // Update manager notifications for this request
-    const dateStr = req_data.start_date instanceof Date
-      ? req_data.start_date.toISOString().split('T')[0]
-      : req_data.start_date?.split('T')[0];
-
-    await pool.query(
-      `UPDATE notifications
-       SET title = $1,
-           message = $2,
-           is_read = TRUE
-       WHERE title = 'New Leave Request — Pending'
-       AND message LIKE $3`,
-      [
-        `Leave ${status} — ${req_data.leave_type}`,
-        `${status}: ${req_data.leave_type} leave for ${req_data.days_requested} day(s) starting ${dateStr}.`,
-        `%starting ${dateStr}%`
-      ]
-    );
 
     res.json(result.rows[0]);
   } catch (err) {

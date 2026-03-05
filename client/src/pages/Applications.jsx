@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
+import { can } from '../utils/access';
 import { useAuth } from '../context/AuthContext';
 import * as S from '../utils/styles';
 import DocumentUpload from '../components/DocumentUpload';
@@ -87,6 +88,7 @@ export default function Applications() {
   const { user, employeeId } = useAuth();
   const [applications, setApplications] = useState([]);
   const [franchises, setFranchises] = useState([]);
+  const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('list'); // 'list' | 'form' | 'detail'
@@ -99,11 +101,19 @@ export default function Applications() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState('');
 
-  useEffect(() => { fetchApplications(); fetchFranchises(); }, []);
+  useEffect(() => { fetchFranchises(); }, []);
+  useEffect(() => { setShowAll(can(user, 'applications.viewAll')); }, [user]);
+  useEffect(() => { fetchApplications(); }, [user, showAll]);
 
   const fetchApplications = async () => {
     try {
-      const res = await api.get('/applications');
+      let url = '/applications';
+      // If user cannot view all (or has not enabled showAll), restrict to their franchise
+      if (!(can(user, 'applications.viewAll') && showAll)) {
+        const fid = user?.franchise_id;
+        if (fid) url = `/applications?franchise_id=${fid}`;
+      }
+      const res = await api.get(url);
       setApplications(res.data);
     } catch { setError('Failed to load applications.'); }
     finally { setLoading(false); }
@@ -539,6 +549,12 @@ export default function Applications() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={S.pageTitle}>Applications</h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {can(user, 'applications.viewAll') && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '13px' }}>
+              <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
+              <span>Show All Branches</span>
+            </label>
+          )}
           <button onClick={() => generateApplicationForm(null, null)} style={S.ghostBtn}>Empty Template</button>
           <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); }} style={S.primaryBtn}>
             + New Application

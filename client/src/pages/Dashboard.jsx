@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
+import { can } from '../utils/access';
 
 const STATUS_STYLES = {
   Draft: { background: '#f1f5f9', color: '#64748b' },
@@ -27,14 +28,20 @@ export default function Dashboard() {
   const [recent, setRecent] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(can(user, 'dashboard.viewAll'));
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [showAll]);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
+      // Consultants always see their franchise only — no showAll for them
+      const useFilter = !can(user, 'dashboard.viewAll') || !showAll;
+      const franchiseParam = (useFilter && user?.franchise_id) ? `?franchise_id=${user.franchise_id}` : '';
+
       const [appsRes, empsRes] = await Promise.all([
-        api.get('/applications'),
-        user?.role !== 'Consultant' ? api.get('/employees') : Promise.resolve({ data: [] })
+        api.get(`/applications${franchiseParam}`),
+        can(user, 'dashboard.employeeCount') ? api.get(`/employees${franchiseParam}`) : Promise.resolve({ data: [] })
       ]);
       const apps = appsRes.data;
       setStats({
@@ -71,6 +78,39 @@ export default function Dashboard() {
           Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
         </h2>
       </div>
+
+      {/* Toggle: My Franchise / All */}
+      {can(user, 'dashboard.viewAll') && user?.franchise_id && (
+        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
+          <div style={{
+            display: 'flex', background: 'white', borderRadius: '10px',
+            padding: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', alignSelf: 'flex-start'
+          }}>
+            <button
+              onClick={() => setShowAll(false)}
+              style={{
+                padding: '7px 14px', borderRadius: '7px', border: 'none',
+                fontSize: '12px', fontWeight: '500', fontFamily: 'DM Sans', cursor: 'pointer',
+                background: !showAll ? '#0f172a' : 'transparent',
+                color: !showAll ? 'white' : '#64748b',
+              }}
+            >
+              {user?.franchise?.franchise_name || 'My Franchise'}
+            </button>
+            <button
+              onClick={() => setShowAll(true)}
+              style={{
+                padding: '7px 14px', borderRadius: '7px', border: 'none',
+                fontSize: '12px', fontWeight: '500', fontFamily: 'DM Sans', cursor: 'pointer',
+                background: showAll ? '#0f172a' : 'transparent',
+                color: showAll ? 'white' : '#64748b',
+              }}
+            >
+              All Franchises
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '10px', marginBottom: '20px' }}>
