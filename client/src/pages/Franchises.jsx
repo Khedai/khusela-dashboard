@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import * as S from '../utils/styles';
+import { useAuth } from '../context/AuthContext';
 
 export default function Franchises() {
   const [franchises, setFranchises] = useState([]);
@@ -13,8 +14,13 @@ export default function Franchises() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const isMobile = useIsMobile();
+  const { user } = useAuth();
 
-  useEffect(() => { fetchFranchises(); }, []);
+  useEffect(() => {
+    fetchFranchises();
+    const interval = setInterval(fetchFranchises, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchFranchises = async () => {
     try { const res = await api.get('/franchises'); setFranchises(res.data); }
@@ -48,11 +54,13 @@ export default function Franchises() {
     <div style={{ maxWidth: '1000px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={S.pageTitle}>Franchises</h2>
-        <button
-          onClick={() => { setShowForm(!showForm); setEditing(null); setForm({ franchise_name: '', location: '' }); setError(''); setSuccess(''); }}
-          style={S.primaryBtn}>
-          {showForm && !editing ? 'Cancel' : '+ Add Franchise'}
-        </button>
+        {(user?.role === 'Admin' || user?.role === 'HR') && (
+          <button
+            onClick={() => { setShowForm(!showForm); setEditing(null); setForm({ franchise_name: '', location: '' }); setError(''); setSuccess(''); }}
+            style={S.primaryBtn}>
+            {showForm && !editing ? 'Cancel' : '+ Add Franchise'}
+          </button>
+        )}
       </div>
 
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13.5px', marginBottom: '16px' }}>{error}</div>}
@@ -97,17 +105,23 @@ export default function Franchises() {
               <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>{f.location || 'No location set'}</p>
               <div style={{ display: 'flex', gap: '20px', marginBottom: '18px' }}>
                 <div>
-                  <p style={{ fontFamily: 'Sora', fontSize: '22px', fontWeight: '700', color: '#2563eb', margin: 0, lineHeight: 1 }}>{f.user_count}</p>
-                  <p style={{ color: '#94a3b8', fontSize: '11px', margin: '3px 0 0' }}>Users</p>
+                  <p style={{ color: '#2563eb', fontSize: '13px', fontWeight: '600', margin: '4px 0' }}>
+                    {f.user_count} employee{f.user_count !== 1 ? 's' : ''}
+                  </p>
                 </div>
                 <div>
-                  <p style={{ fontFamily: 'Sora', fontSize: '22px', fontWeight: '700', color: '#16a34a', margin: 0, lineHeight: 1 }}>{f.application_count}</p>
-                  <p style={{ color: '#94a3b8', fontSize: '11px', margin: '3px 0 0' }}>Applications</p>
+                  <p style={{ color: '#16a34a', fontSize: '13px', fontWeight: '600', margin: '4px 0' }}>
+                    {f.application_count} application{f.application_count !== 1 ? 's' : ''}
+                  </p>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
-                <button onClick={() => handleEdit(f)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>Edit</button>
-                <button onClick={() => handleDelete(f.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>Delete</button>
+                {(user?.role === 'Admin' || user?.role === 'HR') && (
+                  <button onClick={() => handleEdit(f)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>Edit</button>
+                )}
+                {user?.role === 'Admin' && (
+                  <button onClick={() => handleDelete(f.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>Delete</button>
+                )}
               </div>
             </div>
           ))}

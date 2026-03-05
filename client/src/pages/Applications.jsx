@@ -6,7 +6,7 @@ import DocumentUpload from '../components/DocumentUpload';
 import { generateApplicationForm } from '../utils/pdfGenerator';
 
 const EMPTY_FORM = {
-  ext_number: '', branch: '', franchise_id: '',
+  franchise_id: '',
   is_med: false, is_dreview: false, is_drr: false,
   is_3in1: false, is_rent_to: false, other_type: '',
   client_first_name: '', client_last_name: '', client_id_number: '',
@@ -33,8 +33,7 @@ function validateStep(step, form, creditors) {
   const errs = {};
 
   if (step === 0) {
-    if (!form.ext_number.trim()) errs.ext_number = 'Extension number is required.';
-    if (!form.branch.trim()) errs.branch = 'Branch is required.';
+    if (!form.franchise_id) errs.franchise_id = 'Please select a franchise.';
     const anyType = form.is_med || form.is_dreview || form.is_drr || form.is_3in1 || form.is_rent_to || form.other_type.trim();
     if (!anyType) errs.app_type = 'Select at least one application type.';
   }
@@ -175,11 +174,11 @@ export default function Applications() {
       <div style={{ maxWidth: '800px' }}>
         <BackBtn onClick={() => setView('list')} />
         <div style={S.card}>
-          <div style={{ padding: '22px 26px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '22px 26px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2 style={{ ...S.pageTitle, fontSize: '18px' }}>{a.first_name} {a.last_name}</h2>
               <p style={{ color: '#64748b', fontSize: '13px', margin: '3px 0 0' }}>
-                {a.date?.split('T')[0]} · {a.branch || 'No branch'} · Ext {a.ext_number || '—'}
+                {a.date?.split('T')[0]} · {a.franchise_name || 'No franchise'}
               </p>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -335,11 +334,7 @@ export default function Applications() {
             {/* Step 1 — Call Info */}
             {step === 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <WField label="Extension Number *" name="ext_number" value={form.ext_number}
-                    onChange={handleChange} error={fieldErrors.ext_number} />
-                  <WField label="Branch Name *" name="branch" value={form.branch}
-                    onChange={handleChange} error={fieldErrors.branch} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
                   <div>
                     <label style={{ display: 'block', color: fieldErrors.franchise_id ? '#dc2626' : '#64748b', fontSize: '12px', marginBottom: '5px' }}>
                       Franchise / Office
@@ -373,8 +368,7 @@ export default function Applications() {
                         fontSize: '13px', color: form[name] ? '#2563eb' : '#475569',
                         fontWeight: form[name] ? '600' : '400',
                       }}>
-                        <input type="checkbox" name={name} checked={form[name]}
-                          onChange={handleChange} style={{ accentColor: '#2563eb' }} />
+                        <input type="checkbox" name={name} checked={form[name]} onChange={handleChange} style={{ accentColor: '#2563eb' }} />
                         {label}
                       </label>
                     ))}
