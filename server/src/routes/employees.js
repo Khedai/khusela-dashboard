@@ -6,21 +6,41 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 router.use(verifyToken);
 
 // ─── GET ALL EMPLOYEES ────────────────────────────────────
-router.get('/', requireRole('Admin', 'HR'), async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT 
-        e.id, e.first_name, e.last_name, e.title, e.email,
-        e.home_phone, e.alternate_phone, e.marital_status,
-        e.id_number, e.created_at,
-        f.franchise_name
-       FROM employees e
-       LEFT JOIN franchises f ON e.franchise_id = f.id
-       ORDER BY e.last_name ASC`
-    );
+    const { franchise_id } = req.query;
+
+    let query = `
+      SELECT e.*, f.franchise_name
+      FROM employees e
+      LEFT JOIN franchises f ON e.franchise_id = f.id
+    `;
+    const params = [];
+    const conditions = [];
+
+    if (franchise_id) {
+      conditions.push(`e.franchise_id = $${params.length + 1}`);
+      params.push(franchise_id);
+    } else if (req.user.role !== 'Admin') {
+      // Non-admins with no filter still only see their franchise
+      conditions.push(`e.franchise_id = $${params.length + 1}`);
+      params.push(req.user.franchise_id || null);
+    }
+
+    // Never show unassigned employees to non-admins
+    if (req.user.role !== 'Admin') {
+      conditions.push(`e.franchise_id IS NOT NULL`);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    query += ` ORDER BY e.created_at DESC`;
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
-    console.error('Get employees error:', err.message);
+    console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch employees.' });
   }
 });
@@ -64,6 +84,9 @@ router.post('/', requireRole('Admin', 'HR'), async (req, res) => {
     return res.status(400).json({ error: 'First name and last name are required.' });
   }
 
+  // Auto-assign franchise from logged-in user if not provided
+  const franchiseId = franchise_id || req.user?.franchise_id || null;
+
   try {
     const result = await pool.query(
       `INSERT INTO employees (
@@ -81,7 +104,7 @@ router.post('/', requireRole('Admin', 'HR'), async (req, res) => {
         $24, $25, $26, $27, $28
       ) RETURNING *`,
       [
-        user_id || null, franchise_id || null,
+        user_id || null, franchiseId,
         title, first_name, last_name, id_number, tax_number,
         birth_date || null, marital_status, email, home_phone, alternate_phone,
         address_street, address_city, postal_code,

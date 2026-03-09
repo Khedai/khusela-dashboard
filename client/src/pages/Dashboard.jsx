@@ -79,6 +79,10 @@ export default function Dashboard() {
         </h2>
       </div>
 
+      {user?.role === 'Admin' && !showAll && (
+        <UnassignedWarning />
+      )}
+
       {/* Toggle: My Franchise / All */}
       {can(user, 'dashboard.viewAll') && user?.franchise_id && (
         <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
@@ -240,3 +244,45 @@ export default function Dashboard() {
     </div>
   );
 }
+
+  function UnassignedWarning() {
+    const [counts, setCounts] = useState(null);
+
+    useEffect(() => {
+      Promise.all([
+        api.get('/employees'),
+        api.get('/applications'),
+      ]).then(([emps, apps]) => {
+        setCounts({
+          employees: emps.data.filter(e => !e.franchise_id).length,
+          applications: apps.data.filter(a => !a.franchise_id).length,
+        });
+      }).catch(() => {});
+    }, []);
+
+    if (!counts || (counts.employees === 0 && counts.applications === 0)) return null;
+
+    return (
+      <div style={{
+        padding: '12px 16px', borderRadius: '10px', marginBottom: '16px',
+        background: '#fffbeb', border: '1px solid #fde68a',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        flexWrap: 'wrap', gap: '8px',
+      }}>
+        <div>
+          <p style={{ color: '#d97706', fontSize: '13px', fontWeight: '600', margin: '0 0 2px' }}>
+            Unassigned Records
+          </p>
+          <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>
+            {counts.employees > 0 && `${counts.employees} employee${counts.employees > 1 ? 's' : ''}`}
+            {counts.employees > 0 && counts.applications > 0 && ' · '}
+            {counts.applications > 0 && `${counts.applications} application${counts.applications > 1 ? 's' : ''}`}
+            {' '}not assigned to any franchise.
+          </p>
+        </div>
+        <a href="/employees" style={{ color: '#d97706', fontSize: '12px', fontWeight: '600', textDecoration: 'none' }}>
+          Fix in Employees →
+        </a>
+      </div>
+    );
+  }

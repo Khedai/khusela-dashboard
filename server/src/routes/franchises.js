@@ -8,8 +8,8 @@ router.get('/', async (req, res) => {
     const result = await pool.query(`
       SELECT 
         f.id, f.franchise_name, f.location,
-        COUNT(DISTINCT e.id) AS user_count,
-        COUNT(DISTINCT a.id) AS application_count
+        COUNT(DISTINCT e.id) FILTER (WHERE e.franchise_id IS NOT NULL) AS user_count,
+        COUNT(DISTINCT a.id) FILTER (WHERE a.franchise_id IS NOT NULL) AS application_count
       FROM franchises f
       LEFT JOIN employees e ON e.franchise_id = f.id
       LEFT JOIN applications a ON a.franchise_id = f.id

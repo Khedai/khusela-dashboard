@@ -5,26 +5,51 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 router.use(verifyToken);
 
 // ─── GET ALL APPLICATIONS ─────────────────────────────────
-router.get('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT 
-        a.id, a.date, a.status, a.time_of_call,
-        a.is_med, a.is_dreview, a.is_drr, a.is_3in1,
+    const { franchise_id } = req.query;
+
+    let query = `
+      SELECT 
+        a.id, a.date, a.status,
+        a.is_med, a.is_dreview, a.is_drr, a.is_3in1, a.is_rent_to,
         a.gross_salary, a.nett_salary, a.total_expenses,
-        a.debit_order_amount, a.debit_order_date,
+        a.franchise_id,
         c.first_name, c.last_name, c.cell, c.id_number,
         e.first_name AS consultant_first, e.last_name AS consultant_last,
         f.franchise_name
-       FROM applications a
-       LEFT JOIN clients c ON a.client_id = c.id
-       LEFT JOIN employees e ON a.consultant_id = e.id
-       LEFT JOIN franchises f ON a.franchise_id = f.id
-       ORDER BY a.created_at DESC`
-    );
+      FROM applications a
+      LEFT JOIN clients c ON a.client_id = c.id
+      LEFT JOIN employees e ON a.consultant_id = e.id
+      LEFT JOIN franchises f ON a.franchise_id = f.id
+    `;
+
+    const params = [];
+    const conditions = [];
+
+    if (franchise_id) {
+      conditions.push(`a.franchise_id = $${params.length + 1}`);
+      params.push(franchise_id);
+    } else if (req.user.role === 'Consultant') {
+      // Consultants always locked to their franchise — no override
+      conditions.push(`a.franchise_id = $${params.length + 1}`);
+      params.push(req.user.franchise_id || null);
+    }
+
+    // Never show unassigned applications to non-admins
+    if (req.user.role !== 'Admin') {
+      conditions.push(`a.franchise_id IS NOT NULL`);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    query += ` ORDER BY a.created_at DESC`;
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
-    console.error('Get applications error:', err.message);
+    console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch applications.' });
   }
 });
@@ -109,6 +134,14 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
     return res.status(400).json({ error: 'Client first and last name are required.' });
   }
 
+  // Franchise required if neither provided on body nor available on user
+  if (!req.body.franchise_id && !req.user?.franchise_id) {
+    return res.status(400).json({ error: 'Franchise is required. Please select a franchise.' });
+  }
+
+  // Auto-assign franchise from logged-in user if not provided
+  const franchiseId = req.body.franchise_id || req.user?.franchise_id;
+
   // Use a transaction so if creditors fail, the whole thing rolls back
   const client = await pool.connect();
 
@@ -161,7 +194,7 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
         $27,$28,$29,$30
       ) RETURNING *`,
       [
-        clientId, consultant_id || null, franchise_id || null,
+        clientId, consultant_id || null, franchiseId,
         ext_number, branch,
         is_med || false, is_dreview || false, is_drr || false,
         is_3in1 || false, is_rent_to || false, other_type || null,
