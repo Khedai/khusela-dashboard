@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Spinner from './components/Spinner';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useIsMobile } from './utils/useIsMobile';
 import Login from './pages/Login';
@@ -18,8 +19,9 @@ function ProtectedLayout({ children }) {
   const isMobile = useIsMobile();
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a' }}>
-      <div style={{ color: '#64748b', fontFamily: 'DM Sans', fontSize: '14px' }}>Loading...</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a', flexDirection: 'column', gap: '16px' }}>
+      <Spinner size="lg" />
+      <span style={{ color: '#475569', fontFamily: 'DM Sans', fontSize: '13px' }}>Loading...</span>
     </div>
   );
   if (!user) return <Navigate to="/login" />;

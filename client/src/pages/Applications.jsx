@@ -3,6 +3,7 @@ import api from '../utils/api';
 import { can } from '../utils/access';
 import { useAuth } from '../context/AuthContext';
 import * as S from '../utils/styles';
+import Spinner from '../components/Spinner';
 import DocumentUpload from '../components/DocumentUpload';
 import { generateApplicationForm } from '../utils/pdfGenerator';
 
@@ -100,6 +101,8 @@ export default function Applications() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState('');
+  const [viewingId, setViewingId] = useState(null);       // which row's View btn is loading
+  const [mandateUpdating, setMandateUpdating] = useState(null); // which mandate status is in-flight
 
   useEffect(() => { fetchFranchises(); }, []);
   useEffect(() => { setShowAll(can(user, 'applications.viewAll')); }, [user]);
@@ -176,6 +179,35 @@ export default function Applications() {
     } finally { setSubmitting(false); }
   };
 
+  const handleMandateStatusUpdate = async (status) => {
+    setMandateUpdating(status);
+    try {
+      const res = await api.patch(`/applications/${selectedApp.application.id}/mandate`, {
+        mandate_status: status,
+      });
+      setSelectedApp(prev => ({
+        ...prev,
+        application: {
+          ...prev.application,
+          mandate_status: res.data.mandate_status,
+          mandate_signed: res.data.mandate_signed,
+          mandate_signed_date: res.data.mandate_signed_date,
+        }
+      }));
+      // Also update in the list
+      setApplications(prev =>
+        prev.map(a => a.id === selectedApp.application.id
+          ? { ...a, mandate_status: res.data.mandate_status }
+          : a
+        )
+      );
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update mandate status.');
+    } finally {
+      setMandateUpdating(null);
+    }
+  };
+
   // ── Detail view ───────────────────────────────────────────
   if (view === 'detail' && selectedApp) {
     const a = selectedApp.application;
@@ -192,7 +224,8 @@ export default function Applications() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button onClick={() => generateApplicationForm(a, creds)} style={S.ghostBtn}>Download PDF</button>
+              <button onClick={() => generateApplicationForm(a, creds)}
+                className="btn-ghost" style={S.ghostBtn}>Download PDF</button>
               <span style={S.badge(a.status)}>{a.status}</span>
             </div>
           </div>
@@ -239,7 +272,172 @@ export default function Applications() {
             </DetailSection>
 
             <div style={{ marginTop: '8px' }}>
-              <DocumentUpload applicationId={a.id} />
+              <DocumentUpload applicationId={a.id} onUploadComplete={() => {
+                api.get(`/documents/application/${a.id}`).then(res => {
+                  setSelectedApp(prev => ({ ...prev, documents: res.data }));
+                });
+              }} />
+            </div>
+
+            {/* ── MANDATE SECTION ── */}
+            <div style={{
+              background: 'white', borderRadius: '12px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              overflow: 'hidden', marginTop: '16px',
+            }}>
+              <div style={{
+                padding: '14px 20px', borderBottom: '1px solid #f1f5f9',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: '0 0 2px' }}>
+                    Mandate Document
+                  </h3>
+                  <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>
+                    Signed client authorization for debt review process
+                  </p>
+                </div>
+                <MandateBadge status={a.mandate_status} />
+              </div>
+
+              <div style={{ padding: '20px' }}>
+
+                {/* Status timeline */}
+                <div style={{ display: 'flex', gap: '0', marginBottom: '24px' }}>
+                  {[
+                    { key: 'Pending', label: 'Pending', desc: 'Awaiting client signature' },
+                    { key: 'Uploaded', label: 'Uploaded', desc: 'Scanned and uploaded' },
+                    { key: 'Verified', label: 'Verified', desc: 'Confirmed by HR/Admin' },
+                  ].map((step, i) => {
+                    const statuses = ['Pending', 'Uploaded', 'Verified'];
+                    const currentIdx = statuses.indexOf(a.mandate_status || 'Pending');
+                    const stepIdx = statuses.indexOf(step.key);
+                    const isComplete = stepIdx < currentIdx;
+                    const isActive = stepIdx === currentIdx;
+
+                    return (
+                      <div key={step.key} style={{ flex: 1, display: 'flex', alignItems: 'flex-start', position: 'relative' }}>
+                        {/* Connector line */}
+                        {i < 2 && (
+                          <div style={{
+                            position: 'absolute', top: '14px', left: '50%', right: '-50%',
+                            height: '2px',
+                            background: isComplete ? '#16a34a' : '#e2e8f0',
+                            zIndex: 0,
+                          }} />
+                        )}
+                        <div style={{ flex: 1, textAlign: 'center', zIndex: 1 }}>
+                          <div style={{
+                            width: '28px', height: '28px', borderRadius: '50%',
+                            background: isComplete ? '#16a34a' : isActive ? '#2563eb' : '#e2e8f0',
+                            color: isComplete || isActive ? 'white' : '#94a3b8',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            margin: '0 auto 6px',
+                            fontSize: isComplete ? '14px' : '12px', fontWeight: '700',
+                          }}>
+                            {isComplete ? '✓' : i + 1}
+                          </div>
+                          <p style={{
+                            margin: '0 0 2px', fontSize: '12px', fontWeight: '700',
+                            color: isActive ? '#2563eb' : isComplete ? '#16a34a' : '#64748b',
+                          }}>
+                            {step.label}
+                          </p>
+                          <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>{step.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Instructions */}
+                <div style={{
+                  background: '#f8fafc', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px',
+                }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: '700', color: '#0f172a' }}>
+                    Process
+                  </p>
+                  <ol style={{ margin: 0, paddingLeft: '18px', color: '#64748b', fontSize: '12px', lineHeight: '1.8' }}>
+                    <li>Download the application PDF using the button below</li>
+                    <li>Print and have the client sign both Applicant 1 and 2 signature fields</li>
+                    <li>Scan or photograph the signed document</li>
+                    <li>Upload it below as <strong>Signed Mandate</strong></li>
+                    <li>Mark as Verified once confirmed</li>
+                  </ol>
+                </div>
+
+                {/* Download PDF button */}
+                <div style={{ marginBottom: '20px' }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await api.get(`/applications/${a.id}`);
+                        generateApplicationForm(res.data.application, res.data.creditors);
+                      } catch {}
+                    }}
+                    style={{ ...S.ghostBtn, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    ↓ Download Application PDF
+                  </button>
+                </div>
+
+                {/* Document upload specifically for mandate */}
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
+                    Upload Signed Mandate
+                  </p>
+                  <DocumentUpload
+                    applicationId={a.id}
+                    onUploadComplete={() => {
+                      // Refresh selection to show new doc (though not strictly needed here as we update mandate status)
+                      if (a.mandate_status === 'Pending') {
+                        handleMandateStatusUpdate('Uploaded');
+                      }
+                    }}
+                    presetType="Signed Mandate"
+                  />
+                </div>
+
+                {/* HR/Admin: manually update mandate status */}
+                {can(user, 'applications.changeStatus') && (
+                  <div>
+                    <p style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
+                      Update Mandate Status
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {['Pending', 'Uploaded', 'Verified'].map(status => {
+                        const isActive = a.mandate_status === status;
+                        const isLoading = mandateUpdating === status;
+                        return (
+                          <button
+                            key={status}
+                            onClick={() => handleMandateStatusUpdate(status)}
+                            disabled={isActive || mandateUpdating !== null}
+                            style={{
+                              padding: '7px 16px', borderRadius: '8px', border: 'none',
+                              fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans',
+                              cursor: isActive || mandateUpdating ? 'default' : 'pointer',
+                              background: isActive ? '#f1f5f9' : '#0f172a',
+                              color: isActive ? '#94a3b8' : 'white',
+                              opacity: isActive ? 0.6 : mandateUpdating && !isLoading ? 0.5 : 1,
+                              display: 'inline-flex', alignItems: 'center', gap: '7px',
+                            }}
+                          >
+                            {isLoading && <Spinner size="sm" inline />}
+                            {status}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {a.mandate_signed_date && (
+                      <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: '11px' }}>
+                        Verified on {new Date(a.mandate_signed_date).toLocaleDateString('en-ZA')}
+                      </p>
+                    )}
+
+                  </div>
+                )}
+              </div>
             </div>
 
             {creds.length > 0 && (
@@ -556,7 +754,8 @@ export default function Applications() {
             </label>
           )}
           <button onClick={() => generateApplicationForm(null, null)} style={S.ghostBtn}>Empty Template</button>
-          <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); }} style={S.primaryBtn}>
+          <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); }}
+            className="btn-primary" style={S.primaryBtn}>
             + New Application
           </button>
         </div>
@@ -576,26 +775,24 @@ export default function Applications() {
           />
         </div>
         {loading ? (
-          <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
+          <Spinner size="lg" dark label="Loading applications..." />
         ) : applications.length === 0 ? (
           <div style={{ padding: '60px', textAlign: 'center' }}>
             <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '12px' }}>No applications yet.</p>
-            <button onClick={() => setView('form')} style={S.primaryBtn}>Create First Application</button>
+            <button onClick={() => setView('form')} className="btn-primary" style={S.primaryBtn}>Create First Application</button>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr>
-                {['Client', 'Date', 'Branch', 'Type', 'Nett Salary', 'Total Expenses', 'Status', ''].map(h => (
+                {['Client', 'Date', 'Branch', 'Type', 'Nett Salary', 'Total Expenses', 'Mandate', 'Status', ''].map(h => (
                   <th key={h} style={{ ...S.tableHeader, textAlign: ['Nett Salary', 'Total Expenses'].includes(h) ? 'right' : 'left' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filteredApps.map(app => (
-                <tr key={app.id}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <tr key={app.id} className="table-row">
                   <td style={{ ...S.tableCell, fontWeight: '500' }}>{app.first_name} {app.last_name}</td>
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{app.date?.split('T')[0]}</td>
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{app.franchise_name || '—'}</td>
@@ -608,13 +805,23 @@ export default function Applications() {
                   <td style={{ ...S.tableCell, textAlign: 'right' }}>
                     {app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}
                   </td>
+                  <td style={S.tableCell}>
+                    <MandateBadge status={app.mandate_status} />
+                  </td>
                   <td style={S.tableCell}><span style={S.badge(app.status)}>{app.status}</span></td>
                   <td style={S.tableCell}>
-                    <button onClick={async () => {
-                      const res = await api.get(`/applications/${app.id}`);
-                      setSelectedApp(res.data); setView('detail');
-                    }} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
-                      View
+                    <button
+                      onClick={async () => {
+                        setViewingId(app.id);
+                        try {
+                          const res = await api.get(`/applications/${app.id}`);
+                          setSelectedApp(res.data); setView('detail');
+                        } finally { setViewingId(null); }
+                      }}
+                      disabled={viewingId === app.id}
+                      className="btn-link"
+                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: viewingId === app.id ? 'default' : 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: '4px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      {viewingId === app.id ? <><Spinner size="sm" dark inline /> Opening...</> : 'View'}
                     </button>
                   </td>
                 </tr>
@@ -676,5 +883,24 @@ function DR({ label, value, highlight }) {
         {value || '—'}
       </p>
     </div>
+  );
+}
+
+function MandateBadge({ status }) {
+  const styles = {
+    Pending:  { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' },
+    Uploaded: { background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a' },
+    Verified: { background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' },
+  };
+  const icons = { Pending: '⏳', Uploaded: '📄', Verified: '✓' };
+  const s = styles[status] || styles.Pending;
+  return (
+    <span style={{
+      ...s, padding: '3px 9px', borderRadius: '20px',
+      fontSize: '11px', fontWeight: '600',
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+    }}>
+      {icons[status || 'Pending']} {status || 'Pending'}
+    </span>
   );
 }

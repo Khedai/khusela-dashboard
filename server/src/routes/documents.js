@@ -22,6 +22,15 @@ const upload = multer({
   }
 });
 
+const ALLOWED_DOC_TYPES = [
+  'ID Copy',
+  'Payslip', 
+  'Proof of Address',
+  'Bank Statement',
+  'Signed Mandate',
+  'Other',
+];
+
 router.use(verifyToken);
 
 // ─── UPLOAD FILE ─────────────────────────────────────────
@@ -34,6 +43,10 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
   if (!doc_type) {
     return res.status(400).json({ error: 'doc_type is required.' });
+  }
+
+  if (!ALLOWED_DOC_TYPES.includes(doc_type)) {
+    return res.status(400).json({ error: `Invalid doc_type. Allowed: ${ALLOWED_DOC_TYPES.join(', ')}` });
   }
 
   // Build a unique file key for R2

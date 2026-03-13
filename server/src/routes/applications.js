@@ -14,6 +14,7 @@ router.get('/', verifyToken, async (req, res) => {
         a.id, a.date, a.status,
         a.is_med, a.is_dreview, a.is_drr, a.is_3in1, a.is_rent_to,
         a.gross_salary, a.nett_salary, a.total_expenses,
+        a.mandate_status, a.mandate_signed, a.mandate_signed_date,
         a.franchise_id,
         c.first_name, c.last_name, c.cell, c.id_number,
         e.first_name AS consultant_first, e.last_name AS consultant_last,
@@ -254,6 +255,20 @@ router.patch('/:id/status', requireRole('Admin', 'HR'), async (req, res) => {
     return res.status(400).json({ error: 'Invalid status value.' });
   }
 
+  // Block approval if mandate not verified
+  if (status === 'Approved') {
+    const mandateCheck = await pool.query(
+      'SELECT mandate_status FROM applications WHERE id = $1',
+      [req.params.id]
+    );
+    const mandateStatus = mandateCheck.rows[0]?.mandate_status;
+    if (mandateStatus !== 'Verified') {
+      return res.status(400).json({
+        error: 'Cannot approve application until mandate is verified. Please upload and verify the signed mandate first.'
+      });
+    }
+  }
+
   try {
     const result = await pool.query(
       `UPDATE applications SET status = $1, updated_at = NOW()
@@ -269,6 +284,41 @@ router.patch('/:id/status', requireRole('Admin', 'HR'), async (req, res) => {
   } catch (err) {
     console.error('Update status error:', err.message);
     res.status(500).json({ error: 'Failed to update status.' });
+  }
+});
+
+// ─── MANDATE STATUS UPDATE (Admin/HR only) ───────────────
+router.patch('/:id/mandate', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+  const { mandate_status } = req.body;
+  const validStatuses = ['Pending', 'Uploaded', 'Verified'];
+
+  if (!validStatuses.includes(mandate_status)) {
+    return res.status(400).json({ error: 'Invalid mandate status.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE applications 
+       SET mandate_status = $1,
+           mandate_signed = $2,
+           mandate_signed_date = $3
+       WHERE id = $4 RETURNING *`,
+      [
+        mandate_status,
+        mandate_status === 'Verified',
+        mandate_status === 'Verified' ? new Date() : null,
+        req.params.id,
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Application not found.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to update mandate status.' });
   }
 });
 

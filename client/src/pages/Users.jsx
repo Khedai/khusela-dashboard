@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useIsMobile } from '../utils/useIsMobile';
+import Spinner from '../components/Spinner';
 import api from '../utils/api';
 import * as S from '../utils/styles';
 
@@ -13,6 +14,8 @@ export default function Users() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [resetPasswords, setResetPasswords] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [toggling, setToggling] = useState({});   // { [userId]: true }
+  const [resetting, setResetting] = useState({}); // { [userId]: true }
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const isMobile = useIsMobile();
@@ -40,24 +43,30 @@ export default function Users() {
   };
 
   const handleToggle = async (id) => {
+    if (toggling[id]) return;
+    setToggling(t => ({ ...t, [id]: true }));
     try { await api.patch(`/users/${id}/toggle`); fetchData(); }
     catch { setError('Failed to update user.'); }
+    finally { setToggling(t => ({ ...t, [id]: false })); }
   };
 
   const handleResetPassword = async (id) => {
     const pw = resetPasswords[id];
     if (!pw || pw.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setResetting(r => ({ ...r, [id]: true }));
     try {
       await api.patch(`/users/${id}/password`, { password: pw });
       setSuccess('Password reset.'); setResetPasswords(p => ({ ...p, [id]: '' }));
     } catch (err) { setError(err.response?.data?.error || 'Failed.'); }
+    finally { setResetting(r => ({ ...r, [id]: false })); }
   };
 
   return (
     <div style={{ maxWidth: '1100px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={S.pageTitle}>User Management</h2>
-        <button onClick={() => { setShowForm(!showForm); setError(''); setSuccess(''); }} style={S.primaryBtn}>
+        <button onClick={() => { setShowForm(!showForm); setError(''); setSuccess(''); }}
+          className="btn-primary" style={S.primaryBtn}>
           {showForm ? 'Cancel' : '+ New User'}
         </button>
       </div>
@@ -97,10 +106,12 @@ export default function Users() {
               </select>
             </div>
             <div style={{ gridColumn: 'span 2', display: 'flex', gap: '10px', marginTop: '4px' }}>
-              <button type="submit" disabled={submitting} style={S.primaryBtn}>
-                {submitting ? 'Creating...' : 'Create User'}
+              <button type="submit" disabled={submitting}
+                className="btn-primary" style={{ ...S.primaryBtn, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {submitting ? <><Spinner size="sm" inline /> Creating...</> : 'Create User'}
               </button>
-              <button type="button" onClick={() => setShowForm(false)} style={S.ghostBtn}>Cancel</button>
+              <button type="button" onClick={() => setShowForm(false)}
+                className="btn-ghost" style={S.ghostBtn}>Cancel</button>
             </div>
           </form>
         </div>
@@ -108,7 +119,7 @@ export default function Users() {
 
       <div style={S.card}>
         {loading ? (
-          <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
+          <Spinner size="lg" dark label="Loading users..." />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
@@ -121,9 +132,7 @@ export default function Users() {
             </thead>
             <tbody>
               {users.map(u => (
-                <tr key={u.id} style={{ opacity: u.is_active ? 1 : 0.5 }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <tr key={u.id} className="table-row" style={{ opacity: u.is_active ? 1 : 0.5 }}>
                   <td style={{ ...S.tableCell, fontWeight: '500' }}>{u.username}</td>
                   <td style={S.tableCell}><span style={S.badge(u.role)}>{u.role}</span></td>
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{u.franchise_name || '—'}</td>
@@ -135,15 +144,21 @@ export default function Users() {
                         onChange={e => setResetPasswords(p => ({ ...p, [u.id]: e.target.value }))}
                         style={{ ...S.input, width: '140px', padding: '6px 10px', fontSize: '12px' }} />
                       <button onClick={() => handleResetPassword(u.id)}
-                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0, whiteSpace: 'nowrap' }}>
-                        Reset
+                        disabled={resetting[u.id]}
+                        className="btn-link"
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {resetting[u.id] ? <Spinner size="sm" dark inline /> : null}
+                        {resetting[u.id] ? 'Resetting...' : 'Reset'}
                       </button>
                     </div>
                   </td>
                   <td style={S.tableCell}>
                     <button onClick={() => handleToggle(u.id)}
-                      style={{ background: 'none', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0, color: u.is_active ? '#dc2626' : '#16a34a' }}>
-                      {u.is_active ? 'Deactivate' : 'Activate'}
+                      disabled={toggling[u.id]}
+                      className="btn-link"
+                      style={{ background: 'none', border: 'none', fontSize: '12px', cursor: toggling[u.id] ? 'default' : 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px', color: u.is_active ? '#dc2626' : '#16a34a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      {toggling[u.id] ? <Spinner size="sm" dark inline /> : null}
+                      {toggling[u.id] ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                   </td>
                 </tr>

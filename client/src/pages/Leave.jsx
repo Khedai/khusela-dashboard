@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
+import Spinner from '../components/Spinner';
 import * as S from '../utils/styles';
 
 const LEAVE_TYPES = ['Annual', 'Sick', 'Family Responsibility', 'Unpaid', 'Study', 'Maternity/Paternity'];
@@ -35,6 +36,7 @@ export default function Leave() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [actioning, setActioning] = useState({}); // { [requestId]: 'Approved'|'Rejected' }
   const [rejecting, setRejecting] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [error, setError] = useState('');
@@ -111,12 +113,14 @@ export default function Leave() {
       ? 'Approve this leave request? Days will be deducted from their balance.'
       : 'Reject this leave request?';
     if (!window.confirm(msg)) return;
+    setActioning(a => ({ ...a, [id]: status }));
     try {
       await api.patch(`/leave/request/${id}`, { status, rejection_reason: rejectionReason });
       setRejecting(null); setRejectionReason('');
       setSuccess(`Request ${status.toLowerCase()} successfully.`);
       fetchData();
     } catch { setError('Failed to update request.'); }
+    finally { setActioning(a => { const n = { ...a }; delete n[id]; return n; }); }
   };
 
   const allRequests = isManager ? requests : requests;
@@ -136,7 +140,7 @@ export default function Leave() {
         </div>
         {!isManager && (
           <button onClick={() => { setShowForm(!showForm); setError(''); setWarning(''); }}
-            style={S.primaryBtn}>
+            className="btn-primary" style={S.primaryBtn}>
             {showForm ? 'Cancel' : '+ Apply for Leave'}
           </button>
         )}
@@ -214,8 +218,12 @@ export default function Leave() {
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-              <button type="submit" disabled={submitting} style={S.primaryBtn}>{submitting ? 'Submitting...' : 'Submit Request'}</button>
-              <button type="button" onClick={() => setShowForm(false)} style={S.ghostBtn}>Cancel</button>
+              <button type="submit" disabled={submitting}
+                className="btn-primary" style={{ ...S.primaryBtn, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {submitting ? <><Spinner size="sm" inline /> Submitting...</> : 'Submit Request'}
+              </button>
+              <button type="button" onClick={() => setShowForm(false)}
+                className="btn-ghost" style={S.ghostBtn}>Cancel</button>
             </div>
           </form>
         </div>
@@ -230,7 +238,7 @@ export default function Leave() {
         </div>
 
         {loading ? (
-          <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
+          <Spinner size="lg" dark label="Loading leave data..." />
         ) : allRequests.length === 0 ? (
           <div style={{ padding: '60px', textAlign: 'center' }}>
             <p style={{ color: '#0f172a', fontSize: '15px', fontWeight: '600', fontFamily: 'Sora', margin: '0 0 8px' }}>
@@ -256,9 +264,7 @@ export default function Leave() {
               </thead>
               <tbody>
                 {allRequests.map(r => (
-                  <tr key={r.id}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <tr key={r.id} className="table-row">
                     {isManager && (
                       <td style={{ ...S.tableCell, fontWeight: '500' }}>{r.first_name} {r.last_name}</td>
                     )}
@@ -300,15 +306,24 @@ export default function Leave() {
                               </div>
                             </div>
                           ) : (
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                              <button onClick={() => handleAction(r.id, 'Approved')}
-                                style={{ background: 'none', border: 'none', color: '#16a34a', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>
-                                Approve
-                              </button>
-                              <button onClick={() => setRejecting(r.id)}
-                                style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>
-                                Reject
-                              </button>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              {actioning[r.id] ? (
+                                <><Spinner size="sm" dark inline />
+                                <span style={{ color: '#94a3b8', fontSize: '12px' }}>{actioning[r.id]}…</span></>
+                              ) : (
+                                <>
+                                  <button onClick={() => handleAction(r.id, 'Approved')}
+                                    className="btn-success btn-link"
+                                    style={{ background: 'none', border: 'none', color: '#16a34a', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px' }}>
+                                    Approve
+                                  </button>
+                                  <button onClick={() => setRejecting(r.id)}
+                                    className="btn-danger btn-link"
+                                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px' }}>
+                                    Reject
+                                  </button>
+                                </>
+                              )}
                             </div>
                           )
                         ) : (

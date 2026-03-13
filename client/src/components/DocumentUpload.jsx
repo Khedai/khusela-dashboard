@@ -9,11 +9,11 @@ const DOC_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
-export default function DocumentUpload({ applicationId }) {
+export default function DocumentUpload({ applicationId, onUploadComplete, presetType }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [docType, setDocType] = useState('id_copy');
+  const [docType, setDocType] = useState(presetType || 'ID Copy');
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -66,6 +66,7 @@ export default function DocumentUpload({ applicationId }) {
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchDocuments();
+      if (onUploadComplete) onUploadComplete();
     } catch (err) {
       setError(err.response?.data?.error || 'Upload failed.');
     } finally {
@@ -93,7 +94,7 @@ export default function DocumentUpload({ applicationId }) {
     }
   };
 
-  const docTypeLabel = (type) => DOC_TYPES.find(d => d.value === type)?.label || type;
+  const docTypeLabel = (type) => type;
 
   const fileIcon = (fileName) => {
     if (!fileName) return '📄';
@@ -108,6 +109,25 @@ export default function DocumentUpload({ applicationId }) {
     IMG: { bg: '#eff6ff', color: '#2563eb' },
     FILE: { bg: '#f8fafc', color: '#64748b' },
   };
+
+  const typeSelector = presetType ? (
+    <div style={{
+      padding: '8px 12px', borderRadius: '8px',
+      background: '#eff6ff', color: '#2563eb',
+      fontSize: '13px', fontWeight: '600', border: '1px solid #bfdbfe',
+    }}>
+      {presetType}
+    </div>
+  ) : (
+    <select value={docType} onChange={e => setDocType(e.target.value)} style={{ ...S.input }}>
+      <option>ID Copy</option>
+      <option>Payslip</option>
+      <option>Proof of Address</option>
+      <option>Bank Statement</option>
+      <option>Signed Mandate</option>
+      <option>Other</option>
+    </select>
+  );
 
   return (
     <div>
@@ -136,11 +156,7 @@ export default function DocumentUpload({ applicationId }) {
             <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>
               Document Type
             </label>
-            <select value={docType} onChange={e => setDocType(e.target.value)} style={{ ...S.input }}>
-              {DOC_TYPES.map(d => (
-                <option key={d.value} value={d.value}>{d.label}</option>
-              ))}
-            </select>
+            {typeSelector}
           </div>
 
           <div style={{ flex: 2, minWidth: '200px' }}>
