@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import khuselaLogoUrl from '../assets/khusela-logo.png';
 
 const BRAND_BLUE = [37, 99, 235];
 const DARK = [15, 23, 42];
@@ -9,22 +10,57 @@ const LINE = [226, 232, 240];
 
 // ─── SHARED HELPERS ───────────────────────────────────────
 
-function addHeader(doc, title, subtitle) {
+let _logoData = null;
+async function getLogoData() {
+  if (_logoData) return _logoData;
+  try {
+    const res = await fetch(khuselaLogoUrl);
+    const blob = await res.blob();
+    _logoData = await new Promise((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.readAsDataURL(blob);
+    });
+    return _logoData;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function addHeader(doc, title, subtitle) {
   // Blue top bar
   doc.setFillColor(...BRAND_BLUE);
   doc.rect(0, 0, 210, 22, 'F');
 
-  // K logo box
-  doc.setFillColor(255, 255, 255, 0.2);
-  doc.roundedRect(8, 4, 14, 14, 2, 2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('K', 15, 13.5, { align: 'center' });
-
-  // Company name
-  doc.setFontSize(13);
-  doc.text('Khusela', 26, 13);
+  // Try to draw the real logo image
+  const logoData = await getLogoData();
+  if (logoData) {
+    // place logo at left with white padding
+    try {
+      doc.addImage(logoData, 'PNG', 8, 4, 28, 14);
+      // Do not draw the textual "Khusela" here — the logo image already contains the name.
+    } catch (e) {
+      // fallback to letter mark
+      doc.setFillColor(255, 255, 255, 0.2);
+      doc.roundedRect(8, 4, 14, 14, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('K', 15, 13.5, { align: 'center' });
+      doc.setFontSize(13);
+      doc.text('Khusela', 26, 13);
+    }
+  } else {
+    // fallback to letter mark
+    doc.setFillColor(255, 255, 255, 0.2);
+    doc.roundedRect(8, 4, 14, 14, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('K', 15, 13.5, { align: 'center' });
+    doc.setFontSize(13);
+    doc.text('Khusela', 26, 13);
+  }
 
   // Title on right
   doc.setFontSize(10);
@@ -52,32 +88,38 @@ function addSectionTitle(doc, title, y) {
 }
 
 function addField(doc, label, value, x, y, width = 85) {
+  // Label — small grey caption above the line
   doc.setTextColor(...MID);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.text(label, x, y);
 
-  // Underline / box for the value
-  doc.setDrawColor(...LINE);
-  doc.setLineWidth(0.3);
-  doc.line(x, y + 1, x + width, y + 1);
-
+  // Value — larger dark text below the label
   doc.setTextColor(...DARK);
   doc.setFontSize(8.5);
   doc.setFont('helvetica', value ? 'bold' : 'normal');
-  doc.text(value || (value === '' ? '' : ''), x, y - 0.5);
+  doc.text(value || '', x, y + 5);
 
-  return y + 8;
+  // Underline beneath the value
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.3);
+  doc.line(x, y + 6.5, x + width, y + 6.5);
+
+  return y + 11;
 }
 
 function addEmptyField(doc, label, x, y, width = 85) {
+  // Label
   doc.setTextColor(...MID);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.text(label, x, y);
+
+  // Empty line with more breathing room
   doc.setDrawColor(...LINE);
   doc.setLineWidth(0.3);
-  doc.line(x, y + 5, x + width, y + 5);
+  doc.line(x, y + 6.5, x + width, y + 6.5);
+
   return y + 11;
 }
 
@@ -110,12 +152,12 @@ function addFooter(doc, pageNum) {
 
 // ─── EMPLOYEE FORM ────────────────────────────────────────
 
-export function generateEmployeeForm(employee) {
+export async function generateEmployeeForm(employee) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const e = employee || {};
   const isTemplate = !employee;
 
-  addHeader(doc, 'Employee Record', isTemplate ? 'Template' : `${e.first_name || ''} ${e.last_name || ''}`);
+  await addHeader(doc, 'Employee Record', isTemplate ? 'Template' : `${e.first_name || ''} ${e.last_name || ''}`);
 
   let y = 30;
   const F = (label, val, x, yPos, w) =>
@@ -165,7 +207,7 @@ export function generateEmployeeForm(employee) {
   if (y > 240) {
     addFooter(doc, 1);
     doc.addPage();
-    addHeader(doc, 'Employee Record', isTemplate ? 'Template' : `${e.first_name || ''} ${e.last_name || ''}`);
+    await addHeader(doc, 'Employee Record', isTemplate ? 'Template' : `${e.first_name || ''} ${e.last_name || ''}`);
     y = 30;
   }
 
@@ -202,14 +244,14 @@ export function generateEmployeeForm(employee) {
 
 // ─── APPLICATION FORM ─────────────────────────────────────
 
-export function generateApplicationForm(application, creditors) {
+export async function generateApplicationForm(application, creditors) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const a = application || {};
   const creds = creditors || [];
   const isTemplate = !application;
 
   const clientName = isTemplate ? 'Template' : `${a.first_name || ''} ${a.last_name || ''}`;
-  addHeader(doc, 'Application Form', clientName);
+  await addHeader(doc, 'Application Form', clientName);
 
   let y = 30;
   const F = (label, val, x, yPos, w) =>
@@ -297,7 +339,7 @@ export function generateApplicationForm(application, creditors) {
   // New page for banking + creditors
   addFooter(doc, 1);
   doc.addPage();
-  addHeader(doc, 'Application Form', clientName);
+  await addHeader(doc, 'Application Form', clientName);
   y = 30;
 
   // Banking

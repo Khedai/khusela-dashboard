@@ -308,7 +308,7 @@ export default function Employees() {
             </h2>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => generateEmployeeForm(selected)} style={S.ghostBtn}>
+            <button onClick={async () => await generateEmployeeForm(selected)} style={S.ghostBtn}>
               ↓ PDF
             </button>
             {can(user, 'employees.edit') && (

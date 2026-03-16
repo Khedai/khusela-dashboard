@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import { can } from '../utils/access';
+import khuselaLogo from '../assets/khusela-logo.png';
 
 const STATUS_STYLES = {
   Draft: { background: '#f1f5f9', color: '#64748b' },
@@ -72,11 +73,14 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: '1100px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{today}</p>
-        <h2 style={{ fontFamily: 'Sora', fontSize: isMobile ? '20px' : '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
-          Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
-        </h2>
+      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <img src={khuselaLogo} alt="Khusela" style={{ width: isMobile ? 80 : 120, height: 'auto' }} />
+        <div>
+          <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{today}</p>
+          <h2 style={{ fontFamily: 'Sora', fontSize: isMobile ? '20px' : '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+            Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
+          </h2>
+        </div>
       </div>
 
       {user?.role === 'Admin' && !showAll && (

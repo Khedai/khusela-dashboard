@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import axios from 'axios';
 import api from '../utils/api';
+import khuselaLogo from '../assets/khusela-logo.png';
 import { Link } from 'react-router-dom';
 
 export default function Login() {
@@ -44,15 +45,19 @@ export default function Login() {
           borderRight: '1px solid rgba(255,255,255,0.06)',
         }}>
           <div style={{ maxWidth: '440px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '48px' }}>
-              <div style={{
-                width: '40px', height: '40px',
-                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{ color: 'white', fontWeight: '800', fontSize: '18px', fontFamily: 'Sora' }}>K</span>
-              </div>
-              <span style={{ color: 'white', fontSize: '22px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '48px' }}>
+              <img
+                src={khuselaLogo}
+                alt="Khusela"
+                style={{
+                  width: isMobile ? 100 : 140,
+                  height: 'auto',
+                  background: 'white',
+                  padding: 8,
+                  borderRadius: 12,
+                  boxShadow: '0 6px 18px rgba(2,6,23,0.3)',
+                }}
+              />
             </div>
             <h1 style={{ fontFamily: 'Sora', fontSize: '40px', fontWeight: '800', color: 'white', lineHeight: '1.15', marginBottom: '20px' }}>
               Debt Management<br />
@@ -83,14 +88,11 @@ export default function Login() {
       }}>
         {isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '40px', justifyContent: 'center' }}>
-            <div style={{
-              width: '38px', height: '38px',
-              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-              borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ color: 'white', fontWeight: '800', fontSize: '17px', fontFamily: 'Sora' }}>K</span>
-            </div>
-            <span style={{ color: 'white', fontSize: '20px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
+            <img
+              src={khuselaLogo}
+              alt="Khusela"
+              style={{ width: 100, height: 'auto', background: 'white', padding: 8, borderRadius: 10 }}
+            />
           </div>
         )}
 
