@@ -69,9 +69,17 @@ function SidebarContent({ user, onNavigate }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Logo */}
       <div style={{ padding: '24px 18px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '16px' }}>
-          <img src={logo} alt="Khusela" style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '6px', flexShrink: 0, filter: 'brightness(0) invert(1)' }} />
-          <span style={{ color: 'white', fontSize: '17px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
+       <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '8px' }}>
+          <img
+            src={logo}
+            alt="Khusela"
+            style={{
+              width: '140px',
+              height: 'auto',
+              filter: 'brightness(0) invert(1)',
+              display: 'block',
+            }}
+          />
         </div>
         <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '7px', padding: '9px 11px' }}>
           <p style={{ color: '#475569', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 2px' }}>

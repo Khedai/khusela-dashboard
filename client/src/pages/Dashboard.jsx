@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import { can } from '../utils/access';
-import khuselaLogo from '../assets/khusela-logo.png';
 
 const STATUS_STYLES = {
   Draft: { background: '#f1f5f9', color: '#64748b' },
@@ -14,12 +13,12 @@ const STATUS_STYLES = {
 };
 
 const CARDS = [
-  { key: 'total',       label: 'Total',        color: '#3b82f6' },
-  { key: 'approved',    label: 'Approved',     color: '#16a34a' },
-  { key: 'submitted',   label: 'Submitted',    color: '#7c3aed' },
+  { key: 'total', label: 'Total', color: '#3b82f6' },
+  { key: 'approved', label: 'Approved', color: '#16a34a' },
+  { key: 'submitted', label: 'Submitted', color: '#7c3aed' },
   { key: 'pendingDocs', label: 'Pending Docs', color: '#d97706' },
-  { key: 'draft',       label: 'Draft',        color: '#64748b' },
-  { key: 'rejected',    label: 'Rejected',     color: '#dc2626' },
+  { key: 'draft', label: 'Draft', color: '#64748b' },
+  { key: 'rejected', label: 'Rejected', color: '#dc2626' },
 ];
 
 export default function Dashboard() {
@@ -59,7 +58,7 @@ export default function Dashboard() {
         try {
           const balRes = await api.get(`/leave/balance/${employeeId}`);
           setLeaveBalance(balRes.data);
-        } catch {}
+        } catch { }
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -73,14 +72,11 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: '1100px' }}>
-      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <img src={khuselaLogo} alt="Khusela" style={{ width: isMobile ? 80 : 120, height: 'auto' }} />
-        <div>
-          <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{today}</p>
-          <h2 style={{ fontFamily: 'Sora', fontSize: isMobile ? '20px' : '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
-            Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
-          </h2>
-        </div>
+      <div style={{ marginBottom: '24px' }}>
+        <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{today}</p>
+        <h2 style={{ fontFamily: 'Sora', fontSize: isMobile ? '20px' : '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+          Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
+        </h2>
       </div>
 
       {user?.role === 'Admin' && !showAll && (
@@ -249,44 +245,44 @@ export default function Dashboard() {
   );
 }
 
-  function UnassignedWarning() {
-    const [counts, setCounts] = useState(null);
+function UnassignedWarning() {
+  const [counts, setCounts] = useState(null);
 
-    useEffect(() => {
-      Promise.all([
-        api.get('/employees'),
-        api.get('/applications'),
-      ]).then(([emps, apps]) => {
-        setCounts({
-          employees: emps.data.filter(e => !e.franchise_id).length,
-          applications: apps.data.filter(a => !a.franchise_id).length,
-        });
-      }).catch(() => {});
-    }, []);
+  useEffect(() => {
+    Promise.all([
+      api.get('/employees'),
+      api.get('/applications'),
+    ]).then(([emps, apps]) => {
+      setCounts({
+        employees: emps.data.filter(e => !e.franchise_id).length,
+        applications: apps.data.filter(a => !a.franchise_id).length,
+      });
+    }).catch(() => { });
+  }, []);
 
-    if (!counts || (counts.employees === 0 && counts.applications === 0)) return null;
+  if (!counts || (counts.employees === 0 && counts.applications === 0)) return null;
 
-    return (
-      <div style={{
-        padding: '12px 16px', borderRadius: '10px', marginBottom: '16px',
-        background: '#fffbeb', border: '1px solid #fde68a',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        flexWrap: 'wrap', gap: '8px',
-      }}>
-        <div>
-          <p style={{ color: '#d97706', fontSize: '13px', fontWeight: '600', margin: '0 0 2px' }}>
-            Unassigned Records
-          </p>
-          <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>
-            {counts.employees > 0 && `${counts.employees} employee${counts.employees > 1 ? 's' : ''}`}
-            {counts.employees > 0 && counts.applications > 0 && ' · '}
-            {counts.applications > 0 && `${counts.applications} application${counts.applications > 1 ? 's' : ''}`}
-            {' '}not assigned to any franchise.
-          </p>
-        </div>
-        <a href="/employees" style={{ color: '#d97706', fontSize: '12px', fontWeight: '600', textDecoration: 'none' }}>
-          Fix in Employees →
-        </a>
+  return (
+    <div style={{
+      padding: '12px 16px', borderRadius: '10px', marginBottom: '16px',
+      background: '#fffbeb', border: '1px solid #fde68a',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      flexWrap: 'wrap', gap: '8px',
+    }}>
+      <div>
+        <p style={{ color: '#d97706', fontSize: '13px', fontWeight: '600', margin: '0 0 2px' }}>
+          Unassigned Records
+        </p>
+        <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>
+          {counts.employees > 0 && `${counts.employees} employee${counts.employees > 1 ? 's' : ''}`}
+          {counts.employees > 0 && counts.applications > 0 && ' · '}
+          {counts.applications > 0 && `${counts.applications} application${counts.applications > 1 ? 's' : ''}`}
+          {' '}not assigned to any franchise.
+        </p>
       </div>
-    );
-  }
+      <a href="/employees" style={{ color: '#d97706', fontSize: '12px', fontWeight: '600', textDecoration: 'none' }}>
+        Fix in Employees →
+      </a>
+    </div>
+  );
+}
