@@ -32,7 +32,7 @@ const linkStyle = (isActive) => ({
 });
 
 function SidebarContent({ user, onNavigate }) {
-  const { logout } = useAuth();
+  const { logout, franchise } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -77,9 +77,33 @@ function SidebarContent({ user, onNavigate }) {
           <p style={{ color: '#475569', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 2px' }}>
             {user?.role}
           </p>
-          <p style={{ color: 'white', fontSize: '13px', fontWeight: '600', margin: 0 }}>
+          <p style={{ color: 'white', fontSize: '13px', fontWeight: '600', margin: '0 0 6px' }}>
             {user?.username}
           </p>
+          {/* Branch identifier */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '5px',
+            background: 'rgba(59,130,246,0.12)',
+            border: '1px solid rgba(59,130,246,0.22)',
+            borderRadius: '5px',
+            padding: '4px 8px',
+          }}>
+            <span style={{ fontSize: '9px', color: '#3b82f6', lineHeight: 1 }}>📍</span>
+            <span style={{
+              color: '#93c5fd',
+              fontSize: '11px',
+              fontWeight: '600',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '148px',
+              display: 'block',
+            }}>
+              {user?.role === 'Admin'
+                ? 'All Branches'
+                : franchise?.franchise_name || 'No branch assigned'}
+            </span>
+          </div>
         </div>
       </div>
 

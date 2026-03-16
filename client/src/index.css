@@ -6,7 +6,9 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   margin: 0;
@@ -20,15 +22,30 @@ body {
   color: #0f172a;
 }
 
-h1, h2, h3, .font-display {
+h1,
+h2,
+h3,
+.font-display {
   font-family: 'Sora', sans-serif;
 }
 
 /* ─── Scrollbar ─────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
 
 /* ─── Global smooth transitions ─────────────────── */
 * {
@@ -40,7 +57,9 @@ h1, h2, h3, .font-display {
 
 /* ─── Spinner ────────────────────────────────────── */
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .spinner {
@@ -88,17 +107,20 @@ h1, h2, h3, .font-display {
 
 /* ─── Skeleton shimmer ───────────────────────────── */
 @keyframes shimmer {
-  0%   { background-position: -600px 0; }
-  100% { background-position: 600px 0; }
+  0% {
+    background-position: -600px 0;
+  }
+
+  100% {
+    background-position: 600px 0;
+  }
 }
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    #f1f5f9 25%,
-    #e8edf2 50%,
-    #f1f5f9 75%
-  );
+  background: linear-gradient(90deg,
+      #f1f5f9 25%,
+      #e8edf2 50%,
+      #f1f5f9 75%);
   background-size: 1200px 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 6px;
@@ -108,9 +130,11 @@ h1, h2, h3, .font-display {
 .table-row {
   transition: background-color 100ms ease;
 }
+
 .table-row:hover {
   background-color: #f8fafc !important;
 }
+
 .table-row:active {
   background-color: #f1f5f9 !important;
 }
@@ -119,15 +143,18 @@ h1, h2, h3, .font-display {
 .btn-primary {
   transform: translateY(0);
 }
+
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 18px rgba(59, 130, 246, 0.35) !important;
 }
+
 .btn-primary:active:not(:disabled) {
   transform: translateY(0);
   box-shadow: 0 1px 4px rgba(59, 130, 246, 0.2) !important;
   opacity: 0.9;
 }
+
 .btn-primary:disabled {
   cursor: not-allowed;
   opacity: 0.6;
@@ -138,6 +165,7 @@ h1, h2, h3, .font-display {
   background-color: #e2e8f0 !important;
   transform: translateY(-1px);
 }
+
 .btn-ghost:active:not(:disabled) {
   transform: translateY(0);
   background-color: #cbd5e1 !important;
@@ -147,9 +175,11 @@ h1, h2, h3, .font-display {
 .btn-link {
   transition: opacity 100ms ease, transform 100ms ease;
 }
+
 .btn-link:hover {
   opacity: 0.8;
 }
+
 .btn-link:active {
   opacity: 0.5;
   transform: scale(0.95);
@@ -160,6 +190,7 @@ h1, h2, h3, .font-display {
   background-color: rgba(220, 38, 38, 0.08) !important;
   border-radius: 6px;
 }
+
 .btn-success:hover:not(:disabled) {
   background-color: rgba(22, 163, 74, 0.08) !important;
   border-radius: 6px;
@@ -169,6 +200,7 @@ h1, h2, h3, .font-display {
 .card-hover {
   transition: box-shadow 200ms ease, transform 200ms ease;
 }
+
 .card-hover:hover {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.09) !important;
   transform: translateY(-1px);
@@ -176,9 +208,17 @@ h1, h2, h3, .font-display {
 
 /* ─── Pending badge pulse ────────────────────────── */
 @keyframes soft-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.6; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
+
 .badge-pending {
   animation: soft-pulse 2.2s ease-in-out infinite;
 }
