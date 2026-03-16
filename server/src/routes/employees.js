@@ -192,6 +192,88 @@ router.delete('/:id', requireRole('Admin'), async (req, res) => {
   }
 });
 
+// ─── PATCH EMPLOYEE (partial update) ──────────────────────
+router.patch('/:id', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+  const {
+    title, first_name, last_name, id_number, tax_number,
+    birth_date, marital_status, email, cell, whatsapp,
+    home_phone, alternate_phone,
+    address_street, address_city, postal_code,
+    allergies_health_concerns,
+    ec_title, ec_first_name, ec_last_name, ec_address,
+    ec_primary_phone, ec_alternate_phone, ec_relationship,
+    bank_name, branch_name, branch_code,
+    account_name, account_number, account_type,
+    job_title, employment_date,
+    franchise_id,
+  } = req.body;
+
+  try {
+    // HR cannot change franchise — only Admin can
+    const franchiseUpdate = req.user.role === 'Admin' ? franchise_id : undefined;
+
+    // HR can only edit employees in their own franchise
+    if (req.user.role === 'HR') {
+      const empCheck = await pool.query(
+        'SELECT franchise_id FROM employees WHERE id = $1',
+        [req.params.id]
+      );
+      if (empCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Employee not found.' });
+      }
+      if (empCheck.rows[0].franchise_id !== req.user.franchise_id) {
+        return res.status(403).json({ error: 'You can only edit employees in your franchise.' });
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE employees SET
+        title = $1, first_name = $2, last_name = $3,
+        id_number = $4, tax_number = $5,
+        birth_date = $6, marital_status = $7,
+        email = $8, cell = $9, whatsapp = $10,
+        home_phone = $11, alternate_phone = $12,
+        address_street = $13, address_city = $14, postal_code = $15,
+        allergies_health_concerns = $16,
+        ec_title = $17, ec_first_name = $18, ec_last_name = $19,
+        ec_address = $20, ec_primary_phone = $21,
+        ec_alternate_phone = $22, ec_relationship = $23,
+        bank_name = $24, branch_name = $25, branch_code = $26,
+        account_name = $27, account_number = $28, account_type = $29,
+        job_title = $30, employment_date = $31
+        ${req.user.role === 'Admin' ? ', franchise_id = $33' : ''}
+      WHERE id = $32
+      RETURNING *`,
+      [
+        title || null, first_name, last_name || null,
+        id_number || null, tax_number || null,
+        birth_date || null, marital_status || null,
+        email || null, cell || null, whatsapp || null,
+        home_phone || null, alternate_phone || null,
+        address_street || null, address_city || null, postal_code || null,
+        allergies_health_concerns || null,
+        ec_title || null, ec_first_name || null, ec_last_name || null,
+        ec_address || null, ec_primary_phone || null,
+        ec_alternate_phone || null, ec_relationship || null,
+        bank_name || null, branch_name || null, branch_code || null,
+        account_name || null, account_number || null, account_type || null,
+        job_title || null, employment_date || null,
+        req.params.id,
+        ...(req.user.role === 'Admin' ? [franchise_id || null] : []),
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Update employee error:', err.message);
+    res.status(500).json({ error: 'Failed to update employee.' });
+  }
+});
+
 // ─── LINK EMPLOYEE TO USER ACCOUNT ───────────────────────
 router.patch('/:id/link-user', requireRole('Admin', 'HR'), async (req, res) => {
   const { user_id } = req.body;

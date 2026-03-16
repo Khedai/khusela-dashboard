@@ -1,356 +1,524 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useIsMobile } from '../utils/useIsMobile';
+import { can } from '../utils/access';
 import api from '../utils/api';
 import * as S from '../utils/styles';
-import { useIsMobile } from '../utils/useIsMobile';
-import { useAuth } from '../context/AuthContext';
-import EmployeeDocumentUpload from '../components/EmployeeDocumentUpload';
 import { generateEmployeeForm } from '../utils/pdfGenerator';
 
-const EMPTY_FORM = {
-  title: '', first_name: '', last_name: '', id_number: '', tax_number: '',
-  birth_date: '', marital_status: '', email: '', home_phone: '', alternate_phone: '',
-  address_street: '', address_city: '', postal_code: '',
-  allergies_health_concerns: '',
-  ec_title: '', ec_first_name: '', ec_last_name: '', ec_address: '',
-  ec_primary_phone: '', ec_alternate_phone: '', ec_relationship: '',
-  bank_name: '', branch_name: '', branch_code: '', account_name: '', account_number: ''
-};
+const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
+const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
+const ACCOUNT_TYPES = ['Cheque', 'Savings', 'Transmission'];
 
 export default function Employees() {
+  const { user } = useAuth();
+  const isMobile = useIsMobile();
+
   const [employees, setEmployees] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [linkingUser, setLinkingUser] = useState(false);
-  const [linkSuccess, setLinkSuccess] = useState('');
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('list'); // 'list' | 'form' | 'detail'
+  const [franchises, setFranchises] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
+  const [view, setView] = useState('list'); // list | detail | edit
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const isMobile = useIsMobile();
-  const { user } = useAuth();
+  const [search, setSearch] = useState('');
+  const [form, setForm] = useState({});
 
   useEffect(() => {
     fetchEmployees();
-    if (user?.role === 'Admin' || user?.role === 'HR') fetchUsers();
+    fetchFranchises();
   }, []);
 
-  const fetchUsers = async () => {
-    try {
-      const res = await api.get('/users');
-      setUsers(res.data);
-    } catch {}
-  };
-
   const fetchEmployees = async () => {
+    setLoading(true);
     try {
-      const res = await api.get('/employees');
+      const franchiseParam = user?.role !== 'Admin' && user?.franchise_id
+        ? `?franchise_id=${user.franchise_id}` : '';
+      const res = await api.get(`/employees${franchiseParam}`);
       setEmployees(res.data);
     } catch { setError('Failed to load employees.'); }
     finally { setLoading(false); }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitting(true); setError('');
+  const fetchFranchises = async () => {
     try {
-      await api.post('/employees', form);
-      setSuccess('Employee onboarded successfully.');
-      setView('list'); setForm(EMPTY_FORM);
-      fetchEmployees();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save.');
-    } finally { setSubmitting(false); }
+      const res = await api.get('/franchises');
+      setFranchises(res.data);
+    } catch {}
   };
 
-  const filtered = employees.filter(e =>
-    `${e.first_name} ${e.last_name} ${e.id_number || ''} ${e.email || ''}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const openDetail = (emp) => {
+    setSelected(emp);
+    setView('detail');
+    setError(''); setSuccess('');
+  };
 
-  // Detail view
-  if (view === 'detail' && selected) {
-    const e = selected;
+  const openEdit = (emp) => {
+    setSelected(emp);
+    setForm({ ...emp });
+    setView('edit');
+    setError(''); setSuccess('');
+  };
+
+  const handleSave = async () => {
+    if (!form.first_name) {
+      setError('First name is required.');
+      return;
+    }
+    setSaving(true); setError(''); setSuccess('');
+    try {
+      const res = await api.patch(`/employees/${selected.id}`, form);
+      setSelected(res.data);
+      setEmployees(prev => prev.map(e => e.id === res.data.id ? res.data : e));
+      setSuccess('Employee updated successfully.');
+      setView('detail');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save changes.');
+    } finally { setSaving(false); }
+  };
+
+  const f = (key) => form[key] || '';
+  const set = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }));
+
+  const filtered = employees.filter(e => {
+    const q = search.toLowerCase();
+    return (
+      e.first_name?.toLowerCase().includes(q) ||
+      e.last_name?.toLowerCase().includes(q) ||
+      e.id_number?.toLowerCase().includes(q) ||
+      e.email?.toLowerCase().includes(q) ||
+      e.job_title?.toLowerCase().includes(q)
+    );
+  });
+
+  // ── EDIT VIEW ──────────────────────────────────────────
+  if (view === 'edit') {
     return (
       <div style={{ maxWidth: '800px' }}>
-        <BackButton onClick={() => setView('list')} />
-        <div style={S.card}>
-          <div style={{ padding: '22px 26px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h2 style={{ ...S.pageTitle, fontSize: '18px' }}>{e.title} {e.first_name} {e.last_name}</h2>
-              <p style={{ color: '#64748b', fontSize: '13px', margin: '2px 0 0' }}>{e.email || 'No email'}</p>
-              {!e.last_name && (
-                <div style={{
-                  marginTop: '10px', padding: '10px 14px', borderRadius: '8px',
-                  background: '#fffbeb', border: '1px solid #fde68a',
-                  color: '#d97706', fontSize: '13px', fontWeight: '500',
-                }}>
-                  Profile incomplete — please fill in this employee's details.
-                </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button onClick={() => generateEmployeeForm(e)} style={S.ghostBtn}>Download PDF</button>
-            </div>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => { setView('detail'); setError(''); }}
+              style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+              ← Back
+            </button>
+            <h2 style={{ ...S.pageTitle, margin: 0 }}>
+              Edit — {selected?.first_name} {selected?.last_name}
+            </h2>
           </div>
-          <div style={{ padding: '24px 26px' }}>
-            {[
-              { title: 'Personal Information', rows: [
-                ['ID Number', e.id_number], ['Tax Number', e.tax_number],
-                ['Date of Birth', e.birth_date?.split('T')[0]], ['Marital Status', e.marital_status],
-                ['Home Phone', e.home_phone], ['Alternate Phone', e.alternate_phone],
-              ]},
-              { title: 'Address', rows: [
-                ['Street', e.address_street], ['City', e.address_city], ['Postal Code', e.postal_code],
-              ]},
-              { title: 'Health', rows: [['Allergies / Concerns', e.allergies_health_concerns]] },
-              { title: 'Emergency Contact', rows: [
-                ['Name', [e.ec_title, e.ec_first_name, e.ec_last_name].filter(Boolean).join(' ')],
-                ['Relationship', e.ec_relationship], ['Primary Phone', e.ec_primary_phone],
-                ['Alternate Phone', e.ec_alternate_phone], ['Address', e.ec_address],
-              ]},
-              { title: 'Bank Details', rows: [
-                ['Bank', e.bank_name], ['Branch', e.branch_name],
-                ['Branch Code', e.branch_code], ['Account Name', e.account_name],
-                ['Account Number', e.account_number],
-              ]},
-            ].map(section => (
-              <div key={section.title} style={S.formSection}>
-                <p style={S.formSectionTitle}>{section.title}</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
-                  {section.rows.map(([label, value]) => (
-                    <div key={label}>
-                      <span style={{ color: '#94a3b8', fontSize: '12px' }}>{label}</span>
-                      <p style={{ color: '#0f172a', fontSize: '13.5px', margin: '2px 0 0', fontWeight: '500' }}>{value || '—'}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {(user?.role === 'Admin' || user?.role === 'HR') && (
-              <>
-                <div style={S.formSection}>
-                  <p style={S.formSectionTitle}>Account Link</p>
-                  <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '12px' }}>
-                    Link this employee to a user account so they can submit leave requests.
-                  </p>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <select
-                      defaultValue={e.user_id || ''}
-                      onChange={async (ev) => {
-                        setLinkingUser(true); setLinkSuccess('');
-                        try {
-                          await api.patch(`/employees/${e.id}/link-user`, { user_id: ev.target.value || null });
-                          setLinkSuccess('Account linked successfully.');
-                          fetchEmployees();
-                        } catch {
-                          setError('Failed to link account.');
-                        } finally { setLinkingUser(false); }
-                      }}
-                      style={{ ...S.input, width: '240px' }}
-                    >
-                      <option value="">— No account linked —</option>
-                      {users.filter(u => u.role === 'Consultant' || u.role === 'HR').map(u => (
-                        <option key={u.id} value={u.id}>{u.username} ({u.role})</option>
-                      ))}
-                    </select>
-                    {linkingUser && <span style={{ color: '#94a3b8', fontSize: '13px' }}>Saving...</span>}
-                    {linkSuccess && <span style={{ color: '#16a34a', fontSize: '13px', fontWeight: '500' }}>{linkSuccess}</span>}
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '8px' }}>
-                  <EmployeeDocumentUpload employeeId={e.id} />
-                </div>
-              </>
-            )}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => { setView('detail'); setError(''); }} style={S.ghostBtn}>Cancel</button>
+            <button onClick={handleSave} disabled={saving}
+              style={{ ...S.primaryBtn, opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
           </div>
         </div>
-      </div>
-    );
-  }
 
-  // Onboarding form
-  if (view === 'form') {
-    return (
-      <div style={{ maxWidth: '800px' }}>
-        <BackButton onClick={() => { setView('list'); setError(''); }} />
-        <div style={{ ...S.card, overflow: 'visible' }}>
-          <div style={{ padding: '22px 26px', borderBottom: '1px solid #f1f5f9' }}>
-            <h2 style={{ ...S.pageTitle, fontSize: '18px' }}>Onboard New Employee</h2>
-          </div>
-          {error && <AlertBanner type="error" message={error} />}
-          <form onSubmit={handleSubmit} style={{ padding: '24px 26px' }}>
-            {[
-              { title: 'Personal Information', fields: [
-                { label: 'Title', name: 'title', type: 'select', options: ['', 'Mr', 'Mrs', 'Ms', 'Dr', 'Prof'] },
-                { label: 'First Name *', name: 'first_name', required: true },
-                { label: 'Last Name *', name: 'last_name', required: true },
-                { label: 'ID Number', name: 'id_number' },
-                { label: 'Tax Number', name: 'tax_number' },
-                { label: 'Date of Birth', name: 'birth_date', type: 'date' },
-                { label: 'Marital Status', name: 'marital_status', type: 'select', options: ['', 'Single', 'Married', 'Divorced', 'Widowed'] },
-                { label: 'Email', name: 'email', type: 'email' },
-                { label: 'Home Phone', name: 'home_phone' },
-                { label: 'Alternate Phone', name: 'alternate_phone' },
-              ]},
-              { title: 'Address', fields: [
-                { label: 'Street Address', name: 'address_street', span: 2 },
-                { label: 'City', name: 'address_city' },
-                { label: 'Postal Code', name: 'postal_code' },
-              ]},
-              { title: 'Emergency Contact', fields: [
-                { label: 'Title', name: 'ec_title', type: 'select', options: ['', 'Mr', 'Mrs', 'Ms', 'Dr'] },
-                { label: 'First Name', name: 'ec_first_name' },
-                { label: 'Last Name', name: 'ec_last_name' },
-                { label: 'Relationship', name: 'ec_relationship' },
-                { label: 'Primary Phone', name: 'ec_primary_phone' },
-                { label: 'Alternate Phone', name: 'ec_alternate_phone' },
-                { label: 'Address', name: 'ec_address', span: 2 },
-              ]},
-              { title: 'Bank Details', fields: [
-                { label: 'Bank Name', name: 'bank_name' },
-                { label: 'Branch Name', name: 'branch_name' },
-                { label: 'Branch Code', name: 'branch_code' },
-                { label: 'Account Name', name: 'account_name' },
-                { label: 'Account Number', name: 'account_number' },
-              ]},
-            ].map(section => (
-              <div key={section.title} style={S.formSection}>
-                <p style={S.formSectionTitle}>{section.title}</p>
-                <div style={S.responsiveGrid(isMobile)}>
-                  {section.fields.map(f => (
-                    <div key={f.name} style={{ gridColumn: f.span === 2 ? 'span 2' : 'span 1' }}>
-                      <FormField field={f} value={form[f.name]}
-                        onChange={e => setForm(p => ({ ...p, [f.name]: e.target.value }))} />
-                    </div>
+        {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+
+        {/* Form sections */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* Personal */}
+          <FormSection title="Personal Details">
+            <FormGrid>
+              <FormField label="Title">
+                <select value={f('title')} onChange={set('title')} style={S.input}>
+                  <option value="">—</option>
+                  {TITLES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </FormField>
+              <FormField label="First Name *">
+                <input value={f('first_name')} onChange={set('first_name')} style={S.input} />
+              </FormField>
+              <FormField label="Last Name">
+                <input value={f('last_name')} onChange={set('last_name')} style={S.input} />
+              </FormField>
+              <FormField label="ID Number">
+                <input value={f('id_number')} onChange={set('id_number')} style={S.input} maxLength={13} />
+              </FormField>
+              <FormField label="Tax Number">
+                <input value={f('tax_number')} onChange={set('tax_number')} style={S.input} />
+              </FormField>
+              <FormField label="Date of Birth">
+                <input type="date" value={f('birth_date')?.split('T')[0] || ''} onChange={set('birth_date')} style={S.input} />
+              </FormField>
+              <FormField label="Marital Status">
+                <select value={f('marital_status')} onChange={set('marital_status')} style={S.input}>
+                  <option value="">—</option>
+                  {MARITAL.map(m => <option key={m}>{m}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Job Title">
+                <input value={f('job_title')} onChange={set('job_title')} style={S.input} placeholder="e.g. Debt Consultant" />
+              </FormField>
+              <FormField label="Employment Date">
+                <input type="date" value={f('employment_date')?.split('T')[0] || ''} onChange={set('employment_date')} style={S.input} />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+
+          {/* Contact */}
+          <FormSection title="Contact Details">
+            <FormGrid>
+              <FormField label="Email">
+                <input type="email" value={f('email')} onChange={set('email')} style={S.input} />
+              </FormField>
+              <FormField label="Cell">
+                <input value={f('cell')} onChange={set('cell')} style={S.input} placeholder="e.g. 082 123 4567" />
+              </FormField>
+              <FormField label="WhatsApp">
+                <input value={f('whatsapp')} onChange={set('whatsapp')} style={S.input} />
+              </FormField>
+              <FormField label="Home Phone">
+                <input value={f('home_phone')} onChange={set('home_phone')} style={S.input} />
+              </FormField>
+              <FormField label="Alternate Phone">
+                <input value={f('alternate_phone')} onChange={set('alternate_phone')} style={S.input} />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+
+          {/* Address */}
+          <FormSection title="Address">
+            <FormGrid>
+              <FormField label="Street Address" span={2}>
+                <input value={f('address_street')} onChange={set('address_street')} style={S.input} />
+              </FormField>
+              <FormField label="City">
+                <input value={f('address_city')} onChange={set('address_city')} style={S.input} />
+              </FormField>
+              <FormField label="Postal Code">
+                <input value={f('postal_code')} onChange={set('postal_code')} style={S.input} />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+
+          {/* Health */}
+          <FormSection title="Health">
+            <FormField label="Allergies / Health Concerns">
+              <textarea
+                value={f('allergies_health_concerns')}
+                onChange={set('allergies_health_concerns')}
+                rows={3} style={{ ...S.input, resize: 'vertical' }}
+                placeholder="None"
+              />
+            </FormField>
+          </FormSection>
+
+          {/* Emergency Contact */}
+          <FormSection title="Emergency Contact">
+            <FormGrid>
+              <FormField label="Title">
+                <select value={f('ec_title')} onChange={set('ec_title')} style={S.input}>
+                  <option value="">—</option>
+                  {TITLES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </FormField>
+              <FormField label="First Name">
+                <input value={f('ec_first_name')} onChange={set('ec_first_name')} style={S.input} />
+              </FormField>
+              <FormField label="Last Name">
+                <input value={f('ec_last_name')} onChange={set('ec_last_name')} style={S.input} />
+              </FormField>
+              <FormField label="Relationship">
+                <input value={f('ec_relationship')} onChange={set('ec_relationship')} style={S.input} placeholder="e.g. Spouse, Parent" />
+              </FormField>
+              <FormField label="Primary Phone">
+                <input value={f('ec_primary_phone')} onChange={set('ec_primary_phone')} style={S.input} />
+              </FormField>
+              <FormField label="Alternate Phone">
+                <input value={f('ec_alternate_phone')} onChange={set('ec_alternate_phone')} style={S.input} />
+              </FormField>
+              <FormField label="Address" span={2}>
+                <input value={f('ec_address')} onChange={set('ec_address')} style={S.input} />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+
+          {/* Banking */}
+          <FormSection title="Banking Details">
+            <FormGrid>
+              <FormField label="Bank Name">
+                <input value={f('bank_name')} onChange={set('bank_name')} style={S.input} placeholder="e.g. ABSA, FNB, Nedbank" />
+              </FormField>
+              <FormField label="Account Name">
+                <input value={f('account_name')} onChange={set('account_name')} style={S.input} />
+              </FormField>
+              <FormField label="Account Number">
+                <input value={f('account_number')} onChange={set('account_number')} style={S.input} />
+              </FormField>
+              <FormField label="Account Type">
+                <select value={f('account_type')} onChange={set('account_type')} style={S.input}>
+                  <option value="">—</option>
+                  {ACCOUNT_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Branch Name">
+                <input value={f('branch_name')} onChange={set('branch_name')} style={S.input} />
+              </FormField>
+              <FormField label="Branch Code">
+                <input value={f('branch_code')} onChange={set('branch_code')} style={S.input} />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+
+          {/* Franchise — Admin only */}
+          {user?.role === 'Admin' && (
+            <FormSection title="Assignment">
+              <FormField label="Franchise">
+                <select value={f('franchise_id')} onChange={set('franchise_id')} style={S.input}>
+                  <option value="">— Unassigned —</option>
+                  {franchises.map(fr => (
+                    <option key={fr.id} value={fr.id}>{fr.franchise_name}</option>
                   ))}
-                </div>
-              </div>
-            ))}
-            <div style={{ marginBottom: '24px' }}>
-              <p style={S.formSectionTitle}>Health</p>
-              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '6px' }}>Allergies / Health Concerns</label>
-              <textarea name="allergies_health_concerns" value={form.allergies_health_concerns}
-                onChange={e => setForm(p => ({ ...p, allergies_health_concerns: e.target.value }))}
-                rows={3} style={{ ...S.input, resize: 'vertical' }} />
-            </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="submit" disabled={submitting} style={S.primaryBtn}>
-                {submitting ? 'Saving...' : 'Save Employee'}
-              </button>
-              <button type="button" onClick={() => { setView('list'); setError(''); }} style={S.ghostBtn}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  }
+                </select>
+              </FormField>
+            </FormSection>
+          )}
 
-  // Directory list
-  return (
-    <div style={{ maxWidth: '1100px' }}>
-      <div style={S.pageHeader(isMobile)}>
-        <h2 style={S.pageTitle}>Employee Directory</h2>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <button onClick={() => generateEmployeeForm(null)} style={S.ghostBtn}>Empty Template</button>
-          <button onClick={() => { setView('form'); setSuccess(''); setError(''); }} style={S.primaryBtn}>
-            + Onboard Employee
+        </div>
+
+        {/* Bottom save */}
+        <div style={{ display: 'flex', gap: '8px', marginTop: '24px', justifyContent: 'flex-end' }}>
+          <button onClick={() => { setView('detail'); setError(''); }} style={S.ghostBtn}>Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ ...S.primaryBtn, opacity: saving ? 0.7 : 1 }}>
+            {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>
+    );
+  }
 
-      {success && <AlertBanner type="success" message={success} />}
-      {error && <AlertBanner type="error" message={error} />}
+  // ── DETAIL VIEW ────────────────────────────────────────
+  if (view === 'detail' && selected) {
+    return (
+      <div style={{ maxWidth: '800px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => setView('list')}
+              style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+              ← Back
+            </button>
+            <h2 style={{ ...S.pageTitle, margin: 0 }}>
+              {selected.title} {selected.first_name} {selected.last_name}
+            </h2>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => generateEmployeeForm(selected)} style={S.ghostBtn}>
+              ↓ PDF
+            </button>
+            {can(user, 'employees.edit') && (
+              <button onClick={() => openEdit(selected)} style={S.primaryBtn}>
+                Edit Details
+              </button>
+            )}
+          </div>
+        </div>
 
-      <input
-        type="text" placeholder="Search by name, ID or email..."
-        value={search} onChange={e => setSearch(e.target.value)}
-        style={{ ...S.input, width: '320px', marginBottom: '16px' }}
-      />
+        {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
-      <div style={S.card}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <DetailSection title="Personal Details" data={[
+            { label: 'Title', value: selected.title },
+            { label: 'Full Name', value: `${selected.first_name || ''} ${selected.last_name || ''}`.trim() },
+            { label: 'ID Number', value: selected.id_number },
+            { label: 'Tax Number', value: selected.tax_number },
+            { label: 'Date of Birth', value: selected.birth_date?.split('T')[0] },
+            { label: 'Marital Status', value: selected.marital_status },
+            { label: 'Job Title', value: selected.job_title },
+            { label: 'Employment Date', value: selected.employment_date?.split('T')[0] },
+            { label: 'Franchise', value: selected.franchise_name },
+          ]} />
+          <DetailSection title="Contact" data={[
+            { label: 'Email', value: selected.email },
+            { label: 'Cell', value: selected.cell },
+            { label: 'WhatsApp', value: selected.whatsapp },
+            { label: 'Home Phone', value: selected.home_phone },
+            { label: 'Alternate Phone', value: selected.alternate_phone },
+          ]} />
+          <DetailSection title="Address" data={[
+            { label: 'Street', value: selected.address_street },
+            { label: 'City', value: selected.address_city },
+            { label: 'Postal Code', value: selected.postal_code },
+          ]} />
+          <DetailSection title="Emergency Contact" data={[
+            { label: 'Name', value: `${selected.ec_title || ''} ${selected.ec_first_name || ''} ${selected.ec_last_name || ''}`.trim() },
+            { label: 'Relationship', value: selected.ec_relationship },
+            { label: 'Primary Phone', value: selected.ec_primary_phone },
+            { label: 'Alternate Phone', value: selected.ec_alternate_phone },
+            { label: 'Address', value: selected.ec_address },
+          ]} />
+          <DetailSection title="Health" data={[
+            { label: 'Allergies / Health Concerns', value: selected.allergies_health_concerns || 'None' },
+          ]} />
+          <DetailSection title="Banking" data={[
+            { label: 'Bank', value: selected.bank_name },
+            { label: 'Account Name', value: selected.account_name },
+            { label: 'Account Number', value: selected.account_number },
+            { label: 'Account Type', value: selected.account_type },
+            { label: 'Branch Name', value: selected.branch_name },
+            { label: 'Branch Code', value: selected.branch_code },
+          ]} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── LIST VIEW ──────────────────────────────────────────
+  return (
+    <div style={{ maxWidth: '1100px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <h2 style={S.pageTitle}>Employees</h2>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search name, ID, email..."
+            style={{ ...S.input, width: isMobile ? '100%' : '220px', margin: 0 }}
+          />
+        </div>
+      </div>
+
+      {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
         {loading ? (
-          <p style={{ padding: '24px', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
+          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>Loading...</div>
         ) : filtered.length === 0 ? (
-          <p style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>No employees found.</p>
+          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>No employees found.</div>
+        ) : isMobile ? (
+          <div>
+            {filtered.map((emp, i) => (
+              <div key={emp.id} onClick={() => openDetail(emp)}
+                style={{ padding: '14px 18px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                  <span style={{ fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>
+                    {emp.first_name} {emp.last_name}
+                  </span>
+                  <span style={{ color: '#2563eb', fontSize: '12px', fontWeight: '600' }}>View</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                  {emp.job_title || 'No title'} · {emp.franchise_name || 'No branch'}
+                </p>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
-              <tr>
-                {['Name', 'ID Number', 'Email', 'Phone', 'Marital Status', ''].map(h => (
-                  <th key={h} style={S.tableHeader}>{h}</th>
+              <tr style={{ background: '#f8fafc' }}>
+                {['Name', 'ID Number', 'Job Title', 'Cell', 'Franchise', 'Actions'].map(h => (
+                  <th key={h} style={{
+                    padding: '10px 22px', textAlign: 'left',
+                    color: '#94a3b8', fontSize: '11px', fontWeight: '600',
+                    textTransform: 'uppercase', letterSpacing: '0.06em',
+                  }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(emp => (
-                <tr key={emp.id}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ ...S.tableCell, fontWeight: '500' }}>{emp.title} {emp.first_name} {emp.last_name}</td>
-                  <td style={{ ...S.tableCell, color: '#64748b' }}>{emp.id_number || '—'}</td>
-                  <td style={{ ...S.tableCell, color: '#64748b' }}>{emp.email || '—'}</td>
-                  <td style={{ ...S.tableCell, color: '#64748b' }}>{emp.home_phone || '—'}</td>
-                  <td style={{ ...S.tableCell, color: '#64748b' }}>{emp.marital_status || '—'}</td>
-                  <td style={S.tableCell}>
-                    <button onClick={() => { setSelected(emp); setView('detail'); }}
-                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
-                      View
-                    </button>
+                <tr key={emp.id} className="table-row" style={{ borderTop: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>
+                    {emp.first_name} {emp.last_name}
+                  </td>
+                  <td style={{ padding: '12px 22px', color: '#64748b' }}>
+                    {emp.id_number || '—'}
+                  </td>
+                  <td style={{ padding: '12px 22px', color: '#64748b' }}>
+                    {emp.job_title || '—'}
+                  </td>
+                  <td style={{ padding: '12px 22px', color: '#64748b' }}>
+                    {emp.cell || emp.home_phone || '—'}
+                  </td>
+                  <td style={{ padding: '12px 22px' }}>
+                    {emp.franchise_name ? (
+                      <span style={{
+                        background: '#eff6ff', color: '#2563eb',
+                        padding: '2px 8px', borderRadius: '4px',
+                        fontSize: '11px', fontWeight: '600',
+                      }}>{emp.franchise_name}</span>
+                    ) : '—'}
+                  </td>
+                  <td style={{ padding: '12px 22px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => openDetail(emp)}
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+                        View
+                      </button>
+                      {can(user, 'employees.edit') && (
+                        <button onClick={() => openEdit(emp)}
+                          style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+                          Edit
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
-            </table>
-          </div>
+          </table>
         )}
       </div>
     </div>
   );
 }
 
-function FormField({ field, value, onChange }) {
+// ── Helper components ──────────────────────────────────────
+
+function FormSection({ title, children }) {
   return (
-    <div>
-      <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>{field.label}</label>
-      {field.type === 'select' ? (
-        <select value={value} onChange={onChange} style={{ ...S.input }}>
-          {field.options.map(o => <option key={o} value={o}>{o || '— Select —'}</option>)}
-        </select>
-      ) : (
-        <input type={field.type || 'text'} value={value} onChange={onChange}
-          required={field.required} style={S.input} />
-      )}
+    <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+        <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{title}</p>
+      </div>
+      <div style={{ padding: '18px 20px' }}>{children}</div>
     </div>
   );
 }
 
-function BackButton({ onClick }) {
+function FormGrid({ children }) {
   return (
-    <button onClick={onClick} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', marginBottom: '16px', padding: 0 }}>
-      ← Back
-    </button>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+      {children}
+    </div>
   );
 }
 
-function AlertBanner({ type, message }) {
+function FormField({ label, children, span }) {
   return (
-    <div style={{
-      margin: '0 26px 16px',
-      padding: '11px 14px',
-      borderRadius: '8px',
-      fontSize: '13.5px',
-      background: type === 'error' ? '#fef2f2' : '#f0fdf4',
-      color: type === 'error' ? '#dc2626' : '#16a34a',
-      border: `1px solid ${type === 'error' ? '#fecaca' : '#bbf7d0'}`,
-    }}>
-      {message}
+    <div style={{ gridColumn: span === 2 ? 'span 2' : 'span 1' }}>
+      <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px', fontWeight: '500' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function DetailSection({ title, data }) {
+  const hasValues = data.some(d => d.value);
+  if (!hasValues) return null;
+  return (
+    <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+        <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{title}</p>
+      </div>
+      <div style={{ padding: '4px 0' }}>
+        {data.filter(d => d.value).map((item, i) => (
+          <div key={i} style={{
+            display: 'flex', padding: '10px 20px',
+            borderBottom: i < data.filter(d => d.value).length - 1 ? '1px solid #f8fafc' : 'none',
+          }}>
+            <span style={{ color: '#94a3b8', fontSize: '12.5px', width: '160px', flexShrink: 0 }}>{item.label}</span>
+            <span style={{ color: '#0f172a', fontSize: '13px', fontWeight: '500' }}>{item.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
