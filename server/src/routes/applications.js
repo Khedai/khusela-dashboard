@@ -329,18 +329,18 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
 
 // ─── EDIT APPLICATION DETAILS ─────────────────────────────
 router.patch('/:id', async (req, res) => {
-  const {
-    date, franchise_id, consultant_id,
-    is_med, is_dreview, is_drr, is_3in1, is_rent_to,
-    gross_salary, nett_salary, spouse_salary, total_expenses,
-    exp_groceries, exp_rent_bond, exp_transport,
-    exp_school_fees, exp_rates, exp_water_elec,
-    bank, account_no, account_type,
-    debit_order_date, debit_order_amount, debt_review_status,
-    // Client fields
-    first_name, last_name, id_number, cell, whatsapp,
-    email, address, employer, marital_status,
-  } = req.body;
+  const b = req.body;
+
+  // Accept both aliased names (from GET /:id) and direct names
+  const first_name     = b.first_name     ?? b.client_first_name ?? null;
+  const last_name      = b.last_name      ?? b.client_last_name  ?? null;
+  const id_number      = b.id_number      ?? b.client_id_number  ?? null;
+  const cell           = b.cell           ?? b.client_cell       ?? null;
+  const whatsapp       = b.whatsapp       ?? b.client_whatsapp   ?? null;
+  const email          = b.email          ?? b.client_email      ?? null;
+  const address        = b.address        ?? b.client_address    ?? null;
+  const employer       = b.employer       ?? b.client_employer   ?? null;
+  const marital_status = b.marital_status ?? b.client_marital_status ?? null;
 
   try {
     // HR can only edit own franchise applications
@@ -389,28 +389,27 @@ router.patch('/:id', async (req, res) => {
       );
     }
 
-    // Update application
+    // Update application (total_expenses is a generated column — do NOT set it)
     const result = await pool.query(
       `UPDATE applications SET
         date = $1, franchise_id = $2, consultant_id = $3,
         is_med = $4, is_dreview = $5, is_drr = $6,
         is_3in1 = $7, is_rent_to = $8,
         gross_salary = $9, nett_salary = $10, spouse_salary = $11,
-        total_expenses = $12,
-        exp_groceries = $13, exp_rent_bond = $14, exp_transport = $15,
-        exp_school_fees = $16, exp_rates = $17, exp_water_elec = $18,
-        bank = $19, account_no = $20, account_type = $21,
-        debit_order_date = $22, debit_order_amount = $23,
-        debt_review_status = $24
-       WHERE id = $25 RETURNING *`,
+        exp_groceries = $12, exp_rent_bond = $13, exp_transport = $14,
+        exp_school_fees = $15, exp_rates = $16, exp_water_elec = $17,
+        bank = $18, account_no = $19, account_type = $20,
+        debit_order_date = $21, debit_order_amount = $22,
+        debt_review_status = $23
+       WHERE id = $24 RETURNING *`,
       [
-        date, franchise_id, consultant_id,
-        is_med, is_dreview, is_drr, is_3in1, is_rent_to,
-        gross_salary, nett_salary, spouse_salary, total_expenses,
-        exp_groceries, exp_rent_bond, exp_transport,
-        exp_school_fees, exp_rates, exp_water_elec,
-        bank, account_no, account_type,
-        debit_order_date, debit_order_amount, debt_review_status,
+        b.date, b.franchise_id, b.consultant_id,
+        b.is_med, b.is_dreview, b.is_drr, b.is_3in1, b.is_rent_to,
+        b.gross_salary, b.nett_salary, b.spouse_salary,
+        b.exp_groceries, b.exp_rent_bond, b.exp_transport,
+        b.exp_school_fees, b.exp_rates, b.exp_water_elec,
+        b.bank, b.account_no, b.account_type,
+        b.debit_order_date, b.debit_order_amount, b.debt_review_status,
         req.params.id
       ]
     );
