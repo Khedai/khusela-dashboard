@@ -42,12 +42,16 @@ function SidebarContent({ user, onNavigate }) {
   };
 
   const [notifications, setNotifications] = useState([]);
-  const [showNotifs, setShowNotifs] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const unread = notifications.filter(n => !n.is_read).length;
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000);
+    fetchPendingCount();
+    const interval = setInterval(() => {
+      fetchNotifications();
+      fetchPendingCount();
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -56,6 +60,13 @@ function SidebarContent({ user, onNavigate }) {
       const res = await api.get('/notifications');
       setNotifications(res.data);
     } catch { }
+  };
+
+  const fetchPendingCount = async () => {
+    try {
+      const res = await api.get('/applications/pending-count');
+      setPendingCount(res.data.count);
+    } catch {}
   };
 
   const markAllRead = async () => {
@@ -132,6 +143,15 @@ function SidebarContent({ user, onNavigate }) {
                   minWidth: '18px', textAlign: 'center', lineHeight: '16px',
                 }}>
                   {unread}
+                </span>
+              )}
+              {item.to === '/applications' && pendingCount > 0 && (
+                <span style={{
+                  background: '#d97706', color: 'white',
+                  borderRadius: '10px', fontSize: '10px',
+                  fontWeight: '700', padding: '1px 6px',
+                }}>
+                  {pendingCount}
                 </span>
               )}
             </span>

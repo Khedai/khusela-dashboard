@@ -4,10 +4,42 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 
 router.use(verifyToken);
 
+// ─── GET PENDING COUNT (MUST BE BEFORE /:id) ──────────────
+router.get('/pending-count', async (req, res) => {
+  try {
+    const params = [];
+    let where = `WHERE a.status IN ('Submitted', 'Pending Docs')`;
+
+    if (req.user.role === 'Consultant') {
+      const empResult = await pool.query(
+        'SELECT id FROM employees WHERE user_id = $1 LIMIT 1',
+        [req.user.id]
+      );
+      const empId = empResult.rows[0]?.id;
+      if (empId) {
+        where += ` AND a.consultant_id = $1`;
+        params.push(empId);
+      }
+    } else if (req.user.role === 'HR') {
+      where += ` AND a.franchise_id = $1`;
+      params.push(req.user.franchise_id);
+    }
+
+    const result = await pool.query(
+      `SELECT COUNT(*) FROM applications a ${where}`,
+      params
+    );
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (err) {
+    res.status(500).json({ count: 0 });
+  }
+});
+
 // ─── GET ALL APPLICATIONS ─────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const { franchise_id } = req.query;
+    const { franchise_id, page = 1, limit = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
     let query = `
       SELECT 
@@ -46,9 +78,29 @@ router.get('/', verifyToken, async (req, res) => {
       query += ` WHERE ${conditions.join(' AND ')}`;
     }
 
+    // Count query for total
+    const countQuery = query
+      .replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM')
+      .replace(/ORDER BY.*$/, '');
+    const countResult = await pool.query(countQuery.split('ORDER')[0], params);
+    const total = parseInt(countResult.rows[0].count);
+
     query += ` ORDER BY a.created_at DESC`;
+
+    // Add pagination to main query
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), offset);
+
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    res.json({
+      data: result.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      }
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch applications.' });
@@ -96,6 +148,24 @@ router.get('/:id', requireRole('Admin', 'HR', 'Consultant'), async (req, res) =>
   }
 });
 
+// ─── GET APPLICATION LOGS ─────────────────────────────────
+router.get('/:id/logs', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT l.*, u.username
+       FROM application_logs l
+       LEFT JOIN users u ON l.user_id = u.id
+       WHERE l.application_id = $1
+       ORDER BY l.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch logs.' });
+  }
+});
+
+
 // ─── CREATE APPLICATION (with client + creditors) ─────────
 router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
   const {
@@ -140,8 +210,19 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
     return res.status(400).json({ error: 'Franchise is required. Please select a franchise.' });
   }
 
+  let finalConsultantId = consultant_id || null;
+  if (req.user?.role === 'Consultant' && !finalConsultantId) {
+    const empResult = await pool.query(
+      'SELECT id FROM employees WHERE user_id = $1 LIMIT 1',
+      [req.user.id]
+    );
+    if (empResult.rows.length > 0) {
+      finalConsultantId = empResult.rows[0].id;
+    }
+  }
+
   // Auto-assign franchise from logged-in user if not provided
-  const franchiseId = req.body.franchise_id || req.user?.franchise_id;
+  const franchiseId = req.body.franchise_id || req.user?.franchise_id || null;
 
   // Use a transaction so if creditors fail, the whole thing rolls back
   const client = await pool.connect();
@@ -195,7 +276,7 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
         $27,$28,$29,$30
       ) RETURNING *`,
       [
-        clientId, consultant_id || null, franchiseId,
+        clientId, finalConsultantId, franchiseId,
         ext_number, branch,
         is_med || false, is_dreview || false, is_drr || false,
         is_3in1 || false, is_rent_to || false, other_type || null,
@@ -246,43 +327,152 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
   }
 });
 
-// ─── UPDATE APPLICATION STATUS ────────────────────────────
-router.patch('/:id/status', requireRole('Admin', 'HR'), async (req, res) => {
-  const { status } = req.body;
-  const validStatuses = ['Draft', 'Submitted', 'Pending Docs', 'Approved', 'Rejected'];
-
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: 'Invalid status value.' });
-  }
-
-  // Block approval if mandate not verified
-  if (status === 'Approved') {
-    const mandateCheck = await pool.query(
-      'SELECT mandate_status FROM applications WHERE id = $1',
-      [req.params.id]
-    );
-    const mandateStatus = mandateCheck.rows[0]?.mandate_status;
-    if (mandateStatus !== 'Verified') {
-      return res.status(400).json({
-        error: 'Cannot approve application until mandate is verified. Please upload and verify the signed mandate first.'
-      });
-    }
-  }
+// ─── EDIT APPLICATION DETAILS ─────────────────────────────
+router.patch('/:id', async (req, res) => {
+  const {
+    date, franchise_id, consultant_id,
+    is_med, is_dreview, is_drr, is_3in1, is_rent_to,
+    gross_salary, nett_salary, spouse_salary, total_expenses,
+    exp_groceries, exp_rent_bond, exp_transport,
+    exp_school_fees, exp_rates, exp_water_elec,
+    bank, account_no, account_type,
+    debit_order_date, debit_order_amount, debt_review_status,
+    // Client fields
+    first_name, last_name, id_number, cell, whatsapp,
+    email, address, employer, marital_status,
+  } = req.body;
 
   try {
+    // HR can only edit own franchise applications
+    if (req.user.role === 'HR') {
+      const appCheck = await pool.query(
+        'SELECT franchise_id FROM applications WHERE id = $1',
+        [req.params.id]
+      );
+      if (appCheck.rows[0]?.franchise_id !== req.user.franchise_id) {
+        return res.status(403).json({ error: 'You can only edit applications in your franchise.' });
+      }
+    }
+
+    // Consultants can only edit their own applications
+    if (req.user.role === 'Consultant') {
+      const empResult = await pool.query(
+        'SELECT id FROM employees WHERE user_id = $1 LIMIT 1',
+        [req.user.id]
+      );
+      const empId = empResult.rows[0]?.id;
+      const appCheck = await pool.query(
+        'SELECT consultant_id FROM applications WHERE id = $1',
+        [req.params.id]
+      );
+      if (appCheck.rows[0]?.consultant_id !== empId) {
+        return res.status(403).json({ error: 'You can only edit your own applications.' });
+      }
+    }
+
+    // Update client record first
+    const appData = await pool.query(
+      'SELECT client_id FROM applications WHERE id = $1',
+      [req.params.id]
+    );
+    const clientId = appData.rows[0]?.client_id;
+
+    if (clientId) {
+      await pool.query(
+        `UPDATE clients SET
+          first_name = $1, last_name = $2, id_number = $3,
+          cell = $4, whatsapp = $5, email = $6,
+          address = $7, employer = $8, marital_status = $9
+         WHERE id = $10`,
+        [first_name, last_name, id_number, cell, whatsapp,
+         email, address, employer, marital_status, clientId]
+      );
+    }
+
+    // Update application
     const result = await pool.query(
-      `UPDATE applications SET status = $1, updated_at = NOW()
-       WHERE id = $2 RETURNING id, status`,
-      [status, req.params.id]
+      `UPDATE applications SET
+        date = $1, franchise_id = $2, consultant_id = $3,
+        is_med = $4, is_dreview = $5, is_drr = $6,
+        is_3in1 = $7, is_rent_to = $8,
+        gross_salary = $9, nett_salary = $10, spouse_salary = $11,
+        total_expenses = $12,
+        exp_groceries = $13, exp_rent_bond = $14, exp_transport = $15,
+        exp_school_fees = $16, exp_rates = $17, exp_water_elec = $18,
+        bank = $19, account_no = $20, account_type = $21,
+        debit_order_date = $22, debit_order_amount = $23,
+        debt_review_status = $24
+       WHERE id = $25 RETURNING *`,
+      [
+        date, franchise_id, consultant_id,
+        is_med, is_dreview, is_drr, is_3in1, is_rent_to,
+        gross_salary, nett_salary, spouse_salary, total_expenses,
+        exp_groceries, exp_rent_bond, exp_transport,
+        exp_school_fees, exp_rates, exp_water_elec,
+        bank, account_no, account_type,
+        debit_order_date, debit_order_amount, debt_review_status,
+        req.params.id
+      ]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Application not found.' });
-    }
+    // Log the edit
+    await pool.query(
+      `INSERT INTO application_logs (application_id, user_id, action, note)
+       VALUES ($1, $2, 'edited', $3)`,
+      [req.params.id, req.user.id, 'Application details updated']
+    );
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('Update status error:', err.message);
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to update application.' });
+  }
+});
+
+// ─── UPDATE APPLICATION STATUS ────────────────────────────
+router.patch('/:id/status', requireRole('Admin', 'HR'), async (req, res) => {
+  const { status, note } = req.body;
+
+  try {
+    // Mandate check
+    if (status === 'Approved') {
+      const mandateCheck = await pool.query(
+        'SELECT mandate_status FROM applications WHERE id = $1',
+        [req.params.id]
+      );
+      if (mandateCheck.rows[0]?.mandate_status !== 'Verified') {
+        return res.status(400).json({
+          error: 'Cannot approve until mandate is verified.'
+        });
+      }
+    }
+
+    // Get current status before update
+    const current = await pool.query(
+      'SELECT status FROM applications WHERE id = $1',
+      [req.params.id]
+    );
+    if (current.rows.length === 0) {
+      return res.status(404).json({ error: 'Application not found.' });
+    }
+    const oldStatus = current.rows[0].status;
+
+    // Update status
+    const result = await pool.query(
+      `UPDATE applications SET status = $1 WHERE id = $2 RETURNING *`,
+      [status, req.params.id]
+    );
+
+    // Log the change
+    await pool.query(
+      `INSERT INTO application_logs (application_id, user_id, action, old_value, new_value, note)
+       VALUES ($1, $2, 'status_change', $3, $4, $5)`,
+      [req.params.id, req.user.id, oldStatus, status, note || null]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
     res.status(500).json({ error: 'Failed to update status.' });
   }
 });

@@ -3,6 +3,8 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import Spinner from '../components/Spinner';
+import Pagination from '../components/Pagination';
+import EmptyState from '../components/EmptyState';
 import * as S from '../utils/styles';
 
 const LEAVE_TYPES = ['Annual', 'Sick', 'Family Responsibility', 'Unpaid', 'Study', 'Maternity/Paternity'];
@@ -47,14 +49,24 @@ export default function Leave() {
   const [form, setForm] = useState({
     leave_type: 'Annual', start_date: '', end_date: '', reason: ''
   });
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const LIMIT = 20;
 
-  useEffect(() => { fetchData(); }, []);
-  const fetchData = async () => {
+  useEffect(() => { fetchData(page); }, [page]);
+
+  const handlePageChange = (p) => {
+    setPage(p);
+    window.scrollTo(0, 0);
+  };
+
+  const fetchData = async (p = page) => {
     setLoading(true);
     try {
       if (isManager) {
-        const res = await api.get('/leave/requests');
-        setRequests(res.data);
+        const res = await api.get(`/leave/requests?page=${p}&limit=${LIMIT}`);
+        setRequests(res.data.data ? res.data.data : res.data);
+        if (res.data.pagination) setPagination(res.data.pagination);
       } else {
         try {
           const empRes = await api.get('/leave/my-employee');
@@ -102,7 +114,7 @@ export default function Leave() {
       setSuccess('Leave request submitted successfully.');
       setShowForm(false);
       setForm({ leave_type: 'Annual', start_date: '', end_date: '', reason: '' });
-      fetchData();
+      fetchData(page);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to submit.');
     } finally { setSubmitting(false); }
@@ -118,7 +130,7 @@ export default function Leave() {
       await api.patch(`/leave/request/${id}`, { status, rejection_reason: rejectionReason });
       setRejecting(null); setRejectionReason('');
       setSuccess(`Request ${status.toLowerCase()} successfully.`);
-      fetchData();
+      fetchData(page);
     } catch { setError('Failed to update request.'); }
     finally { setActioning(a => { const n = { ...a }; delete n[id]; return n; }); }
   };
@@ -240,16 +252,11 @@ export default function Leave() {
         {loading ? (
           <Spinner size="lg" dark label="Loading leave data..." />
         ) : allRequests.length === 0 ? (
-          <div style={{ padding: '60px', textAlign: 'center' }}>
-            <p style={{ color: '#0f172a', fontSize: '15px', fontWeight: '600', fontFamily: 'Sora', margin: '0 0 8px' }}>
-              No leave requests yet
-            </p>
-            <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>
-              {isManager
-                ? 'Leave requests from your team will appear here.'
-                : 'Submit your first leave request using the button above.'}
-            </p>
-          </div>
+          <EmptyState
+            icon="🗓️"
+            title="No leave requests yet"
+            subtitle={isManager ? 'Leave requests from your team will appear here.' : 'Submit your first leave request using the button above.'}
+          />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
@@ -337,6 +344,15 @@ export default function Leave() {
                 ))}
               </tbody>
             </table>
+            {isManager && pagination && (
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                limit={pagination.limit}
+                onPageChange={handlePageChange}
+              />
+            )}
           </div>
         )}
       </div>

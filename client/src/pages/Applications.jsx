@@ -6,6 +6,9 @@ import * as S from '../utils/styles';
 import Spinner from '../components/Spinner';
 import DocumentUpload from '../components/DocumentUpload';
 import { generateApplicationForm } from '../utils/pdfGenerator';
+import Pagination from '../components/Pagination';
+import EmptyState from '../components/EmptyState';
+import { useUnsavedWarning } from '../utils/useUnsavedWarning';
 
 const EMPTY_FORM = {
   franchise_id: '',
@@ -86,16 +89,26 @@ function validateStep(step, form, creditors) {
 }
 
 export default function Applications() {
-  const { user, employeeId } = useAuth();
+  const { user, employeeId, franchise } = useAuth();
   const [applications, setApplications] = useState([]);
   const [franchises, setFranchises] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('list'); // 'list' | 'form' | 'detail'
   const [selectedApp, setSelectedApp] = useState(null);
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const LIMIT = 20;
+
+  const getInitialForm = () => ({
+    ...EMPTY_FORM,
+    consultant_id: user?.role === 'Consultant' ? employeeId || '' : '',
+    franchise_id: user?.role !== 'Admin' ? user?.franchise_id || '' : '',
+  });
+  const [form, setForm] = useState(getInitialForm());
   const [creditors, setCreditors] = useState([{ ...EMPTY_CREDITOR }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -104,22 +117,59 @@ export default function Applications() {
   const [viewingId, setViewingId] = useState(null);       // which row's View btn is loading
   const [mandateUpdating, setMandateUpdating] = useState(null); // which mandate status is in-flight
 
-  useEffect(() => { fetchFranchises(); }, []);
-  useEffect(() => { setShowAll(can(user, 'applications.viewAll')); }, [user]);
-  useEffect(() => { fetchApplications(); }, [user, showAll]);
+  const [isFormDirty, setIsFormDirty] = useState(false);
+  useUnsavedWarning(isFormDirty && view === 'form');
 
-  const fetchApplications = async () => {
+  const [editApp, setEditApp] = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => { fetchFranchises(); fetchEmployees(); }, [user]);
+  useEffect(() => { setShowAll(can(user, 'applications.viewAll')); }, [user]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setPage(1);
+    fetchApplications(1);
+  }, [showAll, search]);
+
+  useEffect(() => {
+    fetchApplications(page);
+  }, [page]);
+
+  const handlePageChange = (p) => {
+    setPage(p);
+    window.scrollTo(0, 0);
+  };
+
+  const fetchEmployees = async () => {
+    if (user?.role === 'Admin') {
+      try {
+        const res = await api.get('/employees?limit=1000'); // get all employees for dropdown
+        setEmployees(res.data.data ? res.data.data : res.data);
+      } catch {}
+    }
+  };
+
+  const fetchApplications = async (p = page) => {
     try {
       let url = '/applications';
-      // If user cannot view all (or has not enabled showAll), restrict to their franchise
-      if (!(can(user, 'applications.viewAll') && showAll)) {
-        const fid = user?.franchise_id;
-        if (fid) url = `/applications?franchise_id=${fid}`;
-      }
+      const useFilter = !can(user, 'applications.viewAll') || !showAll;
+      const q = [];
+      if (useFilter && user?.franchise_id) q.push(`franchise_id=${user.franchise_id}`);
+      q.push(`page=${p}`);
+      q.push(`limit=${LIMIT}`);
+      
+      if (q.length > 0) url += `?${q.join('&')}`;
+
       const res = await api.get(url);
-      setApplications(res.data);
-    } catch { setError('Failed to load applications.'); }
-    finally { setLoading(false); }
+      setApplications(res.data.data ? res.data.data : res.data);
+      if (res.data.pagination) setPagination(res.data.pagination);
+    } catch {
+      setError('Failed to load applications.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchFranchises = async () => {
@@ -132,6 +182,7 @@ export default function Applications() {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    setIsFormDirty(true);
     if (fieldErrors[name]) setFieldErrors(p => ({ ...p, [name]: undefined }));
   };
 
@@ -139,8 +190,50 @@ export default function Applications() {
     const updated = [...creditors];
     updated[index][e.target.name] = e.target.value;
     setCreditors(updated);
+    setIsFormDirty(true);
     const key = `${e.target.name}_${index}`;
     if (fieldErrors[key]) setFieldErrors(p => ({ ...p, [key]: undefined }));
+  };
+
+  const handleCancelForm = () => {
+    if (isFormDirty && !window.confirm('You have unsaved changes. Are you sure you want to leave?')) return;
+    setIsFormDirty(false);
+    setView('list');
+    setStep(0);
+    setFieldErrors({});
+    setError('');
+  };
+
+  const handleEditSave = async () => {
+    setEditSaving(true); setError('');
+    try {
+      await api.patch(`/applications/${selectedApp.application.id}`, editApp);
+      // Refresh the detail view
+      const res = await api.get(`/applications/${selectedApp.application.id}`);
+      setSelectedApp(res.data.application ? res.data : { application: res.data, creditors: selectedApp.creditors });
+      fetchApplications(page);
+      setView('detail');
+      setSuccess('Application updated successfully.');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save changes.');
+    } finally { setEditSaving(false); }
+  };
+
+  const fetchLogs = async (id) => {
+    try {
+      const res = await api.get(`/applications/${id}/logs`);
+      setLogs(res.data);
+    } catch {}
+  };
+
+  const openDetail = async (app) => {
+    setViewingId(app.id);
+    try {
+      const res = await api.get(`/applications/${app.id}`);
+      setSelectedApp(res.data.application ? res.data : { application: res.data, creditors: [] });
+      fetchLogs(app.id);
+      setView('detail');
+    } finally { setViewingId(null); }
   };
 
   const totalExpenses = () => {
@@ -171,7 +264,8 @@ export default function Applications() {
         consultant_id: employeeId || undefined,
       });
       setSuccess('Application submitted successfully.');
-      setView('list'); setForm(EMPTY_FORM);
+      setIsFormDirty(false);
+      setView('list'); setForm(getInitialForm());
       setCreditors([{ ...EMPTY_CREDITOR }]); setStep(0);
       fetchApplications();
     } catch (err) {
@@ -208,6 +302,107 @@ export default function Applications() {
     }
   };
 
+  // ── Edit view ─────────────────────────────────────────────
+  if (view === 'edit' && selectedApp) {
+    return (
+      <div style={{ maxWidth: '800px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => setView('detail')}
+              style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+              ← Back
+            </button>
+            <h2 style={{ ...S.pageTitle, margin: 0 }}>
+              Edit — {selectedApp.application?.first_name} {selectedApp.application?.last_name}
+            </h2>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => setView('detail')} style={S.ghostBtn}>Cancel</button>
+            <button onClick={handleEditSave} disabled={editSaving}
+              style={{ ...S.primaryBtn, opacity: editSaving ? 0.7 : 1 }}>
+              {editSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+
+        {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* Client Details */}
+          <EditSection title="Client Details">
+            <EditGrid>
+              <EditField label="First Name" value={editApp.first_name} onChange={v => setEditApp(p => ({ ...p, first_name: v }))} />
+              <EditField label="Last Name" value={editApp.last_name} onChange={v => setEditApp(p => ({ ...p, last_name: v }))} />
+              <EditField label="ID Number" value={editApp.id_number} onChange={v => setEditApp(p => ({ ...p, id_number: v }))} />
+              <EditField label="Marital Status" value={editApp.marital_status} onChange={v => setEditApp(p => ({ ...p, marital_status: v }))} type="select" options={['Single', 'Married', 'Divorced', 'Widowed']} />
+              <EditField label="Cell" value={editApp.cell} onChange={v => setEditApp(p => ({ ...p, cell: v }))} />
+              <EditField label="WhatsApp" value={editApp.whatsapp} onChange={v => setEditApp(p => ({ ...p, whatsapp: v }))} />
+              <EditField label="Email" value={editApp.email} onChange={v => setEditApp(p => ({ ...p, email: v }))} />
+              <EditField label="Employer" value={editApp.employer} onChange={v => setEditApp(p => ({ ...p, employer: v }))} />
+              <EditField label="Address" value={editApp.address} onChange={v => setEditApp(p => ({ ...p, address: v }))} span={2} />
+            </EditGrid>
+          </EditSection>
+
+          {/* Income */}
+          <EditSection title="Income">
+            <EditGrid>
+              <EditField label="Gross Salary" value={editApp.gross_salary} onChange={v => setEditApp(p => ({ ...p, gross_salary: v }))} type="number" />
+              <EditField label="Nett Salary" value={editApp.nett_salary} onChange={v => setEditApp(p => ({ ...p, nett_salary: v }))} type="number" />
+              <EditField label="Spouse Salary" value={editApp.spouse_salary} onChange={v => setEditApp(p => ({ ...p, spouse_salary: v }))} type="number" />
+            </EditGrid>
+          </EditSection>
+
+          {/* Expenses */}
+          <EditSection title="Monthly Expenses">
+            <EditGrid>
+              {[
+                ['Groceries', 'exp_groceries'], ['Rent / Bond', 'exp_rent_bond'],
+                ['Transport', 'exp_transport'], ['School Fees', 'exp_school_fees'],
+                ['Rates', 'exp_rates'], ['Water & Electricity', 'exp_water_elec'],
+              ].map(([label, key]) => (
+                <EditField key={key} label={label} value={editApp[key]} onChange={v => setEditApp(p => ({ ...p, [key]: v }))} type="number" />
+              ))}
+            </EditGrid>
+          </EditSection>
+
+          {/* Application Type */}
+          <EditSection title="Application Type">
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', padding: '4px 0' }}>
+              {[['is_med', 'MED'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR'], ['is_3in1', '3-in-1'], ['is_rent_to', 'Rent To']].map(([key, label]) => (
+                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', fontSize: '13px', color: '#0f172a' }}>
+                  <input type="checkbox" checked={!!editApp[key]} onChange={e => setEditApp(p => ({ ...p, [key]: e.target.checked }))} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </EditSection>
+
+          {/* Banking */}
+          <EditSection title="Banking & Debit Order">
+            <EditGrid>
+              <EditField label="Bank" value={editApp.bank} onChange={v => setEditApp(p => ({ ...p, bank: v }))} />
+              <EditField label="Account Number" value={editApp.account_no} onChange={v => setEditApp(p => ({ ...p, account_no: v }))} />
+              <EditField label="Account Type" value={editApp.account_type} onChange={v => setEditApp(p => ({ ...p, account_type: v }))} type="select" options={['Cheque', 'Savings', 'Transmission']} />
+              <EditField label="Debit Order Date" value={editApp.debit_order_date} onChange={v => setEditApp(p => ({ ...p, debit_order_date: v }))} />
+              <EditField label="Debit Order Amount" value={editApp.debit_order_amount} onChange={v => setEditApp(p => ({ ...p, debit_order_amount: v }))} type="number" />
+              <EditField label="Debt Review Status" value={editApp.debt_review_status} onChange={v => setEditApp(p => ({ ...p, debt_review_status: v }))} />
+            </EditGrid>
+          </EditSection>
+
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '24px', justifyContent: 'flex-end' }}>
+          <button onClick={() => setView('detail')} style={S.ghostBtn}>Cancel</button>
+          <button onClick={handleEditSave} disabled={editSaving}
+            style={{ ...S.primaryBtn, opacity: editSaving ? 0.7 : 1 }}>
+            {editSaving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Detail view ───────────────────────────────────────────
   if (view === 'detail' && selectedApp) {
     const a = selectedApp.application;
@@ -224,6 +419,15 @@ export default function Applications() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {(user?.role === 'Admin' || user?.role === 'HR' ||
+                (user?.role === 'Consultant' && a.consultant_id === employeeId)) && (
+                <button
+                  onClick={() => { setEditApp({ ...a }); setView('edit'); }}
+                  style={S.ghostBtn}
+                >
+                  Edit
+                </button>
+              )}
               <button onClick={() => generateApplicationForm(a, creds)}
                 className="btn-ghost" style={S.ghostBtn}>Download PDF</button>
               <span style={S.badge(a.status)}>{a.status}</span>
@@ -462,6 +666,15 @@ export default function Applications() {
                     ))}
                   </tbody>
                 </table>
+                {pagination && (
+                  <Pagination
+                    page={pagination.page}
+                    totalPages={pagination.totalPages}
+                    total={pagination.total}
+                    limit={pagination.limit}
+                    onPageChange={handlePageChange}
+                  />
+                )}
               </div>
             )}
 
@@ -493,6 +706,59 @@ export default function Applications() {
             )}
           </div>
         </div>
+
+        {/* Audit Trail */}
+        {logs.length > 0 && (
+          <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>
+                Activity Log
+              </h3>
+            </div>
+            <div>
+              {logs.map((log, i) => (
+                <div key={log.id} style={{
+                  display: 'flex', gap: '12px', padding: '12px 20px',
+                  borderTop: i > 0 ? '1px solid #f8fafc' : 'none',
+                  alignItems: 'flex-start',
+                }}>
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                    background: log.action === 'status_change' ? '#eff6ff' : '#f0fdf4',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '12px',
+                  }}>
+                    {log.action === 'status_change' ? '⇄' : '✎'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <span style={{ fontWeight: '600', fontSize: '13px', color: '#0f172a' }}>
+                          {log.action === 'status_change'
+                            ? `Status changed: ${log.old_value} → ${log.new_value}`
+                            : 'Application edited'}
+                        </span>
+                        <span style={{ color: '#64748b', fontSize: '12px', marginLeft: '8px' }}>
+                          by @{log.username}
+                        </span>
+                      </div>
+                      <span style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                        {new Date(log.created_at).toLocaleDateString('en-ZA', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                    {log.note && (
+                      <p style={{ margin: '3px 0 0', color: '#64748b', fontSize: '12px' }}>{log.note}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
     );
   }
@@ -501,7 +767,7 @@ export default function Applications() {
   if (view === 'form') {
     return (
       <div style={{ maxWidth: '800px' }}>
-        <BackBtn onClick={() => { setView('list'); setStep(0); setFieldErrors({}); setError(''); }} />
+        <BackBtn onClick={handleCancelForm} />
 
         {/* Step indicator */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', gap: '4px' }}>
@@ -543,21 +809,56 @@ export default function Applications() {
             {step === 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+                  {/* Consultant field */}
+                  <div>
+                    <label style={{ display: 'block', color: fieldErrors.consultant_id ? '#dc2626' : '#64748b', fontSize: '12px', marginBottom: '5px' }}>
+                      Consultant
+                    </label>
+                    {user?.role === 'Consultant' ? (
+                      <div style={{
+                        ...S.input, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '40px'
+                      }}>
+                        {user.username} (auto-assigned)
+                      </div>
+                    ) : (
+                      <select
+                        name="consultant_id"
+                        value={form.consultant_id || ''}
+                        onChange={handleChange}
+                        style={{ ...S.input, borderColor: fieldErrors.consultant_id ? '#fca5a5' : '#e2e8f0' }}
+                      >
+                        <option value="">— Select Consultant —</option>
+                        {employees.map(e => (
+                          <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Franchise field */}
                   <div>
                     <label style={{ display: 'block', color: fieldErrors.franchise_id ? '#dc2626' : '#64748b', fontSize: '12px', marginBottom: '5px' }}>
                       Franchise / Office
                     </label>
-                    <select
-                      name="franchise_id"
-                      value={form.franchise_id || ''}
-                      onChange={handleChange}
-                      style={{ ...S.input, borderColor: fieldErrors.franchise_id ? '#fca5a5' : '#e2e8f0' }}
-                    >
-                      <option value="">— Select Franchise —</option>
-                      {franchises.map(f => (
-                        <option key={f.id} value={f.id}>{f.franchise_name}</option>
-                      ))}
-                    </select>
+                    {user?.role !== 'Admin' ? (
+                      <div style={{
+                        ...S.input, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '40px'
+                      }}>
+                        {franchise?.franchise_name || 'Your franchise'}
+                      </div>
+                    ) : (
+                      <select
+                        name="franchise_id"
+                        value={form.franchise_id || ''}
+                        onChange={handleChange}
+                        style={{ ...S.input, borderColor: fieldErrors.franchise_id ? '#fca5a5' : '#e2e8f0' }}
+                      >
+                        <option value="">— Select Franchise —</option>
+                        {franchises.map(f => (
+                          <option key={f.id} value={f.id}>{f.franchise_name}</option>
+                        ))}
+                      </select>
+                    )}
                     {fieldErrors.franchise_id && <p style={{ color: '#dc2626', fontSize: '11px', margin: '4px 0 0' }}>{fieldErrors.franchise_id}</p>}
                   </div>
                 </div>
@@ -754,7 +1055,7 @@ export default function Applications() {
             </label>
           )}
           <button onClick={() => generateApplicationForm(null, null)} style={S.ghostBtn}>Empty Template</button>
-          <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); }}
+          <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); setForm(getInitialForm()); }}
             className="btn-primary" style={S.primaryBtn}>
             + New Application
           </button>
@@ -777,10 +1078,13 @@ export default function Applications() {
         {loading ? (
           <Spinner size="lg" dark label="Loading applications..." />
         ) : applications.length === 0 ? (
-          <div style={{ padding: '60px', textAlign: 'center' }}>
-            <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '12px' }}>No applications yet.</p>
-            <button onClick={() => setView('form')} className="btn-primary" style={S.primaryBtn}>Create First Application</button>
-          </div>
+          <EmptyState
+            icon="📋"
+            title="No applications yet"
+            subtitle="Start by creating your first client application."
+            action="+ New Application"
+            onAction={() => { setView('form'); setStep(0); setForm(getInitialForm()); setIsFormDirty(false); setSuccess(''); setError(''); setFieldErrors({}); }}
+          />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
@@ -811,13 +1115,7 @@ export default function Applications() {
                   <td style={S.tableCell}><span style={S.badge(app.status)}>{app.status}</span></td>
                   <td style={S.tableCell}>
                     <button
-                      onClick={async () => {
-                        setViewingId(app.id);
-                        try {
-                          const res = await api.get(`/applications/${app.id}`);
-                          setSelectedApp(res.data); setView('detail');
-                        } finally { setViewingId(null); }
-                      }}
+                      onClick={() => openDetail(app)}
                       disabled={viewingId === app.id}
                       className="btn-link"
                       style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: viewingId === app.id ? 'default' : 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: '4px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -902,5 +1200,47 @@ function MandateBadge({ status }) {
     }}>
       {icons[status || 'Pending']} {status || 'Pending'}
     </span>
+  );
+}
+
+function EditSection({ title, children }) {
+  return (
+    <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+        <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{title}</p>
+      </div>
+      <div style={{ padding: '18px 20px' }}>{children}</div>
+    </div>
+  );
+}
+
+function EditGrid({ children }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+      {children}
+    </div>
+  );
+}
+
+function EditField({ label, value, onChange, type = 'text', options, span }) {
+  return (
+    <div style={{ gridColumn: span === 2 ? 'span 2' : 'span 1' }}>
+      <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px', fontWeight: '500' }}>
+        {label}
+      </label>
+      {type === 'select' ? (
+        <select value={value || ''} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', background: 'white', color: '#0f172a' }}>
+          <option value="">—</option>
+          {options.map(o => <option key={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input
+          type={type}
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', boxSizing: 'border-box' }}
+        />
+      )}
+    </div>
   );
 }

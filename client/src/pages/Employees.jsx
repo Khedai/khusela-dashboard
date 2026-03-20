@@ -5,6 +5,8 @@ import { can } from '../utils/access';
 import api from '../utils/api';
 import * as S from '../utils/styles';
 import { generateEmployeeForm } from '../utils/pdfGenerator';
+import Pagination from '../components/Pagination';
+import EmptyState from '../components/EmptyState';
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
@@ -24,19 +26,37 @@ export default function Employees() {
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({});
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const LIMIT = 20;
+
+  useEffect(() => { fetchFranchises(); }, []);
 
   useEffect(() => {
-    fetchEmployees();
-    fetchFranchises();
-  }, []);
+    setPage(1);
+    fetchEmployees(1);
+  }, [search]);
 
-  const fetchEmployees = async () => {
+  useEffect(() => {
+    fetchEmployees(page);
+  }, [page]);
+
+  const handlePageChange = (p) => {
+    setPage(p);
+    window.scrollTo(0, 0);
+  };
+
+  const fetchEmployees = async (p = page) => {
     setLoading(true);
     try {
-      const franchiseParam = user?.role !== 'Admin' && user?.franchise_id
-        ? `?franchise_id=${user.franchise_id}` : '';
-      const res = await api.get(`/employees${franchiseParam}`);
-      setEmployees(res.data);
+      const q = [];
+      if (user?.role !== 'Admin' && user?.franchise_id) q.push(`franchise_id=${user.franchise_id}`);
+      q.push(`page=${p}`);
+      q.push(`limit=${LIMIT}`);
+
+      const res = await api.get(`/employees?${q.join('&')}`);
+      setEmployees(res.data.data ? res.data.data : res.data);
+      if (res.data.pagination) setPagination(res.data.pagination);
     } catch { setError('Failed to load employees.'); }
     finally { setLoading(false); }
   };
@@ -389,7 +409,13 @@ export default function Employees() {
         {loading ? (
           <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>Loading...</div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>No employees found.</div>
+          <EmptyState
+            icon="👤"
+            title="No employees yet"
+            subtitle="Add your first employee to get started."
+            action="+ Add Employee"
+            onAction={() => setView('form')}
+          />
         ) : isMobile ? (
           <div>
             {filtered.map((emp, i) => (
@@ -408,8 +434,9 @@ export default function Employees() {
             ))}
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
-            <thead>
+          <>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+              <thead>
               <tr style={{ background: '#f8fafc' }}>
                 {['Name', 'ID Number', 'Job Title', 'Cell', 'Franchise', 'Actions'].map(h => (
                   <th key={h} style={{
@@ -460,8 +487,18 @@ export default function Employees() {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+            {pagination && (
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                limit={pagination.limit}
+                onPageChange={handlePageChange}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

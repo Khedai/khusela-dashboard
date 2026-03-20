@@ -37,13 +37,22 @@ export default function Dashboard() {
     try {
       // Consultants always see their franchise only — no showAll for them
       const useFilter = !can(user, 'dashboard.viewAll') || !showAll;
-      const franchiseParam = (useFilter && user?.franchise_id) ? `?franchise_id=${user.franchise_id}` : '';
+
+      // Build URL — always fetch all records for dashboard stats (no pagination)
+      const appsUrl  = useFilter && user?.franchise_id
+        ? `/applications?franchise_id=${user.franchise_id}&limit=1000`
+        : '/applications?limit=1000';
+      const empsUrl  = useFilter && user?.franchise_id
+        ? `/employees?franchise_id=${user.franchise_id}&limit=1000`
+        : '/employees?limit=1000';
 
       const [appsRes, empsRes] = await Promise.all([
-        api.get(`/applications${franchiseParam}`),
-        can(user, 'dashboard.employeeCount') ? api.get(`/employees${franchiseParam}`) : Promise.resolve({ data: [] })
+        api.get(appsUrl),
+        can(user, 'dashboard.employeeCount') ? api.get(empsUrl) : Promise.resolve({ data: { data: [] } })
       ]);
-      const apps = appsRes.data;
+      // Both endpoints now return { data: [...], pagination: {...} }
+      const apps = Array.isArray(appsRes.data) ? appsRes.data : (appsRes.data.data ?? []);
+      const emps = Array.isArray(empsRes.data) ? empsRes.data : (empsRes.data.data ?? []);
       setStats({
         total: apps.length,
         draft: apps.filter(a => a.status === 'Draft').length,
@@ -51,7 +60,7 @@ export default function Dashboard() {
         pendingDocs: apps.filter(a => a.status === 'Pending Docs').length,
         approved: apps.filter(a => a.status === 'Approved').length,
         rejected: apps.filter(a => a.status === 'Rejected').length,
-        employees: empsRes.data.length,
+        employees: emps.length,
       });
       setRecent(apps.slice(0, 6));
       if (user?.role === 'Consultant' && employeeId) {
@@ -250,12 +259,14 @@ function UnassignedWarning() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/employees'),
-      api.get('/applications'),
+      api.get('/employees?limit=1000'),
+      api.get('/applications?limit=1000'),
     ]).then(([emps, apps]) => {
+      const empList = Array.isArray(emps.data) ? emps.data : (emps.data.data ?? []);
+      const appList = Array.isArray(apps.data) ? apps.data : (apps.data.data ?? []);
       setCounts({
-        employees: emps.data.filter(e => !e.franchise_id).length,
-        applications: apps.data.filter(a => !a.franchise_id).length,
+        employees: empList.filter(e => !e.franchise_id).length,
+        applications: appList.filter(a => !a.franchise_id).length,
       });
     }).catch(() => { });
   }, []);

@@ -30,14 +30,19 @@ router.get('/balance/:employee_id', async (req, res) => {
 // ─── GET ALL LEAVE REQUESTS ───────────────────────────────
 router.get('/requests', requireRole('Admin', 'HR'), async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
     let query = `
       SELECT 
         lr.*,
         e.first_name, e.last_name, e.franchise_id AS employee_franchise_id,
+        f.franchise_name,
         u.username AS approved_by_username
-       FROM leave_requests lr
-       LEFT JOIN employees e ON lr.employee_id = e.id
-       LEFT JOIN users u ON lr.approved_by = u.id
+      FROM leave_requests lr
+      LEFT JOIN employees e ON lr.employee_id = e.id
+      LEFT JOIN franchises f ON e.franchise_id = f.id
+      LEFT JOIN users u ON lr.approved_by = u.id
     `;
     const params = [];
 
@@ -54,10 +59,31 @@ router.get('/requests', requireRole('Admin', 'HR'), async (req, res) => {
       }
     }
 
+    // Count query for total
+    const countQuery = query
+      .replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM')
+      .replace(/ORDER BY.*$/, '');
+    const countResult = await pool.query(countQuery.split('ORDER')[0], params);
+    const total = parseInt(countResult.rows[0].count);
+
     query += ` ORDER BY lr.created_at DESC`;
+
+    // Add pagination to main query
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), offset);
+
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    res.json({
+      data: result.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      }
+    });
   } catch (err) {
+    console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch requests.' });
   }
 });

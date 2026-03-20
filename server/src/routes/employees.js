@@ -8,7 +8,8 @@ router.use(verifyToken);
 // ─── GET ALL EMPLOYEES ────────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const { franchise_id } = req.query;
+    const { franchise_id, page = 1, limit = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
     let query = `
       SELECT e.*, f.franchise_name
@@ -36,9 +37,29 @@ router.get('/', verifyToken, async (req, res) => {
       query += ` WHERE ${conditions.join(' AND ')}`;
     }
 
+    // Count query for total
+    const countQuery = query
+      .replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM')
+      .replace(/ORDER BY.*$/, '');
+    const countResult = await pool.query(countQuery.split('ORDER')[0], params);
+    const total = parseInt(countResult.rows[0].count);
+
     query += ` ORDER BY e.created_at DESC`;
+
+    // Add pagination to main query
+    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), offset);
+
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    res.json({
+      data: result.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      }
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch employees.' });
