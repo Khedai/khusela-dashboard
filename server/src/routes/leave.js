@@ -28,63 +28,31 @@ router.get('/balance/:employee_id', async (req, res) => {
 });
 
 // ─── GET ALL LEAVE REQUESTS ───────────────────────────────
-router.get('/requests', requireRole('Admin', 'HR'), async (req, res) => {
+router.get('/requests', verifyToken, requireRole('HR'), async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const hrResult = await pool.query(
+      'SELECT franchise_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const franchiseId = hrResult.rows[0]?.franchise_id;
 
-    let query = `
-      SELECT 
+    const result = await pool.query(
+      `SELECT 
         lr.*,
-        e.first_name, e.last_name, e.franchise_id AS employee_franchise_id,
+        e.first_name, e.last_name,
         f.franchise_name,
         u.username AS approved_by_username
-      FROM leave_requests lr
-      LEFT JOIN employees e ON lr.employee_id = e.id
-      LEFT JOIN franchises f ON e.franchise_id = f.id
-      LEFT JOIN users u ON lr.approved_by = u.id
-    `;
-    const params = [];
-
-    // HR sees only their franchise's requests
-    if (req.user.role === 'HR') {
-      const hrUser = await pool.query(
-        'SELECT franchise_id FROM users WHERE id = $1',
-        [req.user.id]
-      );
-      const franchiseId = hrUser.rows[0]?.franchise_id;
-      if (franchiseId) {
-        query += ` WHERE e.franchise_id = $1`;
-        params.push(franchiseId);
-      }
-    }
-
-    // Count query for total
-    const countQuery = query
-      .replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM')
-      .replace(/ORDER BY.*$/, '');
-    const countResult = await pool.query(countQuery.split('ORDER')[0], params);
-    const total = parseInt(countResult.rows[0].count);
-
-    query += ` ORDER BY lr.created_at DESC`;
-
-    // Add pagination to main query
-    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(parseInt(limit), offset);
-
-    const result = await pool.query(query, params);
-    res.json({
-      data: result.rows,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit)),
-      }
-    });
+       FROM leave_requests lr
+       LEFT JOIN employees e ON lr.employee_id = e.id
+       LEFT JOIN franchises f ON e.franchise_id = f.id
+       LEFT JOIN users u ON lr.approved_by = u.id
+       WHERE e.franchise_id = $1
+       ORDER BY lr.created_at DESC`,
+      [franchiseId]
+    );
+    res.json(result.rows);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Failed to fetch requests.' });
+    res.status(500).json({ error: 'Failed to fetch leave requests.' });
   }
 });
 
@@ -196,14 +164,20 @@ router.post('/request', async (req, res) => {
 });
 
 // ─── APPROVE / REJECT REQUEST ─────────────────────────────
-router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
+router.patch('/request/:id', verifyToken, requireRole('HR'), async (req, res) => {
   const { status, rejection_reason } = req.body;
   if (!['Approved', 'Rejected'].includes(status)) {
     return res.status(400).json({ error: 'Status must be Approved or Rejected.' });
   }
 
   try {
-    // Fetch the request first
+    // Verify the leave request belongs to HR's franchise
+    const hrResult = await pool.query(
+      'SELECT franchise_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const hrFranchiseId = hrResult.rows[0]?.franchise_id;
+
     const reqResult = await pool.query(
       `SELECT lr.*, e.franchise_id AS employee_franchise_id
        FROM leave_requests lr
@@ -216,23 +190,13 @@ router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
       return res.status(404).json({ error: 'Request not found.' });
     }
 
-    const leaveReq = reqResult.rows[0];
-
-    // HR can only approve their own franchise's employees
-    if (req.user.role === 'HR') {
-      const hrUser = await pool.query(
-        'SELECT franchise_id FROM users WHERE id = $1',
-        [req.user.id]
-      );
-      const hrFranchiseId = hrUser.rows[0]?.franchise_id;
-      if (leaveReq.employee_franchise_id !== hrFranchiseId) {
-        return res.status(403).json({
-          error: 'You can only approve leave for employees in your franchise.'
-        });
-      }
+    if (reqResult.rows[0].employee_franchise_id !== hrFranchiseId) {
+      return res.status(403).json({
+        error: 'You can only approve leave for employees in your franchise.'
+      });
     }
 
-    // Update the request
+    // Update
     const result = await pool.query(
       `UPDATE leave_requests
        SET status = $1, approved_by = $2, approved_at = NOW(), rejection_reason = $3
@@ -261,19 +225,6 @@ router.patch('/request/:id', requireRole('Admin', 'HR'), async (req, res) => {
         );
       }
     }
-
-    // Update manager notifications
-    await pool.query(
-      `UPDATE notifications
-       SET title = $1, message = $2, is_read = TRUE
-       WHERE title = 'New Leave Request — Pending'
-       AND message LIKE $3`,
-      [
-        `Leave ${status} — ${req_data.leave_type}`,
-        `${status}: ${req_data.leave_type} leave for ${req_data.days_requested} day(s).`,
-        `%starting ${new Date(req_data.start_date).toISOString().split('T')[0]}%`
-      ]
-    );
 
     // Notify the employee
     const empUser = await pool.query(

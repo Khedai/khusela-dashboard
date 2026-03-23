@@ -30,7 +30,8 @@ function workingDays(start, end) {
 export default function Leave() {
   const { user, employeeId } = useAuth();
   const isMobile = useIsMobile();
-  const isManager = user?.role === 'Admin' || user?.role === 'HR';
+  const isManager = user?.role === 'HR';
+  const isAdmin = user?.role === 'Admin';
 
   const [requests, setRequests] = useState([]);
   const [myEmployee, setMyEmployee] = useState(null);
@@ -53,7 +54,10 @@ export default function Leave() {
   const [pagination, setPagination] = useState(null);
   const LIMIT = 20;
 
-  useEffect(() => { fetchData(page); }, [page]);
+  useEffect(() => {
+    if (isAdmin) { setLoading(false); return; }
+    fetchData(page);
+  }, [page]);
 
   const handlePageChange = (p) => {
     setPage(p);
@@ -79,7 +83,8 @@ export default function Leave() {
           setBalance(balRes.data);
         } catch (empErr) {
           if (empErr.response?.status === 404) {
-            setError('Your account is not linked to an employee record. Ask your Admin to link your account in the Employees section.');
+            // No employee record linked — not an error worth showing
+            setMyEmployee(null);
           } else {
             setError('Failed to load your leave data.');
           }
@@ -137,6 +142,26 @@ export default function Leave() {
 
   const allRequests = isManager ? requests : requests;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
+
+  // Admin has no employee record and no leave management role — show info state
+  if (isAdmin) {
+    return (
+      <div style={{ maxWidth: '1000px' }}>
+        <div style={S.pageHeader(isMobile)}>
+          <h2 style={S.pageTitle}>Leave Management</h2>
+        </div>
+        <div style={{ ...S.card, padding: '48px 32px', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🗓️</div>
+          <h3 style={{ fontFamily: 'Sora', fontSize: '16px', fontWeight: '600', color: '#0f172a', margin: '0 0 8px' }}>
+            Leave management is handled by HR
+          </h3>
+          <p style={{ color: '#64748b', fontSize: '14px', maxWidth: '420px', margin: '0 auto' }}>
+            As an Admin, you oversee the system but leave requests are managed directly by HR users within their franchise. If you need to apply for leave yourself, ask HR to submit a request on your behalf.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: '1000px' }}>
