@@ -27,7 +27,6 @@ const authLimiter = rateLimit({
 });
 
 app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/employees', require('./routes/employees'));
 app.use('/api/applications', require('./routes/applications'));

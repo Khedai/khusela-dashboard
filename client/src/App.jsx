@@ -12,7 +12,7 @@ import Sidebar from './components/Sidebar';
 import SessionWarning from './components/SessionWarning';
 import Inbox from './pages/Inbox';
 import Leave from './pages/Leave';
-import Signup from './pages/Signup';
+
 
 function ProtectedLayout({ children }) {
   const { user, loading } = useAuth();
@@ -53,7 +53,6 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-      <Route path="/signup" element={<Signup />} />
       <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />

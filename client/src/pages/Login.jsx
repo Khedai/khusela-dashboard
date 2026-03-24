@@ -15,7 +15,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -212,12 +212,6 @@ export default function Login() {
           >
             {loading ? 'Signing in...' : 'Sign In →'}
           </button>
-          <p style={{ textAlign: 'center', color: '#475569', fontSize: '13px', margin: 0 }}>
-            Don't have an account?{' '}
-            <Link to="/signup" style={{ color: '#60a5fa', textDecoration: 'none', fontWeight: '600' }}>
-              Create one
-            </Link>
-          </p>
         </form>
       </div>
     </div>
