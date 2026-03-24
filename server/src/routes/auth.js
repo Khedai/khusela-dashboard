@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { sanitize } = require('../utils/sanitize');
 
 // ─── LOGIN ───────────────────────────────────────────────
 router.post('/login', async (req, res) => {
@@ -89,8 +90,9 @@ module.exports = router;
 // ─── SIGNUP ───────────────────────────────────────────────
 router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
   const { username, password, role, franchise_id } = req.body;
+  const cleanUsername = sanitize(username)?.toLowerCase().replace(/\s/g, '');
 
-  if (!username || !password || !role) {
+  if (!cleanUsername || !password || !role) {
     return res.status(400).json({ error: 'Username, password and role are required.' });
   }
 
@@ -103,19 +105,24 @@ router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
     // Check username taken
     const existing = await pool.query(
       'SELECT id FROM users WHERE username = $1',
-      [username]
+      [cleanUsername]
     );
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'Username already taken.' });
     }
 
-    const password_hash = await bcrypt.hash(password, 12);
+    try {
+      const password_hash = await bcrypt.hash(password, 12);
+    } catch (err) {
+      console.error('Password hashing error:', err.message);
+      return res.status(500).json({ error: 'Failed to hash password.' });
+    }
 
     // Create user
     const userResult = await pool.query(
       `INSERT INTO users (username, password_hash, role, franchise_id, is_active)
        VALUES ($1, $2, $3, $4, TRUE) RETURNING id, username, role, franchise_id`,
-      [username, password_hash, role, franchise_id || null]
+      [cleanUsername, password_hash, role, franchise_id || null]
     );
 
     const newUser = userResult.rows[0];
@@ -124,7 +131,7 @@ router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
     await pool.query(
       `INSERT INTO employees (first_name, user_id, franchise_id)
        VALUES ($1, $2, $3)`,
-      [username, newUser.id, franchise_id || null]
+      [cleanUsername, newUser.id, franchise_id || null]
     );
 
     res.status(201).json({ message: 'Account created.', user: newUser });

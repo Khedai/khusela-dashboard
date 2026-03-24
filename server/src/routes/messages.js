@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { sanitize } = require('../utils/sanitize');
 
 router.use(verifyToken);
 router.use(requireRole('Admin', 'HR'));
@@ -64,7 +65,7 @@ router.post('/send', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO messages (sender_id, recipient_id, subject, body, application_id)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [req.user.id, recipient.id, subject || null, body, application_id || null]
+      [req.user.id, recipient.id, sanitize(subject) || null, sanitize(body), application_id || null]
     );
 
     // Get sender info for notification

@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { sanitize } = require('../utils/sanitize');
 
 // All employee routes require a valid token
 router.use(verifyToken);
@@ -126,13 +127,13 @@ router.post('/', requireRole('Admin', 'HR'), async (req, res) => {
       ) RETURNING *`,
       [
         user_id || null, franchiseId,
-        title, first_name, last_name, id_number, tax_number,
-        birth_date || null, marital_status, email, home_phone, alternate_phone,
-        address_street, address_city, postal_code,
-        allergies_health_concerns,
-        ec_title, ec_first_name, ec_last_name, ec_address,
-        ec_primary_phone, ec_alternate_phone, ec_relationship,
-        bank_name, branch_name, branch_code, account_name, account_number
+        sanitize(title), sanitize(first_name), sanitize(last_name), sanitize(id_number), sanitize(tax_number),
+        birth_date || null, sanitize(marital_status), sanitize(email), sanitize(home_phone), sanitize(alternate_phone),
+        sanitize(address_street), sanitize(address_city), sanitize(postal_code),
+        sanitize(allergies_health_concerns),
+        sanitize(ec_title), sanitize(ec_first_name), sanitize(ec_last_name), sanitize(ec_address),
+        sanitize(ec_primary_phone), sanitize(ec_alternate_phone), sanitize(ec_relationship),
+        sanitize(bank_name), sanitize(branch_name), sanitize(branch_code), sanitize(account_name), sanitize(account_number)
       ]
     );
 
@@ -172,13 +173,13 @@ router.put('/:id', requireRole('Admin', 'HR'), async (req, res) => {
        WHERE id = $27
        RETURNING *`,
       [
-        title, first_name, last_name, id_number, tax_number,
-        birth_date || null, marital_status, email, home_phone, alternate_phone,
-        address_street, address_city, postal_code,
-        allergies_health_concerns,
-        ec_title, ec_first_name, ec_last_name, ec_address,
-        ec_primary_phone, ec_alternate_phone, ec_relationship,
-        bank_name, branch_name, branch_code, account_name, account_number,
+        sanitize(title), sanitize(first_name), sanitize(last_name), sanitize(id_number), sanitize(tax_number),
+        birth_date || null, sanitize(marital_status), sanitize(email), sanitize(home_phone), sanitize(alternate_phone),
+        sanitize(address_street), sanitize(address_city), sanitize(postal_code),
+        sanitize(allergies_health_concerns),
+        sanitize(ec_title), sanitize(ec_first_name), sanitize(ec_last_name), sanitize(ec_address),
+        sanitize(ec_primary_phone), sanitize(ec_alternate_phone), sanitize(ec_relationship),
+        sanitize(bank_name), sanitize(branch_name), sanitize(branch_code), sanitize(account_name), sanitize(account_number),
         req.params.id
       ]
     );
@@ -266,19 +267,19 @@ router.patch('/:id', verifyToken, requireRole('Admin', 'HR'), async (req, res) =
       WHERE id = $32
       RETURNING *`,
       [
-        title || null, first_name, last_name || null,
-        id_number || null, tax_number || null,
-        birth_date || null, marital_status || null,
-        email || null, cell || null, whatsapp || null,
-        home_phone || null, alternate_phone || null,
-        address_street || null, address_city || null, postal_code || null,
-        allergies_health_concerns || null,
-        ec_title || null, ec_first_name || null, ec_last_name || null,
-        ec_address || null, ec_primary_phone || null,
-        ec_alternate_phone || null, ec_relationship || null,
-        bank_name || null, branch_name || null, branch_code || null,
-        account_name || null, account_number || null, account_type || null,
-        job_title || null, employment_date || null,
+        sanitize(title) || null, sanitize(first_name), sanitize(last_name) || null,
+        sanitize(id_number) || null, sanitize(tax_number) || null,
+        birth_date || null, sanitize(marital_status) || null,
+        sanitize(email) || null, sanitize(cell) || null, sanitize(whatsapp) || null,
+        sanitize(home_phone) || null, sanitize(alternate_phone) || null,
+        sanitize(address_street) || null, sanitize(address_city) || null, sanitize(postal_code) || null,
+        sanitize(allergies_health_concerns) || null,
+        sanitize(ec_title) || null, sanitize(ec_first_name) || null, sanitize(ec_last_name) || null,
+        sanitize(ec_address) || null, sanitize(ec_primary_phone) || null,
+        sanitize(ec_alternate_phone) || null, sanitize(ec_relationship) || null,
+        sanitize(bank_name) || null, sanitize(branch_name) || null, sanitize(branch_code) || null,
+        sanitize(account_name) || null, sanitize(account_number) || null, sanitize(account_type) || null,
+        sanitize(job_title) || null, employment_date || null,
         req.params.id,
         ...(req.user.role === 'Admin' ? [franchise_id || null] : []),
       ]

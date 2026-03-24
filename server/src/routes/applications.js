@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { sanitize } = require('../utils/sanitize');
 
 router.use(verifyToken);
 
@@ -104,6 +105,102 @@ router.get('/', verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch applications.' });
+  }
+});
+
+// ─── GET NOTES FOR AN APPLICATION (MUST BE BEFORE /:id) ───
+router.get('/:id/notes', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        n.id, n.note, n.created_at,
+        u.username, u.role,
+        f.franchise_name
+       FROM application_notes n
+       LEFT JOIN users u ON n.user_id = u.id
+       LEFT JOIN franchises f ON u.franchise_id = f.id
+       WHERE n.application_id = $1
+       ORDER BY n.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to fetch notes.' });
+  }
+});
+
+// ─── POST NEW NOTE ────────────────────────────────────────
+router.post('/:id/notes', async (req, res) => {
+  const { note } = req.body;
+  if (!note?.trim()) {
+    return res.status(400).json({ error: 'Note cannot be empty.' });
+  }
+
+  try {
+    // Verify access — consultants can only note their own applications
+    if (req.user.role === 'Consultant') {
+      const empResult = await pool.query(
+        'SELECT id FROM employees WHERE user_id = $1 LIMIT 1',
+        [req.user.id]
+      );
+      const empId = empResult.rows[0]?.id;
+      const appCheck = await pool.query(
+        'SELECT consultant_id FROM applications WHERE id = $1',
+        [req.params.id]
+      );
+      if (appCheck.rows[0]?.consultant_id !== empId) {
+        return res.status(403).json({ error: 'You can only add notes to your own applications.' });
+      }
+    }
+
+    // HR can only note own franchise applications
+    if (req.user.role === 'HR') {
+      const appCheck = await pool.query(
+        'SELECT franchise_id FROM applications WHERE id = $1',
+        [req.params.id]
+      );
+      if (appCheck.rows[0]?.franchise_id !== req.user.franchise_id) {
+        return res.status(403).json({ error: 'You can only add notes to applications in your franchise.' });
+      }
+    }
+
+    const result = await pool.query(
+      `INSERT INTO application_notes (application_id, user_id, note)
+       VALUES ($1, $2, $3)
+       RETURNING id, note, created_at`,
+      [req.params.id, req.user.id, note.trim()]
+    );
+
+    // Return with user info attached
+    res.status(201).json({
+      ...result.rows[0],
+      username: req.user.username,
+      role: req.user.role,
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to add note.' });
+  }
+});
+
+// ─── DELETE NOTE — ONLY AUTHOR OR ADMIN ──────────────────
+router.delete('/:id/notes/:noteId', async (req, res) => {
+  try {
+    const noteCheck = await pool.query(
+      'SELECT user_id FROM application_notes WHERE id = $1',
+      [req.params.noteId]
+    );
+    if (noteCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Note not found.' });
+    }
+    if (req.user.role !== 'Admin' && noteCheck.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only delete your own notes.' });
+    }
+    await pool.query('DELETE FROM application_notes WHERE id = $1', [req.params.noteId]);
+    res.json({ message: 'Note deleted.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete note.' });
   }
 });
 
@@ -249,9 +346,9 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          RETURNING id`,
         [
-          client_first_name, client_last_name, client_id_number || null,
-          client_cell, client_whatsapp, client_email, client_address,
-          client_employer, client_marital_status
+          sanitize(client_first_name), sanitize(client_last_name), sanitize(client_id_number) || null,
+          sanitize(client_cell), sanitize(client_whatsapp), sanitize(client_email), sanitize(client_address),
+          sanitize(client_employer), sanitize(client_marital_status)
         ]
       );
       clientId = clientResult.rows[0].id;
@@ -277,16 +374,16 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
       ) RETURNING *`,
       [
         clientId, finalConsultantId, franchiseId,
-        ext_number, branch,
+        sanitize(ext_number), sanitize(branch),
         is_med || false, is_dreview || false, is_drr || false,
-        is_3in1 || false, is_rent_to || false, other_type || null,
+        is_3in1 || false, is_rent_to || false, sanitize(other_type) || null,
         gross_salary || null, nett_salary || null, spouse_salary || null,
         exp_groceries || null, exp_rent_bond || null, exp_transport || null,
         exp_school_fees || null, exp_rates || null, exp_water_elec || null,
-        bank, account_no, account_type, debt_review_status,
-        debit_order_date, debit_order_amount || null,
+        sanitize(bank), sanitize(account_no), sanitize(account_type), sanitize(debt_review_status),
+        sanitize(debit_order_date), debit_order_amount || null,
         has_id_copy || false, has_payslip || false, has_proof_of_address || false,
-        status || 'Draft'
+        sanitize(status) || 'Draft'
       ]
     );
 
@@ -301,8 +398,8 @@ router.post('/', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
            VALUES ($1,$2,$3,$4,$5)`,
           [
             applicationId,
-            creditor.creditor_name || null,
-            creditor.account_num_ref || null,
+            sanitize(creditor.creditor_name) || null,
+            sanitize(creditor.account_num_ref) || null,
             creditor.balance_of_acc || null,
             creditor.amount || null
           ]
@@ -384,8 +481,8 @@ router.patch('/:id', async (req, res) => {
           cell = $4, whatsapp = $5, email = $6,
           address = $7, employer = $8, marital_status = $9
          WHERE id = $10`,
-        [first_name, last_name, id_number, cell, whatsapp,
-         email, address, employer, marital_status, clientId]
+        [sanitize(first_name), sanitize(last_name), sanitize(id_number), sanitize(cell), sanitize(whatsapp),
+         sanitize(email), sanitize(address), sanitize(employer), sanitize(marital_status), clientId]
       );
     }
 
@@ -403,13 +500,13 @@ router.patch('/:id', async (req, res) => {
         debt_review_status = $23
        WHERE id = $24 RETURNING *`,
       [
-        b.date, b.franchise_id, b.consultant_id,
+        sanitize(b.date), b.franchise_id, b.consultant_id,
         b.is_med, b.is_dreview, b.is_drr, b.is_3in1, b.is_rent_to,
         b.gross_salary, b.nett_salary, b.spouse_salary,
         b.exp_groceries, b.exp_rent_bond, b.exp_transport,
         b.exp_school_fees, b.exp_rates, b.exp_water_elec,
-        b.bank, b.account_no, b.account_type,
-        b.debit_order_date, b.debit_order_amount, b.debt_review_status,
+        sanitize(b.bank), sanitize(b.account_no), sanitize(b.account_type),
+        sanitize(b.debit_order_date), b.debit_order_amount, sanitize(b.debt_review_status),
         req.params.id
       ]
     );

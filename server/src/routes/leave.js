@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { sanitize } = require('../utils/sanitize');
 
 router.use(verifyToken);
 
@@ -132,7 +133,7 @@ router.post('/request', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, days_requested, reason)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [employee_id, leave_type, start_date, end_date, days_requested, reason || null]
+      [employee_id, leave_type, start_date, end_date, days_requested, sanitize(reason) || null]
     );
 
     // Notify all HR and Admin users
@@ -201,7 +202,7 @@ router.patch('/request/:id', verifyToken, requireRole('HR'), async (req, res) =>
       `UPDATE leave_requests
        SET status = $1, approved_by = $2, approved_at = NOW(), rejection_reason = $3
        WHERE id = $4 RETURNING *`,
-      [status, req.user.id, rejection_reason || null, req.params.id]
+      [status, req.user.id, sanitize(rejection_reason) || null, req.params.id]
     );
 
     const req_data = result.rows[0];

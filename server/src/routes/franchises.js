@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { sanitize } = require('../utils/sanitize');
 
 // ─── PUBLIC: GET ALL WITH COUNTS ─────────────────────────
 router.get('/', async (req, res) => {
@@ -44,7 +45,7 @@ router.post('/', verifyToken, requireRole('Admin'), async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO franchises (franchise_name, location) VALUES ($1, $2) RETURNING *`,
-      [franchise_name, location || null]
+      [sanitize(franchise_name), sanitize(location) || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -58,7 +59,7 @@ router.put('/:id', verifyToken, requireRole('Admin'), async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE franchises SET franchise_name = $1, location = $2 WHERE id = $3 RETURNING *`,
-      [franchise_name, location, req.params.id]
+      [sanitize(franchise_name), sanitize(location), req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found.' });
     res.json(result.rows[0]);
