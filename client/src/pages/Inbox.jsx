@@ -40,15 +40,26 @@ export default function Inbox() {
       const [notifRes] = await Promise.all([
         api.get('/notifications'),
       ]);
-      setNotifications(notifRes.data);
+      // DEFENSIVE — handle both plain array and paginated response
+      const notifData = Array.isArray(notifRes.data)
+        ? notifRes.data
+        : notifRes.data?.data || [];
+      setNotifications(notifData);
 
       if (isManager) {
         const [inboxRes, sentRes] = await Promise.all([
           api.get('/messages/inbox'),
           api.get('/messages/sent'),
         ]);
-        setMessages(inboxRes.data);
-        setSentMessages(sentRes.data);
+        const inboxData = Array.isArray(inboxRes.data)
+          ? inboxRes.data
+          : inboxRes.data?.data || [];
+        const sentData = Array.isArray(sentRes.data)
+          ? sentRes.data
+          : sentRes.data?.data || [];
+
+        setMessages(inboxData);
+        setSentMessages(sentData);
       }
     } catch {}
     finally { setLoading(false); }
@@ -57,7 +68,9 @@ export default function Inbox() {
   const fetchApplications = async () => {
     try {
       const res = await api.get('/applications');
-      setApplications(res.data);
+      // Handle paginated response
+      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      setApplications(data);
     } catch {}
   };
 
