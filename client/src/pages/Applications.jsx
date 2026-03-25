@@ -13,7 +13,7 @@ import { useUnsavedWarning } from '../utils/useUnsavedWarning';
 const EMPTY_FORM = {
   franchise_id: '',
   is_med: false, is_dreview: false, is_drr: false,
-  is_3in1: false, is_rent_to: false, other_type: '',
+  other_type: '',
   client_first_name: '', client_last_name: '', client_id_number: '',
   client_cell: '', client_whatsapp: '', client_email: '',
   client_address: '', client_employer: '', client_marital_status: '',
@@ -27,7 +27,11 @@ const EMPTY_FORM = {
 };
 
 const EMPTY_CREDITOR = { creditor_name: '', account_num_ref: '', balance_of_acc: '', amount: '' };
-const STEPS = ['Call Info', 'Applicant', 'Financials', 'Creditors', 'Documents'];
+const getSteps = (f) => {
+  const s = ['Call Info', 'Applicant', 'Financials', 'Creditors'];
+  if (!f.is_med) s.push('Documents');
+  return s;
+};
 
 // ── Validation rules ──────────────────────────────────────
 const SA_ID_REGEX = /^\d{13}$/;
@@ -39,7 +43,7 @@ function validateStep(step, form, creditors) {
 
   if (step === 0) {
     if (!form.franchise_id) errs.franchise_id = 'Please select a franchise.';
-    const anyType = form.is_med || form.is_dreview || form.is_drr || form.is_3in1 || form.is_rent_to || form.other_type.trim();
+    const anyType = form.is_med || form.is_dreview || form.is_drr || form.other_type.trim();
     if (!anyType) errs.app_type = 'Select at least one application type.';
   }
 
@@ -58,14 +62,14 @@ function validateStep(step, form, creditors) {
   }
 
   if (step === 2) {
-    if (!form.gross_salary) errs.gross_salary = 'Gross salary is required.';
+    if (!form.gross_salary) errs.gross_salary = 'Total monthly salary is required.';
     else if (isNaN(form.gross_salary) || Number(form.gross_salary) <= 0)
       errs.gross_salary = 'Enter a valid positive amount.';
-    if (!form.nett_salary) errs.nett_salary = 'Nett salary is required.';
+    if (!form.nett_salary) errs.nett_salary = 'Take-home pay is required.';
     else if (isNaN(form.nett_salary) || Number(form.nett_salary) <= 0)
       errs.nett_salary = 'Enter a valid positive amount.';
     if (form.nett_salary && form.gross_salary && Number(form.nett_salary) > Number(form.gross_salary))
-      errs.nett_salary = 'Nett salary cannot exceed gross salary.';
+      errs.nett_salary = 'Take-home pay cannot exceed total salary.';
     ['exp_groceries', 'exp_rent_bond', 'exp_transport', 'exp_school_fees', 'exp_rates', 'exp_water_elec'].forEach(f => {
       if (form[f] && (isNaN(form[f]) || Number(form[f]) < 0))
         errs[f] = 'Enter a valid amount.';
@@ -76,13 +80,17 @@ function validateStep(step, form, creditors) {
   }
 
   if (step === 3) {
-    creditors.forEach((c, i) => {
-      if (!c.creditor_name.trim()) errs[`creditor_name_${i}`] = 'Creditor name is required.';
-      if (c.balance_of_acc && (isNaN(c.balance_of_acc) || Number(c.balance_of_acc) < 0))
-        errs[`balance_of_acc_${i}`] = 'Enter a valid amount.';
-      if (c.amount && (isNaN(c.amount) || Number(c.amount) < 0))
-        errs[`amount_${i}`] = 'Enter a valid amount.';
-    });
+    // Step 3 is either Banking (MED/DRR) or Creditors (Debt Review).
+    // Only validate creditors when we actually show the creditors UI.
+    if (!(form.is_med || form.is_drr)) {
+      creditors.forEach((c, i) => {
+        if (!c.creditor_name.trim()) errs[`creditor_name_${i}`] = 'Creditor name is required.';
+        if (c.balance_of_acc && (isNaN(c.balance_of_acc) || Number(c.balance_of_acc) < 0))
+          errs[`balance_of_acc_${i}`] = 'Enter a valid amount.';
+        if (c.amount && (isNaN(c.amount) || Number(c.amount) < 0))
+          errs[`amount_${i}`] = 'Enter a valid amount.';
+      });
+    }
   }
 
   return errs;
@@ -119,6 +127,8 @@ export default function Applications() {
 
   const [isFormDirty, setIsFormDirty] = useState(false);
   useUnsavedWarning(isFormDirty && view === 'form');
+
+  const STEPS = getSteps(form);
 
   const [editApp, setEditApp] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -292,13 +302,15 @@ export default function Applications() {
   };
 
   const handleSubmit = async () => {
-    const errs = validateStep(4, form, creditors);
+    const lastStepIndex = STEPS.length - 1;
+    const errs = validateStep(lastStepIndex, form, creditors);
     if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
     setSubmitting(true); setError('');
     try {
       await api.post('/applications', {
         ...form,
-        creditors,
+        // Only persist creditors when Debt Review step is active.
+        creditors: (form.is_med || form.is_drr) ? [] : creditors,
         consultant_id: employeeId || undefined,
       });
       setSuccess('Application submitted successfully.');
@@ -385,9 +397,9 @@ export default function Applications() {
           {/* Income */}
           <EditSection title="Income">
             <EditGrid>
-              <EditField label="Gross Salary" value={editApp.gross_salary} onChange={v => setEditApp(p => ({ ...p, gross_salary: v }))} type="number" />
-              <EditField label="Nett Salary" value={editApp.nett_salary} onChange={v => setEditApp(p => ({ ...p, nett_salary: v }))} type="number" />
-              <EditField label="Spouse Salary" value={editApp.spouse_salary} onChange={v => setEditApp(p => ({ ...p, spouse_salary: v }))} type="number" />
+              <EditField label="Total Monthly Salary (Before Deductions)" value={editApp.gross_salary} onChange={v => setEditApp(p => ({ ...p, gross_salary: v }))} type="number" />
+              <EditField label="Take-Home Pay (After Deductions)" value={editApp.nett_salary} onChange={v => setEditApp(p => ({ ...p, nett_salary: v }))} type="number" />
+              <EditField label="Spouse / Partner Monthly Income" value={editApp.spouse_salary} onChange={v => setEditApp(p => ({ ...p, spouse_salary: v }))} type="number" />
             </EditGrid>
           </EditSection>
 
@@ -407,7 +419,7 @@ export default function Applications() {
           {/* Application Type */}
           <EditSection title="Application Type">
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', padding: '4px 0' }}>
-              {[['is_med', 'MED'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR'], ['is_3in1', '3-in-1'], ['is_rent_to', 'Rent To']].map(([key, label]) => (
+              {[['is_med', 'MED (Debt Mediation)'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR (Debt Removal)']].map(([key, label]) => (
                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', fontSize: '13px', color: '#0f172a' }}>
                   <input type="checkbox" checked={!!editApp[key]} onChange={e => setEditApp(p => ({ ...p, [key]: e.target.checked }))} />
                   {label}
@@ -422,9 +434,15 @@ export default function Applications() {
               <EditField label="Bank" value={editApp.bank} onChange={v => setEditApp(p => ({ ...p, bank: v }))} />
               <EditField label="Account Number" value={editApp.account_no} onChange={v => setEditApp(p => ({ ...p, account_no: v }))} />
               <EditField label="Account Type" value={editApp.account_type} onChange={v => setEditApp(p => ({ ...p, account_type: v }))} type="select" options={['Cheque', 'Savings', 'Transmission']} />
-              <EditField label="Debit Order Date" value={editApp.debit_order_date} onChange={v => setEditApp(p => ({ ...p, debit_order_date: v }))} />
+              <EditField label="Debit Order Date" value={editApp.debit_order_date} onChange={v => setEditApp(p => ({ ...p, debit_order_date: v }))} type="date" />
               <EditField label="Debit Order Amount" value={editApp.debit_order_amount} onChange={v => setEditApp(p => ({ ...p, debit_order_amount: v }))} type="number" />
-              <EditField label="Debt Review Status" value={editApp.debt_review_status} onChange={v => setEditApp(p => ({ ...p, debt_review_status: v }))} />
+              <EditField
+                label="Debt Review Status"
+                value={editApp.debt_review_status}
+                onChange={v => setEditApp(p => ({ ...p, debt_review_status: v }))}
+                type="select"
+                options={['Not Under Debt Review', 'Applied for Debt Review', 'Under Debt Review', 'Debt Review Completed', 'Debt Review Withdrawn']}
+              />
             </EditGrid>
           </EditSection>
 
@@ -475,7 +493,7 @@ export default function Applications() {
 
             <DetailSection title="Application Type">
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', gridColumn: 'span 2' }}>
-                {[['is_med', 'MED'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR'], ['is_3in1', '3-in-1'], ['is_rent_to', 'Rent To']].filter(([k]) => a[k]).map(([k, label]) => (
+                {[['is_med', 'MED (Debt Mediation)'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR (Debt Removal)']].filter(([k]) => a[k]).map(([k, label]) => (
                   <span key={k} style={{ ...S.badge('Submitted'), background: '#eff6ff', color: '#2563eb' }}>{label}</span>
                 ))}
                 {a.other_type && <span style={S.badge('Submitted')}>{a.other_type}</span>}
@@ -492,9 +510,9 @@ export default function Applications() {
             </DetailSection>
 
             <DetailSection title="Financials">
-              <DR label="Gross Salary" value={a.gross_salary && `R ${parseFloat(a.gross_salary).toLocaleString()}`} />
-              <DR label="Nett Salary" value={a.nett_salary && `R ${parseFloat(a.nett_salary).toLocaleString()}`} />
-              <DR label="Spouse Salary" value={a.spouse_salary && `R ${parseFloat(a.spouse_salary).toLocaleString()}`} />
+              <DR label="Total Monthly Salary" value={a.gross_salary && `R ${parseFloat(a.gross_salary).toLocaleString()}`} />
+              <DR label="Take-Home Pay" value={a.nett_salary && `R ${parseFloat(a.nett_salary).toLocaleString()}`} />
+              <DR label="Spouse / Partner Income" value={a.spouse_salary && `R ${parseFloat(a.spouse_salary).toLocaleString()}`} />
               <DR label="Total Expenses" value={a.total_expenses && `R ${parseFloat(a.total_expenses).toLocaleString()}`} />
               <DR label="Debit Order Amount" value={a.debit_order_amount && `R ${parseFloat(a.debit_order_amount).toLocaleString()}`} />
               <DR label="Debit Order Date" value={a.debit_order_date} />
@@ -842,7 +860,7 @@ export default function Applications() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      {['Creditor', 'Ref', 'Balance', 'Monthly Amount'].map(h => (
+                      {['Creditor', 'Ref', 'Balance', 'Monthly Installment'].map(h => (
                         <th key={h} style={{ ...S.tableHeader, padding: '9px 14px' }}>{h}</th>
                       ))}
                     </tr>
@@ -1032,13 +1050,7 @@ export default function Applications() {
                     <label style={{ display: 'block', color: fieldErrors.franchise_id ? '#dc2626' : '#64748b', fontSize: '12px', marginBottom: '5px' }}>
                       Franchise / Office
                     </label>
-                    {user?.role !== 'Admin' ? (
-                      <div style={{
-                        ...S.input, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '40px'
-                      }}>
-                        {franchise?.franchise_name || 'Your franchise'}
-                      </div>
-                    ) : (
+                    {user?.role === 'Admin' ? (
                       <select
                         name="franchise_id"
                         value={form.franchise_id || ''}
@@ -1050,6 +1062,12 @@ export default function Applications() {
                           <option key={f.id} value={f.id}>{f.franchise_name}</option>
                         ))}
                       </select>
+                    ) : (
+                      <div style={{
+                        ...S.input, background: '#f8fafc', color: '#64748b', cursor: 'not-allowed', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '40px'
+                      }}>
+                        {franchise?.franchise_name || 'Your franchise'}
+                      </div>
                     )}
                     {fieldErrors.franchise_id && <p style={{ color: '#dc2626', fontSize: '11px', margin: '4px 0 0' }}>{fieldErrors.franchise_id}</p>}
                   </div>
@@ -1060,7 +1078,7 @@ export default function Applications() {
                     Application Type * {fieldErrors.app_type && <ErrText msg={fieldErrors.app_type} />}
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                    {[['is_med','MED'],['is_dreview','Debt Review'],['is_drr','DRR'],['is_3in1','3-in-1'],['is_rent_to','Rent To']].map(([name, label]) => (
+                    {[['is_med','MED (Debt Mediation)'],['is_dreview','Debt Review'],['is_drr','DRR (Debt Removal)']].map(([name, label]) => (
                       <label key={name} style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '10px 12px', borderRadius: '8px', cursor: 'pointer',
@@ -1102,9 +1120,9 @@ export default function Applications() {
             {/* Step 3 — Financials */}
             {step === 2 && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <WField label="Gross Salary *" name="gross_salary" value={form.gross_salary} onChange={handleChange} type="number" error={fieldErrors.gross_salary} placeholder="0.00" />
-                <WField label="Nett Salary *" name="nett_salary" value={form.nett_salary} onChange={handleChange} type="number" error={fieldErrors.nett_salary} placeholder="0.00" />
-                <WField label="Spouse Salary" name="spouse_salary" value={form.spouse_salary} onChange={handleChange} type="number" placeholder="0.00" />
+                <WField label="Total Monthly Salary (Before Deductions) *" name="gross_salary" value={form.gross_salary} onChange={handleChange} type="number" error={fieldErrors.gross_salary} placeholder="0.00" />
+                <WField label="Take-Home Pay (After Deductions) *" name="nett_salary" value={form.nett_salary} onChange={handleChange} type="number" error={fieldErrors.nett_salary} placeholder="0.00" />
+                <WField label="Spouse / Partner Monthly Income" name="spouse_salary" value={form.spouse_salary} onChange={handleChange} type="number" placeholder="0.00" />
                 <div style={{ gridColumn: 'span 2', borderTop: '1px solid #f1f5f9', paddingTop: '14px' }}>
                   <p style={S.formSectionTitle}>Monthly Expenses</p>
                 </div>
@@ -1128,48 +1146,90 @@ export default function Applications() {
                 <WField label="Account Number *" name="account_no" value={form.account_no} onChange={handleChange} error={fieldErrors.account_no} />
                 <WField label="Account Type *" name="account_type" value={form.account_type} onChange={handleChange}
                   type="select" options={['', 'Cheque', 'Savings', 'Transmission']} error={fieldErrors.account_type} />
-                <WField label="Debt Review Status" name="debt_review_status" value={form.debt_review_status} onChange={handleChange} />
-                <WField label="Debit Order Date" name="debit_order_date" value={form.debit_order_date} onChange={handleChange} />
+                <WField
+                  label="Debt Review Status"
+                  name="debt_review_status"
+                  value={form.debt_review_status}
+                  onChange={handleChange}
+                  type="select"
+                  options={['', 'Not Under Debt Review', 'Applied for Debt Review', 'Under Debt Review', 'Debt Review Completed', 'Debt Review Withdrawn']}
+                />
+                <WField label="Debit Order Date" name="debit_order_date" value={form.debit_order_date} onChange={handleChange} type="date" />
                 <WField label="Debit Order Amount" name="debit_order_amount" value={form.debit_order_amount} onChange={handleChange} type="number" placeholder="0.00" />
               </div>
             )}
 
-            {/* Step 4 — Creditors */}
+            {/* Step 4 — Creditors / Banking */}
             {step === 3 && (
               <div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {creditors.map((c, i) => (
-                    <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px 18px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          Creditor {i + 1}
-                        </span>
-                        {creditors.length > 1 && (
-                          <button onClick={() => setCreditors(p => p.filter((_, idx) => idx !== i))}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <WField label="Creditor Name *" name="creditor_name" value={c.creditor_name}
-                          onChange={e => handleCreditorChange(i, e)} error={fieldErrors[`creditor_name_${i}`]} />
-                        <WField label="Account / Ref No" name="account_num_ref" value={c.account_num_ref}
-                          onChange={e => handleCreditorChange(i, e)} />
-                        <WField label="Balance of Account" name="balance_of_acc" value={c.balance_of_acc}
-                          onChange={e => handleCreditorChange(i, e)} type="number" error={fieldErrors[`balance_of_acc_${i}`]} placeholder="0.00" />
-                        <WField label="Monthly Amount" name="amount" value={c.amount}
-                          onChange={e => handleCreditorChange(i, e)} type="number" error={fieldErrors[`amount_${i}`]} placeholder="0.00" />
-                      </div>
+                {(form.is_med || form.is_drr) ? (
+                  /* MED / DRR — banking details only */
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    <div style={{ gridColumn: 'span 2', padding: '10px 14px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                      <p style={{ margin: 0, color: '#1d4ed8', fontSize: '12.5px', fontWeight: '600' }}>
+                        {form.is_med ? 'MED (Debt Mediation) — banking details required' : 'DRR (Debt Removal) — banking details required'}
+                      </p>
                     </div>
-                  ))}
-                </div>
-                <button onClick={() => setCreditors(p => [...p, { ...EMPTY_CREDITOR }])}
-                  style={{ marginTop: '12px', width: '100%', padding: '11px', borderRadius: '10px', border: '2px dashed #e2e8f0', background: 'transparent', color: '#64748b', fontSize: '13.5px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}>
-                  + Add Another Creditor
-                </button>
+                    <WField label="Bank *" name="bank" value={form.bank} onChange={handleChange} error={fieldErrors.bank} />
+                    <WField label="Account Number *" name="account_no" value={form.account_no} onChange={handleChange} error={fieldErrors.account_no} />
+                    <WField
+                      label="Account Type *"
+                      name="account_type"
+                      value={form.account_type}
+                      onChange={handleChange}
+                      type="select"
+                      options={['', 'Cheque', 'Savings', 'Transmission']}
+                      error={fieldErrors.account_type}
+                    />
+                    <WField
+                      label="Debt Review Status"
+                      name="debt_review_status"
+                      value={form.debt_review_status}
+                      onChange={handleChange}
+                      type="select"
+                      options={['', 'Not Under Debt Review', 'Applied for Debt Review', 'Under Debt Review', 'Debt Review Completed', 'Debt Review Withdrawn']}
+                    />
+                    <WField label="Debit Order Date" name="debit_order_date" value={form.debit_order_date} onChange={handleChange} type="date" />
+                    <WField label="Debit Order Amount" name="debit_order_amount" value={form.debit_order_amount} onChange={handleChange} type="number" placeholder="0.00" />
+                  </div>
+                ) : (
+                  /* Debt Review — full creditors list */
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {creditors.map((c, i) => (
+                        <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px 18px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              Creditor {i + 1}
+                            </span>
+                            {creditors.length > 1 && (
+                              <button onClick={() => setCreditors(p => p.filter((_, idx) => idx !== i))}
+                                style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <WField label="Creditor Name *" name="creditor_name" value={c.creditor_name}
+                              onChange={e => handleCreditorChange(i, e)} error={fieldErrors[`creditor_name_${i}`]} />
+                            <WField label="Account / Ref No" name="account_num_ref" value={c.account_num_ref}
+                              onChange={e => handleCreditorChange(i, e)} />
+                            <WField label="Balance of Account" name="balance_of_acc" value={c.balance_of_acc}
+                              onChange={e => handleCreditorChange(i, e)} type="number" error={fieldErrors[`balance_of_acc_${i}`]} placeholder="0.00" />
+                            <WField label="Monthly Installment" name="amount" value={c.amount}
+                              onChange={e => handleCreditorChange(i, e)} type="number" error={fieldErrors[`amount_${i}`]} placeholder="0.00" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => setCreditors(p => [...p, { ...EMPTY_CREDITOR }])}
+                      style={{ marginTop: '12px', width: '100%', padding: '11px', borderRadius: '10px', border: '2px dashed #e2e8f0', background: 'transparent', color: '#64748b', fontSize: '13.5px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}>
+                      + Add Another Creditor
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -1293,7 +1353,7 @@ export default function Applications() {
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{app.date?.split('T')[0]}</td>
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{app.franchise_name || '—'}</td>
                   <td style={{ ...S.tableCell, color: '#64748b', fontSize: '12px' }}>
-                    {[app.is_med && 'MED', app.is_dreview && 'D.Review', app.is_drr && 'DRR', app.is_3in1 && '3-in-1'].filter(Boolean).join(', ') || '—'}
+                    {[app.is_med && 'MED', app.is_dreview && 'D.Review', app.is_drr && 'DRR'].filter(Boolean).join(', ') || '—'}
                   </td>
                   <td style={{ ...S.tableCell, textAlign: 'right' }}>
                     {app.nett_salary ? `R ${parseFloat(app.nett_salary).toLocaleString()}` : '—'}
