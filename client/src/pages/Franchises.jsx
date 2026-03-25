@@ -3,6 +3,7 @@ import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import * as S from '../utils/styles';
 import { useAuth } from '../context/AuthContext';
+import Spinner from '../components/Spinner';
 
 export default function Franchises() {
   const [franchises, setFranchises] = useState([]);
@@ -94,7 +95,7 @@ export default function Franchises() {
       )}
 
       {loading ? (
-        <p style={{ color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
+        <Spinner size="lg" dark label="Loading franchises..." />
       ) : franchises.length === 0 ? (
         <p style={{ color: '#94a3b8', fontSize: '14px' }}>No franchises yet.</p>
       ) : (

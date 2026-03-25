@@ -3,7 +3,7 @@ const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, generateCsrfToken } = require('../middleware/auth');
 const { sanitize } = require('../utils/sanitize');
 
 // ─── LOGIN ───────────────────────────────────────────────
@@ -39,13 +39,19 @@ router.post('/login', async (req, res) => {
       { expiresIn: '8h' }
     );
 
-    // Set httpOnly cookie — JavaScript cannot read this
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    const isProd = process.env.NODE_ENV === 'production';
+    const cookieBase = {
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 8 * 60 * 60 * 1000,
-    });
+    };
+
+    // Set httpOnly cookie — JavaScript cannot read this
+    res.cookie('token', token, { ...cookieBase, httpOnly: true });
+
+    // Set CSRF token — intentionally readable by JS for double-submit validation
+    const csrfToken = generateCsrfToken();
+    res.cookie('csrf-token', csrfToken, { ...cookieBase, httpOnly: false });
 
     // Return user info but NOT the token
     res.json({
@@ -65,11 +71,10 @@ router.post('/login', async (req, res) => {
 
 // ─── LOGOUT ───────────────────────────────────────────────
 router.post('/logout', (req, res) => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-  });
+  const isProd = process.env.NODE_ENV === 'production';
+  const cookieBase = { secure: isProd, sameSite: isProd ? 'none' : 'lax' };
+  res.clearCookie('token', { ...cookieBase, httpOnly: true });
+  res.clearCookie('csrf-token', { ...cookieBase, httpOnly: false });
   res.json({ message: 'Logged out.' });
 });
 
@@ -96,6 +101,10 @@ router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
     return res.status(400).json({ error: 'Username, password and role are required.' });
   }
 
+  if (password.length < 10 || !/[0-9!@#$%^&*]/.test(password)) {
+    return res.status(400).json({ error: 'Password must be at least 10 characters and contain a number or special character.' });
+  }
+
   const allowedRoles = ['Admin', 'HR', 'Consultant'];
   if (!allowedRoles.includes(role)) {
     return res.status(400).json({ error: 'Role must be Admin, HR or Consultant.' });
@@ -111,12 +120,7 @@ router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
       return res.status(409).json({ error: 'Username already taken.' });
     }
 
-    try {
-      const password_hash = await bcrypt.hash(password, 12);
-    } catch (err) {
-      console.error('Password hashing error:', err.message);
-      return res.status(500).json({ error: 'Failed to hash password.' });
-    }
+    const password_hash = await bcrypt.hash(password, 12);
 
     // Create user
     const userResult = await pool.query(

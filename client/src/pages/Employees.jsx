@@ -7,6 +7,7 @@ import * as S from '../utils/styles';
 import { generateEmployeeForm } from '../utils/pdfGenerator';
 import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
+import Spinner from '../components/Spinner';
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
@@ -407,7 +408,7 @@ export default function Employees() {
 
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>Loading...</div>
+          <Spinner size="lg" dark label="Loading employees..." />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon="👤"

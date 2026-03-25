@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 require('dotenv').config();
 const pool = require('../config/db');
 
@@ -30,4 +31,20 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { verifyToken, requireRole };
+// ─── CSRF PROTECTION (double-submit cookie) ───────────────
+// Mutating requests must include X-CSRF-Token header matching the csrf-token cookie.
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+const csrfProtect = (req, res, next) => {
+  if (SAFE_METHODS.has(req.method)) return next();
+  const headerToken = req.headers['x-csrf-token'];
+  const cookieToken = req.cookies?.['csrf-token'];
+  if (!headerToken || !cookieToken || headerToken !== cookieToken) {
+    return res.status(403).json({ error: 'Invalid or missing CSRF token.' });
+  }
+  next();
+};
+
+const generateCsrfToken = () => crypto.randomBytes(32).toString('hex');
+
+module.exports = { verifyToken, requireRole, csrfProtect, generateCsrfToken };

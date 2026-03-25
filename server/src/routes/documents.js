@@ -49,8 +49,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: `Invalid doc_type. Allowed: ${ALLOWED_DOC_TYPES.join(', ')}` });
   }
 
-  // Build a unique file key for R2
-  const ext = req.file.originalname.split('.').pop();
+  // Build a unique file key for R2 — derive extension from validated MIME type, never from filename
+  const MIME_TO_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
+  const ext = MIME_TO_EXT[req.file.mimetype] || 'bin';
   const folder = application_id ? `applications/${application_id}` : `employees/${employee_id}`;
   const fileKey = `${folder}/${doc_type}_${Date.now()}.${ext}`;
 

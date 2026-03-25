@@ -39,7 +39,9 @@ router.post('/upload', requireRole('Admin', 'HR'), upload.single('file'), async 
   const { employee_id, doc_type } = req.body;
   if (!employee_id || !doc_type) return res.status(400).json({ error: 'employee_id and doc_type required.' });
 
-  const ext = req.file.originalname.split('.').pop();
+  // Derive extension from validated MIME type, never from user-supplied filename
+  const MIME_TO_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
+  const ext = MIME_TO_EXT[req.file.mimetype] || 'bin';
   const fileKey = `employees/${employee_id}/${doc_type}_${Date.now()}.${ext}`;
 
   try {

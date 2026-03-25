@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import { can } from '../utils/access';
+import Spinner from '../components/Spinner';
 
 const STATUS_STYLES = {
   Draft: { background: '#f1f5f9', color: '#64748b' },
@@ -73,7 +74,7 @@ export default function Dashboard() {
     finally { setLoading(false); }
   };
 
-  if (loading) return <p style={{ color: '#94a3b8', fontSize: '14px' }}>Loading...</p>;
+  if (loading) return <Spinner size="lg" dark label="Loading dashboard..." />;
   if (!stats) return <p style={{ color: '#94a3b8', fontSize: '14px' }}>Unable to load dash</p>;
 
   const today = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import * as S from '../utils/styles';
+import Spinner from '../components/Spinner';
 
 const ROLES = ['Admin', 'HR', 'Consultant'];
 
@@ -281,7 +282,7 @@ export default function Users() {
 
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>Loading...</div>
+          <Spinner size="lg" dark label="Loading users..." />
         ) : users.length === 0 ? (
           <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>No users found.</div>
         ) : isMobile ? (

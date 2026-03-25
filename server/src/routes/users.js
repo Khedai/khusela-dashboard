@@ -36,15 +36,15 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Invalid role.' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  if (password.length < 10 || !/[0-9!@#$%^&*]/.test(password)) {
+    return res.status(400).json({ error: 'Password must be at least 10 characters and contain a number or special character.' });
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const userResult = await client.query(
       `INSERT INTO users (username, password_hash, role, franchise_id)
        VALUES ($1, $2, $3, $4)
@@ -100,12 +100,12 @@ router.patch('/:id/toggle', async (req, res) => {
 router.patch('/:id/password', async (req, res) => {
   const { password } = req.body;
 
-  if (!password || password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  if (!password || password.length < 10 || !/[0-9!@#$%^&*]/.test(password)) {
+    return res.status(400).json({ error: 'Password must be at least 10 characters and contain a number or special character.' });
   }
 
   try {
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     await pool.query(
       'UPDATE users SET password_hash = $1 WHERE id = $2',
       [passwordHash, req.params.id]

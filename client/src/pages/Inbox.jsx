@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import * as S from '../utils/styles';
 import { generateApplicationForm } from '../utils/pdfGenerator';
+import Spinner from '../components/Spinner';
 
 export default function Inbox() {
   const { user } = useAuth();
@@ -199,7 +200,7 @@ export default function Inbox() {
             )}
           </div>
           {loading ? (
-            <p style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>Loading...</p>
+            <Spinner dark label="Loading notifications..." />
           ) : notifications.length === 0 ? (
             <EmptyState icon="✓" title="No notifications" subtitle="Notifications will appear here." />
           ) : notifications.map((n, i) => (
@@ -238,7 +239,7 @@ export default function Inbox() {
               applications={applications}
             />
           ) : loading ? (
-            <p style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>Loading...</p>
+            <Spinner dark label="Loading messages..." />
           ) : messages.length === 0 ? (
             <EmptyState icon="✉" title="No messages" subtitle="Messages from other HR and Admin staff will appear here." />
           ) : messages.map((m, i) => (

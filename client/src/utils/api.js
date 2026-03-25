@@ -5,6 +5,18 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Attach CSRF token from cookie as a header on every mutating request
+function getCsrfToken() {
+  const match = document.cookie.match(/(?:^|; )csrf-token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+api.interceptors.request.use((config) => {
+  const token = getCsrfToken();
+  if (token) config.headers['x-csrf-token'] = token;
+  return config;
+});
+
 // Cookie handles authentication; if session expires, clear local state and redirect
 api.interceptors.response.use(
   (response) => response,
