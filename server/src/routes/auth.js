@@ -44,6 +44,10 @@ router.post('/login', async (req, res) => {
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
       maxAge: 8 * 60 * 60 * 1000,
+      path: '/',
+      // Optional: set this to the parent domain (e.g. ".example.com")
+      // so cookies can be read/sent across subdomains in production.
+      domain: process.env.COOKIE_DOMAIN || undefined,
     };
 
     // Set httpOnly cookie — JavaScript cannot read this
@@ -72,7 +76,12 @@ router.post('/login', async (req, res) => {
 // ─── LOGOUT ───────────────────────────────────────────────
 router.post('/logout', (req, res) => {
   const isProd = process.env.NODE_ENV === 'production';
-  const cookieBase = { secure: isProd, sameSite: isProd ? 'none' : 'lax' };
+  const cookieBase = {
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/',
+    domain: process.env.COOKIE_DOMAIN || undefined,
+  };
   res.clearCookie('token', { ...cookieBase, httpOnly: true });
   res.clearCookie('csrf-token', { ...cookieBase, httpOnly: false });
   res.json({ message: 'Logged out.' });
@@ -133,9 +142,9 @@ router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
 
     // Auto-create employee record
     await pool.query(
-      `INSERT INTO employees (first_name, user_id, franchise_id)
-       VALUES ($1, $2, $3)`,
-      [cleanUsername, newUser.id, franchise_id || null]
+      `INSERT INTO employees (first_name, last_name, user_id, franchise_id)
+       VALUES ($1, $2, $3, $4)`,
+      [cleanUsername, '', newUser.id, franchise_id || null]
     );
 
     res.status(201).json({ message: 'Account created.', user: newUser });

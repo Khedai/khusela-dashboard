@@ -2,12 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
-import axios from 'axios';
-
-// Plain axios for public endpoints — no auth interceptor
-const publicApi = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-});
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -28,7 +22,7 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    publicApi.get('/franchises')
+    api.get('/franchises')
       .then(res => setFranchises(res.data))
       .catch(() => {});
   }, []);
@@ -54,7 +48,7 @@ export default function Signup() {
 
     setLoading(true); setError('');
     try {
-      await publicApi.post('/auth/signup', {
+      await api.post('/auth/signup', {
         username: form.username,
         password: form.password,
         role: form.role,

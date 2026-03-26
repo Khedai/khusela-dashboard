@@ -13,7 +13,10 @@ function getCsrfToken() {
 
 api.interceptors.request.use((config) => {
   const token = getCsrfToken();
-  if (token) config.headers['x-csrf-token'] = token;
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers['x-csrf-token'] = token;
+  }
   return config;
 });
 
