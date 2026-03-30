@@ -140,12 +140,17 @@ router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
 
     const newUser = userResult.rows[0];
 
-    // Auto-create employee record
-    await pool.query(
-      `INSERT INTO employees (first_name, last_name, user_id, franchise_id)
-       VALUES ($1, $2, $3, $4)`,
-      [cleanUsername, '', newUser.id, franchise_id || null]
-    );
+    // Auto-create employee record.
+    // Admin accounts may be created without a franchise; if employees.franchise_id
+    // is constrained as NOT NULL this would cause a 500. In that case we skip
+    // the employee record creation and let the admin operate without an employee row.
+    if (role !== 'Admin' || franchise_id) {
+      await pool.query(
+        `INSERT INTO employees (first_name, last_name, user_id, franchise_id)
+         VALUES ($1, $2, $3, $4)`,
+        [cleanUsername, 'N/A', newUser.id, franchise_id || null]
+      );
+    }
 
     res.status(201).json({ message: 'Account created.', user: newUser });
   } catch (err) {

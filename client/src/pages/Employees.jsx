@@ -8,10 +8,20 @@ import { generateEmployeeForm } from '../utils/pdfGenerator';
 import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
 import Spinner from '../components/Spinner';
+import FileUpload from '../components/FileUpload';
+import { getIcon } from '../components/fileUploadUtils';
 
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
 const ACCOUNT_TYPES = ['Cheque', 'Savings', 'Transmission'];
+const FOLDER_CATEGORIES = [
+  { key: 'Identity', icon: '', color: '#7c3aed', bg: '#f5f3ff' },
+  { key: 'Employment', icon: '', color: '#2563eb', bg: '#eff6ff' },
+  { key: 'Banking', icon: '', color: '#0891b2', bg: '#ecfeff' },
+  { key: 'Medical', icon: '', color: '#16a34a', bg: '#f0fdf4' },
+  { key: 'Disciplinary', icon: '', color: '#d97706', bg: '#fffbeb' },
+  { key: 'Other', icon: '', color: '#64748b', bg: '#f8fafc' },
+];
 
 export default function Employees() {
   const { user } = useAuth();
@@ -30,6 +40,12 @@ export default function Employees() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const LIMIT = 20;
+
+  const [folderDocs, setFolderDocs] = useState([]);
+  const [folderLoading, setFolderLoading] = useState(false);
+  const [activeFolder, setActiveFolder] = useState(null); // which category is open
+  const [uploadFolder, setUploadFolder] = useState(null);
+  const [uploadDocType, setUploadDocType] = useState('');
 
   useEffect(() => { fetchFranchises(); }, []);
 
@@ -66,13 +82,45 @@ export default function Employees() {
     try {
       const res = await api.get('/franchises');
       setFranchises(res.data);
-    } catch {}
+    } catch { /* ignore */ }
   };
 
   const openDetail = (emp) => {
     setSelected(emp);
     setView('detail');
     setError(''); setSuccess('');
+    setActiveFolder(null);
+    setUploadFolder(null);
+    setUploadDocType('');
+    setFolderDocs([]);
+    setFolderLoading(true);
+    fetchFolderDocs(emp.id);
+  };
+
+  const fetchFolderDocs = async (employeeId) => {
+    setFolderLoading(true);
+    try {
+      const res = await api.get(`/documents/employee-folder/${employeeId}`);
+      setFolderDocs(Array.isArray(res.data) ? res.data : []);
+    } catch { /* ignore */ }
+    finally {
+      setFolderLoading(false);
+    }
+  };
+
+  const handleFolderDocDelete = async (docId) => {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await api.delete(`/documents/folder/${docId}`);
+      setFolderDocs(prev => prev.filter(d => d.id !== docId));
+    } catch { /* ignore */ }
+  };
+
+  const getDocDownloadUrl = async (key) => {
+    try {
+      const res = await api.get(`/documents/download/${encodeURIComponent(key)}`);
+      window.open(res.data.url, '_blank');
+    } catch { /* ignore */ }
   };
 
   const openEdit = (emp) => {
@@ -384,6 +432,181 @@ export default function Employees() {
             { label: 'Branch Name', value: selected.branch_name },
             { label: 'Branch Code', value: selected.branch_code },
           ]} />
+
+          {/* ── PERSONAL FOLDER ── */}
+          {can(user, 'employees.uploadDocs') && (
+            <div style={{ marginTop: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 2px' }}>
+                    Personal Folder
+                  </h3>
+                  <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Private — visible to HR and Admin only</p>
+                </div>
+                <span
+                  style={{
+                    background: '#fef2f2',
+                    color: '#dc2626',
+                    borderRadius: '6px',
+                    padding: '3px 10px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                  }}
+                >
+                  Confidential
+                </span>
+              </div>
+
+              {folderLoading ? (
+                <p style={{ color: '#94a3b8', fontSize: '13px' }}>Loading folder...</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {FOLDER_CATEGORIES.map(cat => {
+                    const catDocs = folderDocs.filter(d => d.folder_category === cat.key);
+                    const isOpen = activeFolder === cat.key;
+                    const isUploading = uploadFolder === cat.key;
+
+                    return (
+                      <div
+                        key={cat.key}
+                        style={{
+                          background: 'white',
+                          borderRadius: '12px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                          overflow: 'hidden',
+                          border: '1px solid #f1f5f9',
+                        }}
+                      >
+                        {/* Folder header */}
+                        <div
+                          onClick={() => setActiveFolder(isOpen ? null : cat.key)}
+                          style={{
+                            padding: '12px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            cursor: 'pointer',
+                            background: isOpen ? cat.bg : 'white',
+                            transition: 'background 0.15s',
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontWeight: '600', fontSize: '13.5px', color: '#0f172a' }}>{cat.key}</span>
+                            {catDocs.length > 0 && (
+                              <span
+                                style={{
+                                  marginLeft: '8px',
+                                  background: cat.bg,
+                                  color: cat.color,
+                                  borderRadius: '10px',
+                                  fontSize: '10px',
+                                  fontWeight: '700',
+                                  padding: '1px 7px',
+                                }}
+                              >
+                                {catDocs.length}
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+                            {isUploading ? 'Uploading...' : (isOpen ? 'Collapse' : 'Expand')}
+                          </span>
+                        </div>
+
+                        {/* Folder contents */}
+                        {isOpen && (
+                          <div style={{ borderTop: `1px solid ${cat.bg}`, padding: '14px 16px' }}>
+                            {/* Upload area */}
+                            <div style={{ marginBottom: '14px' }}>
+                              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                                <input
+                                  value={uploadDocType}
+                                  onChange={e => setUploadDocType(e.target.value)}
+                                  placeholder={`Document name (e.g. ${cat.key === 'Identity' ? 'SA ID Copy' : cat.key === 'Employment' ? 'Employment Contract' : cat.key === 'Banking' ? 'Bank Statement' : cat.key === 'Medical' ? 'Sick Note' : cat.key === 'Disciplinary' ? 'Written Warning' : 'Document'})`}
+                                  style={{
+                                    flex: 1,
+                                    padding: '8px 12px',
+                                    borderRadius: '7px',
+                                    border: '1px solid #e2e8f0',
+                                    fontSize: '12px',
+                                    fontFamily: 'DM Sans',
+                                    color: '#0f172a',
+                                  }}
+                                />
+                              </div>
+                              <FileUpload
+                                uploadUrl={`/documents/employee-folder/${selected.id}`}
+                                extraFields={{
+                                  folder_category: cat.key,
+                                  doc_type: uploadDocType || cat.key,
+                                }}
+                                onUploadStart={() => setUploadFolder(cat.key)}
+                                onUploadComplete={(doc) => {
+                                  setFolderDocs(prev => [doc, ...prev]);
+                                  setUploadDocType('');
+                                  setUploadFolder(null);
+                                }}
+                                label={`Upload to ${cat.key}`}
+                                compact
+                              />
+                            </div>
+
+                            {/* Documents list */}
+                            {catDocs.length === 0 ? (
+                              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0, fontStyle: 'italic' }}>
+                                No documents in this folder yet.
+                              </p>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {catDocs.map(doc => (
+                                  <div
+                                    key={doc.id}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '10px',
+                                      padding: '9px 12px',
+                                      borderRadius: '8px',
+                                      background: '#f8fafc',
+                                      border: '1px solid #f1f5f9',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '18px', flexShrink: 0 }}>{getIcon(doc.file_name)}</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <p style={{ margin: '0 0 1px', fontSize: '12.5px', fontWeight: '500', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {doc.doc_type || doc.file_name}
+                                      </p>
+                                      <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>
+                                        {doc.file_name} · {new Date(doc.uploaded_at).toLocaleDateString('en-ZA')}
+                                      </p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+                                      <button
+                                        onClick={() => getDocDownloadUrl(doc.file_key)}
+                                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}
+                                      >
+                                        Download
+                                      </button>
+                                      <button
+                                        onClick={() => handleFolderDocDelete(doc.id)}
+                                        style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

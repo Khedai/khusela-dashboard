@@ -1,25 +1,45 @@
 const router = require('express').Router();
 const multer = require('multer');
-const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const multerS3 = require('multer-s3');
+const { DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { GetObjectCommand } = require('@aws-sdk/client-s3');
-const r2Client = require('../config/r2');
+const s3Client = require('../config/r2');
 const pool = require('../config/db');
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, requireRole } = require('../middleware/auth');
 require('dotenv').config();
 
-// Store file in memory temporarily before sending to R2
+const ALLOWED_MIME_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+};
+
+const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  storage: multerS3({
+    s3: s3Client,
+    bucket: process.env.R2_BUCKET_NAME,
+    key: (req, file, cb) => {
+      const ext = ALLOWED_MIME_TYPES[file.mimetype] || 'bin';
+      const key = `docs/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
+      cb(null, key);
+    },
+  }),
+  limits: { fileSize: MAX_SIZE },
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (allowed.includes(file.mimetype)) {
+    if (ALLOWED_MIME_TYPES[file.mimetype]) {
       cb(null, true);
     } else {
-      cb(new Error('Only JPG, PNG and PDF files are allowed.'));
+      cb(new Error(`File type not allowed. Accepted: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX`));
     }
-  }
+  },
 });
 
 const ALLOWED_DOC_TYPES = [
@@ -31,10 +51,8 @@ const ALLOWED_DOC_TYPES = [
   'Other',
 ];
 
-router.use(verifyToken);
-
 // ─── UPLOAD FILE ─────────────────────────────────────────
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file provided.' });
   }
@@ -49,20 +67,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: `Invalid doc_type. Allowed: ${ALLOWED_DOC_TYPES.join(', ')}` });
   }
 
-  // Build a unique file key for R2 — derive extension from validated MIME type, never from filename
-  const MIME_TO_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
-  const ext = MIME_TO_EXT[req.file.mimetype] || 'bin';
-  const folder = application_id ? `applications/${application_id}` : `employees/${employee_id}`;
-  const fileKey = `${folder}/${doc_type}_${Date.now()}.${ext}`;
-
   try {
-    // Upload to R2
-    await r2Client.send(new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME,
-      Key: fileKey,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype,
-    }));
+    // multerS3 already uploads the object; we only persist its key
+    const fileKey = req.file.key;
 
     // Save record in documents table
     const result = await pool.query(
@@ -92,7 +99,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 // ─── GET DOCUMENTS FOR AN APPLICATION ────────────────────
-router.get('/application/:application_id', async (req, res) => {
+router.get('/application/:application_id', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT * FROM documents 
@@ -108,30 +115,31 @@ router.get('/application/:application_id', async (req, res) => {
 });
 
 // ─── GET SIGNED DOWNLOAD URL ──────────────────────────────
-router.get('/download/:id', async (req, res) => {
+// Accepts either a document id (for backwards compat) or a raw R2 object key.
+router.get('/download/:keyOrId', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM documents WHERE id = $1',
-      [req.params.id]
-    );
+    const { keyOrId } = req.params;
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Document not found.' });
-    }
-
+    const result = await pool.query('SELECT * FROM documents WHERE id = $1', [keyOrId]);
     const doc = result.rows[0];
 
     // Generate a signed URL valid for 15 minutes
+    const objectKey = doc?.file_key || doc?.r2_url || doc?.file_key;
     const signedUrl = await getSignedUrl(
-      r2Client,
+      s3Client,
       new GetObjectCommand({
         Bucket: process.env.R2_BUCKET_NAME,
-        Key: doc.r2_url,
+        Key: objectKey || keyOrId,
       }),
       { expiresIn: 900 }
     );
 
-    res.json({ url: signedUrl, document: doc });
+    // If requested with a doc id, return the document too (existing frontend behavior).
+    if (doc) {
+      return res.json({ url: signedUrl, document: doc });
+    }
+
+    return res.json({ url: signedUrl });
   } catch (err) {
     console.error('Download URL error:', err.message);
     res.status(500).json({ error: 'Failed to generate download URL.' });
@@ -139,7 +147,7 @@ router.get('/download/:id', async (req, res) => {
 });
 
 // ─── DELETE DOCUMENT ──────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM documents WHERE id = $1',
@@ -153,9 +161,10 @@ router.delete('/:id', async (req, res) => {
     const doc = result.rows[0];
 
     // Delete from R2
-    await r2Client.send(new DeleteObjectCommand({
+    const objectKey = doc?.file_key || doc?.r2_url;
+    await s3Client.send(new DeleteObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME,
-      Key: doc.r2_url,
+      Key: objectKey,
     }));
 
     // Delete from database
@@ -164,6 +173,170 @@ router.delete('/:id', async (req, res) => {
     res.json({ message: 'Document deleted.' });
   } catch (err) {
     console.error('Delete document error:', err.message);
+    res.status(500).json({ error: 'Failed to delete document.' });
+  }
+});
+
+// ─── LEAVE REQUEST DOCUMENTS ─────────────────────────────
+
+// Upload doc for a leave request
+router.post('/leave/:leaveId', verifyToken, upload.single('file'), async (req, res) => {
+  try {
+    const { leaveId } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No file provided.' });
+
+    // Verify access — consultant can only upload to their own leave request
+    if (req.user.role === 'Consultant') {
+      const empResult = await pool.query('SELECT id FROM employees WHERE user_id = $1 LIMIT 1', [
+        req.user.id,
+      ]);
+      const empId = empResult.rows[0]?.id;
+      const leaveCheck = await pool.query('SELECT employee_id FROM leave_requests WHERE id = $1', [
+        leaveId,
+      ]);
+      if (leaveCheck.rows[0]?.employee_id !== empId) {
+        return res
+          .status(403)
+          .json({ error: 'You can only upload documents for your own leave requests.' });
+      }
+    }
+
+    const fileKey = req.file.key;
+    const result = await pool.query(
+      `INSERT INTO documents (leave_request_id, doc_type, file_name, r2_url, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *, r2_url as file_key`,
+      [
+        leaveId,
+        req.body.doc_type || 'Supporting Document',
+        req.file.originalname,
+        fileKey,
+        req.user.id,
+      ]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: err.message || 'Upload failed.' });
+  }
+});
+
+// List docs for a leave request
+router.get('/leave/:leaveId', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT *, r2_url as file_key FROM documents
+       WHERE leave_request_id = $1
+       ORDER BY uploaded_at DESC`,
+      [req.params.leaveId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch documents.' });
+  }
+});
+
+// ─── EMPLOYEE FOLDER DOCUMENTS ───────────────────────────
+
+const FOLDER_CATEGORIES = ['Identity', 'Employment', 'Banking', 'Medical', 'Disciplinary', 'Other'];
+
+// Upload to employee folder
+router.post(
+  '/employee-folder/:employeeId',
+  verifyToken,
+  requireRole('Admin', 'HR'),
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      const { employeeId } = req.params;
+      if (!req.file) return res.status(400).json({ error: 'No file provided.' });
+      const { folder_category, doc_type } = req.body;
+
+      // HR can only upload to own franchise employees
+      if (req.user.role === 'HR') {
+        const empCheck = await pool.query('SELECT franchise_id FROM employees WHERE id = $1', [
+          employeeId,
+        ]);
+        if (empCheck.rows[0]?.franchise_id !== req.user.franchise_id) {
+          return res
+            .status(403)
+            .json({ error: 'You can only upload documents for employees in your franchise.' });
+        }
+      }
+
+      if (!FOLDER_CATEGORIES.includes(folder_category)) {
+        return res.status(400).json({ error: 'Invalid folder category.' });
+      }
+
+      const fileKey = req.file.key;
+      const result = await pool.query(
+        `INSERT INTO documents (employee_id, doc_type, file_name, r2_url, uploaded_by, folder_category)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *, r2_url as file_key`,
+        [
+          employeeId,
+          doc_type || folder_category,
+          req.file.originalname,
+          fileKey,
+          req.user.id,
+          folder_category,
+        ]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).json({ error: err.message || 'Upload failed.' });
+    }
+  }
+);
+
+// List employee folder docs — grouped by category
+router.get('/employee-folder/:employeeId', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    // HR franchise check
+    if (req.user.role === 'HR') {
+      const empCheck = await pool.query('SELECT franchise_id FROM employees WHERE id = $1', [
+        req.params.employeeId,
+      ]);
+      if (empCheck.rows[0]?.franchise_id !== req.user.franchise_id) {
+        return res.status(403).json({ error: 'Access denied.' });
+      }
+    }
+
+    const result = await pool.query(
+      `SELECT *, r2_url as file_key FROM documents
+       WHERE employee_id = $1
+       AND leave_request_id IS NULL
+       ORDER BY folder_category, uploaded_at DESC`,
+      [req.params.employeeId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch documents.' });
+  }
+});
+
+// Delete any document — Admin/HR only
+router.delete('/folder/:docId', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const doc = await pool.query('SELECT * FROM documents WHERE id = $1', [req.params.docId]);
+    if (doc.rows.length === 0) return res.status(404).json({ error: 'Document not found.' });
+
+    // Delete from R2
+    const objectKey = doc.rows[0].file_key || doc.rows[0].r2_url;
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: objectKey,
+      })
+    );
+
+    await pool.query('DELETE FROM documents WHERE id = $1', [req.params.docId]);
+    res.json({ message: 'Deleted.' });
+  } catch (err) {
+    console.error(err.message);
     res.status(500).json({ error: 'Failed to delete document.' });
   }
 });
