@@ -323,6 +323,18 @@ export default function Applications() {
     } finally { setSubmitting(false); }
   };
 
+  const handleDeleteApplication = async () => {
+    if (!window.confirm('Permanently delete this application? This cannot be undone.')) return;
+    try {
+      await api.delete(`/applications/${selectedApp.application.id}`);
+      setSelectedApp(null);
+      setView('list');
+      fetchApplications(page);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete application.');
+    }
+  };
+
   const handleMandateStatusUpdate = async (status) => {
     setMandateUpdating(status);
     try {
@@ -969,6 +981,26 @@ export default function Applications() {
           </div>
         )}
 
+        {/* Delete Application */}
+        {can(user, 'applications.delete') && (
+          <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #fee2e2' }}>
+            <button
+              onClick={handleDeleteApplication}
+              style={{
+                width: '100%', padding: '14px', borderRadius: '10px',
+                border: '2px solid #dc2626', background: '#fef2f2',
+                color: '#dc2626', fontSize: '14px', fontWeight: '700',
+                fontFamily: 'DM Sans', cursor: 'pointer', letterSpacing: '0.01em',
+              }}
+            >
+              Delete Application
+            </button>
+            <p style={{ textAlign: 'center', margin: '8px 0 0', fontSize: '11px', color: '#94a3b8' }}>
+              This permanently removes the application and cannot be undone.
+            </p>
+          </div>
+        )}
+
       </div>
     );
   }
@@ -1449,8 +1481,12 @@ function MandateBadge({ status }) {
       ...s, padding: '3px 9px', borderRadius: '20px',
       fontSize: '11px', fontWeight: '600',
       display: 'inline-flex', alignItems: 'center', gap: '4px',
+      lineHeight: '1.4',
     }}>
-      {icons[status || 'Pending']} {status || 'Pending'}
+      <span style={{ display: 'inline-block', verticalAlign: 'middle', lineHeight: 1, fontSize: '11px' }}>
+        {icons[status || 'Pending']}
+      </span>
+      <span style={{ verticalAlign: 'middle' }}>{status || 'Pending'}</span>
     </span>
   );
 }

@@ -104,14 +104,14 @@ module.exports = router;
 // ─── SIGNUP ───────────────────────────────────────────────
 router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
   const { username, password, role, franchise_id } = req.body;
-  const cleanUsername = sanitize(username)?.toLowerCase().replace(/\s/g, '');
+  const cleanUsername = sanitize(username)?.replace(/\s/g, '');
 
   if (!cleanUsername || !password || !role) {
     return res.status(400).json({ error: 'Username, password and role are required.' });
   }
 
-  if (password.length < 10 || !/[0-9!@#$%^&*]/.test(password)) {
-    return res.status(400).json({ error: 'Password must be at least 10 characters and contain a number or special character.' });
+  if (password.length < 6 || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters and contain a number and a symbol.' });
   }
 
   const allowedRoles = ['Admin', 'HR', 'Consultant'];
@@ -120,9 +120,9 @@ router.post('/signup', verifyToken, requireRole('Admin'), async (req, res) => {
   }
 
   try {
-    // Check username taken
+    // Check username taken (case-insensitive to prevent near-duplicate accounts)
     const existing = await pool.query(
-      'SELECT id FROM users WHERE username = $1',
+      'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
       [cleanUsername]
     );
     if (existing.rows.length > 0) {

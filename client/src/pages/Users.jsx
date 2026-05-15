@@ -18,6 +18,7 @@ export default function Users() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [togglingId, setTogglingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [resettingId, setResettingId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -87,6 +88,18 @@ export default function Users() {
     } finally { setTogglingId(null); }
   };
 
+  const handleDeleteUser = async (u) => {
+    if (!window.confirm(`Are you sure you want to delete @${u.username}? This cannot be undone.`)) return;
+    setDeletingId(u.id); setError(''); setSuccess('');
+    try {
+      await api.delete(`/users/${u.id}`);
+      setUsers(prev => prev.filter(x => x.id !== u.id));
+      setSuccess(`@${u.username} has been deleted.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete user.');
+    } finally { setDeletingId(null); }
+  };
+
   const handleResetPassword = async (u) => {
     const newPassword = window.prompt(`Set new password for @${u.username}:`);
     if (!newPassword) return;
@@ -152,8 +165,11 @@ export default function Users() {
             </label>
             <input
               value={form.username}
-              onChange={e => setForm(p => ({ ...p, username: e.target.value.toLowerCase().replace(/\s/g, '') }))}
-              placeholder="e.g. john_smith"
+              onChange={e => {
+                const v = e.target.value.replace(/\s/g, '');
+                setForm(p => ({ ...p, username: v.charAt(0).toUpperCase() + v.slice(1) }));
+              }}
+              placeholder="e.g. JohnSmith"
               style={S.input}
               autoComplete="off"
             />
@@ -209,7 +225,7 @@ export default function Users() {
                 type={showPassword ? 'text' : 'password'}
                 value={form.password}
                 onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                placeholder="Min. 8 characters"
+                placeholder="Min. 6 chars, 1 number, 1 symbol"
                 style={{ ...S.input, paddingRight: '44px' }}
                 autoComplete="new-password"
               />
@@ -223,13 +239,21 @@ export default function Users() {
             </div>
           </div>
 
-          {/* Password strength */}
-          {form.password && strength && (
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ height: '3px', background: '#f1f5f9', borderRadius: '2px', overflow: 'hidden', marginBottom: '4px' }}>
-                <div style={{ height: '100%', width: strength.width, background: strength.color, borderRadius: '2px', transition: 'all 0.3s' }} />
-              </div>
-              <p style={{ margin: 0, fontSize: '11px', color: strength.color, fontWeight: '500' }}>{strength.label}</p>
+          {/* Password requirements */}
+          {form.password && (
+            <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {[
+                { label: 'At least 6 characters',  met: form.password.length >= 6 },
+                { label: 'Contains a number',      met: /[0-9]/.test(form.password) },
+                { label: 'Contains a symbol',      met: /[^A-Za-z0-9]/.test(form.password) },
+              ].map(r => (
+                <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: r.met ? '#16a34a' : '#dc2626' }}>
+                    {r.met ? '✓' : '✗'}
+                  </span>
+                  <span style={{ fontSize: '11px', color: r.met ? '#16a34a' : '#94a3b8' }}>{r.label}</span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -313,10 +337,16 @@ export default function Users() {
                     {resettingId === u.id ? 'Saving...' : 'Reset Password'}
                   </button>
                   {u.id !== user?.id && (
-                    <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
-                      style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                      {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
+                        style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                        {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
+                        style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                        {deletingId === u.id ? '...' : 'Delete'}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -368,10 +398,16 @@ export default function Users() {
                         {resettingId === u.id ? 'Saving...' : 'Reset Password'}
                       </button>
                       {u.id !== user?.id && (
-                        <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
-                          style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
+                            style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                            {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
+                            style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                            {deletingId === u.id ? '...' : 'Delete'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </td>

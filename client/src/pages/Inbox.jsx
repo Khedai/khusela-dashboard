@@ -9,7 +9,7 @@ import Spinner from '../components/Spinner';
 export default function Inbox() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const isManager = user?.role === 'Admin' || user?.role === 'HR';
+  const isManager = user?.role === 'Admin' || user?.role === 'HR' || user?.role === 'Consultant';
 
   const [tab, setTab] = useState('notifications'); // notifications | inbox | sent | compose
   const [notifications, setNotifications] = useState([]);
@@ -241,7 +241,7 @@ export default function Inbox() {
           ) : loading ? (
             <Spinner dark label="Loading messages..." />
           ) : messages.length === 0 ? (
-            <EmptyState icon="✉" title="No messages" subtitle="Messages from other HR and Admin staff will appear here." />
+            <EmptyState icon="✉" title="No messages" subtitle="Messages from other staff will appear here." />
           ) : messages.map((m, i) => (
             <MessageRow key={m.id} message={m} i={i} timeAgo={timeAgo} isSent={false}
               onClick={() => { setSelectedMessage(m); markMessageRead(m.id); }} />
@@ -276,7 +276,7 @@ export default function Inbox() {
           <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9' }}>
             <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>New Message</h3>
             <p style={{ color: '#94a3b8', fontSize: '12px', margin: '4px 0 0' }}>
-              Send to HR or Admin staff using @username
+              Send to any staff member using @username
             </p>
           </div>
 

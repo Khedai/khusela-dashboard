@@ -11,6 +11,10 @@ if (JWT_SECRET.length < 32) {
   process.exit(1);
 }
 
+// Run once on startup — safe to repeat
+const pool = require('./config/db');
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMPTZ').catch(() => {});
+
 const app = express();
 app.set('trust proxy', 1); // Required for Render/Heroku
 

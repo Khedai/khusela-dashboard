@@ -11,6 +11,14 @@ import * as S from '../utils/styles';
 
 const LEAVE_TYPES = ['Annual', 'Sick', 'Family Responsibility', 'Unpaid', 'Study', 'Maternity/Paternity'];
 
+const fmtDate = (dateStr) => {
+  if (!dateStr) return '—';
+  const s = String(dateStr).split('T')[0];
+  const parts = s.split('-');
+  if (parts.length !== 3) return s;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
 const STATUS_STYLES = {
   Pending: { background: '#fffbeb', color: '#d97706' },
   Approved: { background: '#f0fdf4', color: '#16a34a' },
@@ -251,7 +259,7 @@ export default function Leave() {
               </h3>
               <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>
                 {selectedRequest.first_name} {selectedRequest.last_name} ·{' '}
-                {selectedRequest.start_date?.split('T')[0]} → {selectedRequest.end_date?.split('T')[0]} ·{' '}
+                {fmtDate(selectedRequest.start_date)} → {fmtDate(selectedRequest.end_date)} ·{' '}
                 {selectedRequest.days_requested} day{selectedRequest.days_requested !== 1 ? 's' : ''}
               </p>
             </div>
@@ -399,7 +407,7 @@ export default function Leave() {
                         {doc.file_name}
                       </p>
                       <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>
-                        {doc.doc_type} · {new Date(doc.uploaded_at).toLocaleDateString('en-ZA')}
+                        {doc.doc_type} · {fmtDate(doc.uploaded_at)} {new Date(doc.uploaded_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
@@ -654,7 +662,7 @@ export default function Leave() {
                     )}
                     <td style={S.tableCell}>{r.leave_type}</td>
                     <td style={{ ...S.tableCell, whiteSpace: 'nowrap', color: '#64748b' }}>
-                      {r.start_date?.split('T')[0]} → {r.end_date?.split('T')[0]}
+                      {fmtDate(r.start_date)} → {fmtDate(r.end_date)}
                     </td>
                     <td style={{ ...S.tableCell, textAlign: 'center' }}>{r.days_requested}</td>
                     <td style={{ ...S.tableCell, color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

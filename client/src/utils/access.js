@@ -22,8 +22,8 @@ export const can = (user, action) => {
     'leave.viewAll':             ['HR'], 
 
     // Messaging
-    'messages.send':             ['Admin', 'HR'],
-    'messages.viewInbox':        ['Admin', 'HR'],
+    'messages.send':             ['Admin', 'HR', 'Consultant'],
+    'messages.viewInbox':        ['Admin', 'HR', 'Consultant'],
 
     // Users
     'users.manage':              ['Admin'],

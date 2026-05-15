@@ -4,7 +4,7 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const { sanitize } = require('../utils/sanitize');
 
 router.use(verifyToken);
-router.use(requireRole('Admin', 'HR'));
+router.use(requireRole('Admin', 'HR', 'Consultant'));
 
 // ─── SEARCH USERS BY @USERNAME ────────────────────────────
 router.get('/search-users', async (req, res) => {
@@ -15,7 +15,7 @@ router.get('/search-users', async (req, res) => {
       `SELECT u.id, u.username, u.role, f.franchise_name
        FROM users u
        LEFT JOIN franchises f ON u.franchise_id = f.id
-       WHERE u.role IN ('Admin', 'HR')
+       WHERE u.role IN ('Admin', 'HR', 'Consultant')
          AND u.is_active = TRUE
          AND u.id != $1
          AND u.username ILIKE $2
@@ -39,13 +39,13 @@ router.post('/send', async (req, res) => {
   try {
     // Find recipient
     const recipientResult = await pool.query(
-      `SELECT id, username, role FROM users 
-       WHERE username = $1 AND role IN ('Admin', 'HR') AND is_active = TRUE`,
+      `SELECT id, username, role FROM users
+       WHERE username = $1 AND role IN ('Admin', 'HR', 'Consultant') AND is_active = TRUE`,
       [recipient_username.replace('@', '')]
     );
 
     if (recipientResult.rows.length === 0) {
-      return res.status(404).json({ error: `User @${recipient_username.replace('@', '')} not found or is not HR/Admin.` });
+      return res.status(404).json({ error: `User @${recipient_username.replace('@', '')} not found.` });
     }
 
     const recipient = recipientResult.rows[0];

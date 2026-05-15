@@ -57,7 +57,35 @@ router.get('/requests', verifyToken, requireRole('HR'), async (req, res) => {
   }
 });
 
-// ─── GET MY LEAVE REQUESTS (for consultant) ───────────────
+// ─── GET EMPLOYEE LEAVE (HR/Admin view of specific employee) ─
+router.get('/employee/:employee_id', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+  const year = new Date().getFullYear();
+  try {
+    let balResult = await pool.query(
+      'SELECT * FROM leave_balances WHERE employee_id = $1 AND year = $2',
+      [req.params.employee_id, year]
+    );
+    if (balResult.rows.length === 0) {
+      balResult = await pool.query(
+        'INSERT INTO leave_balances (employee_id, year) VALUES ($1, $2) RETURNING *',
+        [req.params.employee_id, year]
+      );
+    }
+    const reqResult = await pool.query(
+      `SELECT lr.*, u.username AS approved_by_username
+       FROM leave_requests lr
+       LEFT JOIN users u ON lr.approved_by = u.id
+       WHERE lr.employee_id = $1
+       ORDER BY lr.created_at DESC`,
+      [req.params.employee_id]
+    );
+    res.json({ balance: balResult.rows[0], requests: reqResult.rows });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to fetch employee leave.' });
+  }
+});
+
 // ─── GET MY EMPLOYEE RECORD ───────────────────────────────
 router.get('/my-employee', async (req, res) => {
   try {

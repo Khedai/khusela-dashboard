@@ -14,14 +14,25 @@ import { getIcon } from '../components/fileUploadUtils';
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
 const ACCOUNT_TYPES = ['Cheque', 'Savings', 'Transmission'];
+const POSITIONS = ['HR', 'Consultant'];
 const FOLDER_CATEGORIES = [
-  { key: 'Identity', icon: '', color: '#7c3aed', bg: '#f5f3ff' },
-  { key: 'Employment', icon: '', color: '#2563eb', bg: '#eff6ff' },
-  { key: 'Banking', icon: '', color: '#0891b2', bg: '#ecfeff' },
-  { key: 'Medical', icon: '', color: '#16a34a', bg: '#f0fdf4' },
-  { key: 'Disciplinary', icon: '', color: '#d97706', bg: '#fffbeb' },
-  { key: 'Other', icon: '', color: '#64748b', bg: '#f8fafc' },
+  { key: 'Identity',             icon: '', color: '#7c3aed', bg: '#f5f3ff' },
+  { key: 'Employment Contract',  icon: '', color: '#2563eb', bg: '#eff6ff' },
+  { key: 'Banking',              icon: '', color: '#0891b2', bg: '#ecfeff' },
+  { key: 'Medical',              icon: '', color: '#16a34a', bg: '#f0fdf4' },
+  { key: 'Leave',                icon: '', color: '#0d9488', bg: '#f0fdfa' },
+  { key: 'Disciplinary',         icon: '', color: '#d97706', bg: '#fffbeb' },
+  { key: 'Next of Kin',          icon: '', color: '#db2777', bg: '#fdf2f8' },
+  { key: 'Other',                icon: '', color: '#64748b', bg: '#f8fafc' },
 ];
+
+const fmtDate = (dateStr) => {
+  if (!dateStr) return '—';
+  const s = String(dateStr).split('T')[0];
+  const parts = s.split('-');
+  if (parts.length !== 3) return s;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
 
 export default function Employees() {
   const { user } = useAuth();
@@ -47,7 +58,14 @@ export default function Employees() {
   const [uploadFolder, setUploadFolder] = useState(null);
   const [uploadDocType, setUploadDocType] = useState('');
 
-  useEffect(() => { fetchFranchises(); }, []);
+  const [empLeave, setEmpLeave] = useState(null);
+  const [empLeaveLoading, setEmpLeaveLoading] = useState(false);
+
+  const [pastEmployees, setPastEmployees] = useState([]);
+  const [pastLoading, setPastLoading] = useState(false);
+  const [showPast, setShowPast] = useState(false);
+
+  useEffect(() => { fetchFranchises(); fetchPastEmployees(); }, []);
 
   useEffect(() => {
     setPage(1);
@@ -85,6 +103,15 @@ export default function Employees() {
     } catch { /* ignore */ }
   };
 
+  const fetchPastEmployees = async () => {
+    setPastLoading(true);
+    try {
+      const res = await api.get('/employees/terminated');
+      setPastEmployees(Array.isArray(res.data) ? res.data : []);
+    } catch { /* ignore */ }
+    finally { setPastLoading(false); }
+  };
+
   const openDetail = (emp) => {
     setSelected(emp);
     setView('detail');
@@ -94,7 +121,9 @@ export default function Employees() {
     setUploadDocType('');
     setFolderDocs([]);
     setFolderLoading(true);
+    setEmpLeave(null);
     fetchFolderDocs(emp.id);
+    fetchEmpLeave(emp.id);
   };
 
   const fetchFolderDocs = async (employeeId) => {
@@ -106,6 +135,15 @@ export default function Employees() {
     finally {
       setFolderLoading(false);
     }
+  };
+
+  const fetchEmpLeave = async (employeeId) => {
+    setEmpLeaveLoading(true);
+    try {
+      const res = await api.get(`/leave/employee/${employeeId}`);
+      setEmpLeave(res.data);
+    } catch { /* ignore */ }
+    finally { setEmpLeaveLoading(false); }
   };
 
   const handleFolderDocDelete = async (docId) => {
@@ -149,6 +187,24 @@ export default function Employees() {
 
   const f = (key) => form[key] || '';
   const set = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }));
+
+  // Date helpers for DD/MM/YYYY text inputs in the edit form
+  const toEditDate = (iso) => {
+    if (!iso) return '';
+    const s = String(iso).split('T')[0];
+    const parts = s.split('-');
+    if (parts.length !== 3 || !parts[0]) return '';
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+  const setDate = (key) => (e) => {
+    const val = e.target.value;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+      const [d, m, y] = val.split('/');
+      setForm(p => ({ ...p, [key]: `${y}-${m}-${d}` }));
+    } else {
+      setForm(p => ({ ...p, [key]: val }));
+    }
+  };
 
   const filtered = employees.filter(e => {
     const q = search.toLowerCase();
@@ -212,7 +268,7 @@ export default function Employees() {
                 <input value={f('tax_number')} onChange={set('tax_number')} style={S.input} />
               </FormField>
               <FormField label="Date of Birth">
-                <input type="date" value={f('birth_date')?.split('T')[0] || ''} onChange={set('birth_date')} style={S.input} />
+                <input type="text" value={toEditDate(f('birth_date'))} onChange={setDate('birth_date')} placeholder="DD/MM/YYYY" maxLength={10} style={S.input} />
               </FormField>
               <FormField label="Marital Status">
                 <select value={f('marital_status')} onChange={set('marital_status')} style={S.input}>
@@ -220,11 +276,14 @@ export default function Employees() {
                   {MARITAL.map(m => <option key={m}>{m}</option>)}
                 </select>
               </FormField>
-              <FormField label="Job Title">
-                <input value={f('job_title')} onChange={set('job_title')} style={S.input} placeholder="e.g. Debt Consultant" />
+              <FormField label="Position">
+                <select value={f('job_title')} onChange={set('job_title')} style={S.input}>
+                  <option value="">—</option>
+                  {POSITIONS.map(p => <option key={p}>{p}</option>)}
+                </select>
               </FormField>
               <FormField label="Employment Date">
-                <input type="date" value={f('employment_date')?.split('T')[0] || ''} onChange={set('employment_date')} style={S.input} />
+                <input type="text" value={toEditDate(f('employment_date'))} onChange={setDate('employment_date')} placeholder="DD/MM/YYYY" maxLength={10} style={S.input} />
               </FormField>
             </FormGrid>
           </FormSection>
@@ -334,8 +393,8 @@ export default function Employees() {
             </FormGrid>
           </FormSection>
 
-          {/* Franchise — Admin only */}
-          {user?.role === 'Admin' && (
+          {/* Franchise */}
+          {user?.role === 'Admin' ? (
             <FormSection title="Assignment">
               <FormField label="Franchise">
                 <select value={f('franchise_id')} onChange={set('franchise_id')} style={S.input}>
@@ -346,7 +405,13 @@ export default function Employees() {
                 </select>
               </FormField>
             </FormSection>
-          )}
+          ) : selected?.franchise_name ? (
+            <FormSection title="Assignment">
+              <FormField label="Franchise">
+                <input value={selected.franchise_name} disabled style={{ ...S.input, background: '#f8fafc', color: '#64748b' }} />
+              </FormField>
+            </FormSection>
+          ) : null}
 
         </div>
 
@@ -396,10 +461,10 @@ export default function Employees() {
             { label: 'Full Name', value: `${selected.first_name || ''} ${selected.last_name || ''}`.trim() },
             { label: 'ID Number', value: selected.id_number },
             { label: 'Tax Number', value: selected.tax_number },
-            { label: 'Date of Birth', value: selected.birth_date?.split('T')[0] },
+            { label: 'Date of Birth', value: fmtDate(selected.birth_date) },
             { label: 'Marital Status', value: selected.marital_status },
-            { label: 'Job Title', value: selected.job_title },
-            { label: 'Employment Date', value: selected.employment_date?.split('T')[0] },
+            { label: 'Position', value: selected.job_title },
+            { label: 'Employment Date', value: fmtDate(selected.employment_date) },
             { label: 'Franchise', value: selected.franchise_name },
           ]} />
           <DetailSection title="Contact" data={[
@@ -432,6 +497,61 @@ export default function Employees() {
             { label: 'Branch Name', value: selected.branch_name },
             { label: 'Branch Code', value: selected.branch_code },
           ]} />
+
+          {/* ── LEAVE OVERVIEW ── */}
+          {can(user, 'leave.viewAll') && (
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Leave Overview</p>
+                <span style={{ color: '#94a3b8', fontSize: '11px' }}>{new Date().getFullYear()}</span>
+              </div>
+              {empLeaveLoading ? (
+                <p style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading...</p>
+              ) : !empLeave ? (
+                <p style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '13px', margin: 0, fontStyle: 'italic' }}>No leave data found.</p>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+                    {[
+                      { label: 'Annual', total: empLeave.balance?.annual_total, used: empLeave.balance?.annual_used, color: '#2563eb' },
+                      { label: 'Sick', total: empLeave.balance?.sick_total, used: empLeave.balance?.sick_used, color: '#0891b2' },
+                      { label: 'Family Resp.', total: empLeave.balance?.family_total, used: empLeave.balance?.family_used, color: '#16a34a' },
+                    ].map(lb => (
+                      <div key={lb.label} style={{ flex: '1', padding: '14px 20px', borderRight: '1px solid #f1f5f9', minWidth: '90px' }}>
+                        <p style={{ margin: '0 0 4px', fontSize: '11px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{lb.label}</p>
+                        <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: lb.color }}>
+                          {(lb.total ?? 0) - (lb.used ?? 0)}<span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>/{lb.total ?? 0}</span>
+                        </p>
+                        <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>{lb.used ?? 0} used</p>
+                      </div>
+                    ))}
+                  </div>
+                  {empLeave.requests?.length > 0 ? empLeave.requests.map((r, i) => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', borderTop: i > 0 ? '1px solid #f8fafc' : 'none', gap: '12px' }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: '13px', fontWeight: '500', color: '#0f172a' }}>{r.leave_type}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '12px', marginLeft: '8px' }}>
+                          {fmtDate(r.start_date)} → {fmtDate(r.end_date)} · {r.days_requested}d
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '600',
+                          background: r.status === 'Approved' ? '#f0fdf4' : r.status === 'Rejected' ? '#fef2f2' : '#fffbeb',
+                          color: r.status === 'Approved' ? '#16a34a' : r.status === 'Rejected' ? '#dc2626' : '#d97706',
+                        }}>{r.status}</span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          {fmtDate(r.created_at)} {new Date(r.created_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                  )) : (
+                    <p style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '12px', margin: 0, fontStyle: 'italic' }}>No leave requests on record.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── PERSONAL FOLDER ── */}
           {can(user, 'employees.uploadDocs') && (
@@ -522,7 +642,16 @@ export default function Employees() {
                                 <input
                                   value={uploadDocType}
                                   onChange={e => setUploadDocType(e.target.value)}
-                                  placeholder={`Document name (e.g. ${cat.key === 'Identity' ? 'SA ID Copy' : cat.key === 'Employment' ? 'Employment Contract' : cat.key === 'Banking' ? 'Bank Statement' : cat.key === 'Medical' ? 'Sick Note' : cat.key === 'Disciplinary' ? 'Written Warning' : 'Document'})`}
+                                  placeholder={`Document name (e.g. ${
+                    cat.key === 'Identity' ? 'SA ID Copy' :
+                    cat.key === 'Employment Contract' ? 'Signed Employment Contract' :
+                    cat.key === 'Banking' ? 'Bank Statement' :
+                    cat.key === 'Medical' ? 'Medical Certificate' :
+                    cat.key === 'Leave' ? 'Sick Note / Leave Certificate' :
+                    cat.key === 'Disciplinary' ? 'Written Warning' :
+                    cat.key === 'Next of Kin' ? 'ID Copy of Next of Kin' :
+                    'Document'
+                  })`}
                                   style={{
                                     flex: 1,
                                     padding: '8px 12px',
@@ -577,7 +706,7 @@ export default function Employees() {
                                         {doc.doc_type || doc.file_name}
                                       </p>
                                       <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>
-                                        {doc.file_name} · {new Date(doc.uploaded_at).toLocaleDateString('en-ZA')}
+                                        {doc.file_name} · {fmtDate(doc.uploaded_at)} {new Date(doc.uploaded_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
                                       </p>
                                     </div>
                                     <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
@@ -725,6 +854,70 @@ export default function Employees() {
           </>
         )}
       </div>
+
+      {/* ── PAST EMPLOYEES ── */}
+      {can(user, 'employees.view') && (
+        <div style={{ marginTop: '32px' }}>
+          <button
+            onClick={() => setShowPast(p => !p)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: 'Sora', fontSize: '13px', fontWeight: '700',
+              color: '#64748b', padding: '0 0 12px',
+            }}
+          >
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '20px', height: '20px', borderRadius: '4px',
+              background: '#f1f5f9', fontSize: '10px', transition: 'transform 0.15s',
+              transform: showPast ? 'rotate(90deg)' : 'none',
+            }}>▶</span>
+            Past Employees
+            {pastEmployees.length > 0 && (
+              <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '10px', fontSize: '11px', fontWeight: '600', padding: '1px 8px' }}>
+                {pastEmployees.length}
+              </span>
+            )}
+          </button>
+
+          {showPast && (
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #f1f5f9' }}>
+              {pastLoading ? (
+                <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading...</p>
+              ) : pastEmployees.length === 0 ? (
+                <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0, fontStyle: 'italic' }}>No past employees on record.</p>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      {['Name', 'Position', 'Franchise', 'Terminated'].map(h => (
+                        <th key={h} style={{ padding: '10px 22px', textAlign: 'left', color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pastEmployees.map((emp, i) => (
+                      <tr key={emp.id} style={{ borderTop: '1px solid #f1f5f9', opacity: 0.75 }}>
+                        <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>
+                          {emp.first_name} {emp.last_name}
+                        </td>
+                        <td style={{ padding: '12px 22px', color: '#64748b' }}>{emp.job_title || '—'}</td>
+                        <td style={{ padding: '12px 22px', color: '#64748b' }}>{emp.franchise_name || '—'}</td>
+                        <td style={{ padding: '12px 22px' }}>
+                          <span style={{ background: '#fef2f2', color: '#dc2626', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>
+                            {fmtDate(emp.terminated_at)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

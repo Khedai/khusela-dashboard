@@ -34,6 +34,8 @@ router.get('/', verifyToken, async (req, res) => {
       conditions.push(`e.franchise_id IS NOT NULL`);
     }
 
+    conditions.push('e.terminated_at IS NULL');
+
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;
     }
@@ -64,6 +66,30 @@ router.get('/', verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch employees.' });
+  }
+});
+
+// ─── GET TERMINATED (PAST) EMPLOYEES ─────────────────────
+router.get('/terminated', requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const conditions = ['e.terminated_at IS NOT NULL'];
+    const params = [];
+    if (req.user.role !== 'Admin') {
+      conditions.push(`e.franchise_id = $${params.length + 1}`);
+      params.push(req.user.franchise_id || null);
+    }
+    const result = await pool.query(
+      `SELECT e.*, f.franchise_name
+       FROM employees e
+       LEFT JOIN franchises f ON e.franchise_id = f.id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY e.terminated_at DESC`,
+      params
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to fetch past employees.' });
   }
 });
 

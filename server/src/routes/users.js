@@ -127,6 +127,11 @@ router.delete('/:id', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
+    // Mark linked employee as terminated so HR can see them in Past Employees
+    await pool.query(
+      'UPDATE employees SET terminated_at = NOW(), user_id = NULL WHERE user_id = $1',
+      [req.params.id]
+    );
     res.json({ message: 'User deleted.' });
   } catch (err) {
     console.error('Delete user error:', err.message);
