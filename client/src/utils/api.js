@@ -5,10 +5,17 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Attach CSRF token from cookie as a header on every mutating request
+// Attach CSRF token as a header on every mutating request.
+// Cookie-based reading fails in cross-domain deployments (Vercel + Render),
+// so we fall back to the token stored in localStorage after login.
 function getCsrfToken() {
-  const match = document.cookie.match(/(?:^|; )csrf-token=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  const cookie = document.cookie.match(/(?:^|; )csrf-token=([^;]+)/);
+  if (cookie) return decodeURIComponent(cookie[1]);
+  return localStorage.getItem('csrf-token');
+}
+
+export function storeCsrfToken(token) {
+  if (token) localStorage.setItem('csrf-token', token);
 }
 
 api.interceptors.request.use((config) => {

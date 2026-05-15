@@ -57,7 +57,8 @@ router.post('/login', async (req, res) => {
     const csrfToken = generateCsrfToken();
     res.cookie('csrf-token', csrfToken, { ...cookieBase, httpOnly: false });
 
-    // Return user info but NOT the token
+    // Return user info + csrfToken in body (needed for cross-domain deployments
+    // where document.cookie can't read cookies set by a different origin)
     res.json({
       user: {
         id: user.id,
@@ -65,7 +66,8 @@ router.post('/login', async (req, res) => {
         role: user.role,
         franchise_id: user.franchise_id,
         franchise_name: user.franchise_name,
-      }
+      },
+      csrfToken,
     });
   } catch (err) {
     console.error('Login error:', err.message);
