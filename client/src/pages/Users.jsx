@@ -56,8 +56,8 @@ export default function Users() {
       setError('Username, password and role are required.');
       return;
     }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
     if (!form.franchise_id && form.role !== 'Admin') {
@@ -103,8 +103,8 @@ export default function Users() {
   const handleResetPassword = async (u) => {
     const newPassword = window.prompt(`Set new password for @${u.username}:`);
     if (!newPassword) return;
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
     setResettingId(u.id); setError(''); setSuccess('');
