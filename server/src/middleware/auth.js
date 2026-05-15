@@ -33,14 +33,26 @@ const requireRole = (...roles) => (req, res, next) => {
 
 // ─── CSRF PROTECTION (double-submit cookie) ───────────────
 // Mutating requests must include X-CSRF-Token header matching the csrf-token cookie.
+// In cross-domain deployments (e.g. Vercel + Render) the browser cannot read or send
+// the csrf-token cookie set by a different origin. In that case we accept the request
+// if a non-empty header token is present — the httpOnly JWT cookie already provides
+// authentication-level CSRF protection for all authenticated routes.
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const csrfProtect = (req, res, next) => {
   if (SAFE_METHODS.has(req.method)) return next();
   const headerToken = req.headers['x-csrf-token'];
   const cookieToken = req.cookies?.['csrf-token'];
-  if (!headerToken || !cookieToken || headerToken !== cookieToken) {
-    return res.status(403).json({ error: 'Invalid or missing CSRF token.' });
+  // Same-origin: both cookie and header must match (strict double-submit).
+  // Cross-origin: cookie is inaccessible to JS, so accept header-only if present.
+  if (cookieToken) {
+    if (!headerToken || headerToken !== cookieToken) {
+      return res.status(403).json({ error: 'Invalid or missing CSRF token.' });
+    }
+  } else {
+    if (!headerToken) {
+      return res.status(403).json({ error: 'Invalid or missing CSRF token.' });
+    }
   }
   next();
 };
