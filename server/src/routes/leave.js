@@ -28,17 +28,12 @@ router.get('/balance/:employee_id', async (req, res) => {
   }
 });
 
-// ─── GET ALL LEAVE REQUESTS ───────────────────────────────
-router.get('/requests', verifyToken, requireRole('HR'), async (req, res) => {
+// ─── GET ALL LEAVE REQUESTS (Admin only) ─────────────────
+router.get('/requests', verifyToken, requireRole('Admin'), async (req, res) => {
   try {
-    const hrResult = await pool.query(
-      'SELECT franchise_id FROM users WHERE id = $1',
-      [req.user.id]
-    );
-    const franchiseId = hrResult.rows[0]?.franchise_id;
-
+    // Admin sees all leave requests across all franchises
     const result = await pool.query(
-      `SELECT 
+      `SELECT
         lr.*,
         e.first_name, e.last_name,
         f.franchise_name,
@@ -47,9 +42,7 @@ router.get('/requests', verifyToken, requireRole('HR'), async (req, res) => {
        LEFT JOIN employees e ON lr.employee_id = e.id
        LEFT JOIN franchises f ON e.franchise_id = f.id
        LEFT JOIN users u ON lr.approved_by = u.id
-       WHERE e.franchise_id = $1
-       ORDER BY lr.created_at DESC`,
-      [franchiseId]
+       ORDER BY lr.created_at DESC`
     );
     res.json(result.rows);
   } catch (err) {
@@ -192,21 +185,14 @@ router.post('/request', async (req, res) => {
   }
 });
 
-// ─── APPROVE / REJECT REQUEST ─────────────────────────────
-router.patch('/request/:id', verifyToken, requireRole('HR'), async (req, res) => {
+// ─── APPROVE / REJECT REQUEST (Admin only) ───────────────
+router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res) => {
   const { status, rejection_reason } = req.body;
   if (!['Approved', 'Rejected'].includes(status)) {
     return res.status(400).json({ error: 'Status must be Approved or Rejected.' });
   }
 
   try {
-    // Verify the leave request belongs to HR's franchise
-    const hrResult = await pool.query(
-      'SELECT franchise_id FROM users WHERE id = $1',
-      [req.user.id]
-    );
-    const hrFranchiseId = hrResult.rows[0]?.franchise_id;
-
     const reqResult = await pool.query(
       `SELECT lr.*, e.franchise_id AS employee_franchise_id
        FROM leave_requests lr
@@ -219,13 +205,7 @@ router.patch('/request/:id', verifyToken, requireRole('HR'), async (req, res) =>
       return res.status(404).json({ error: 'Request not found.' });
     }
 
-    if (reqResult.rows[0].employee_franchise_id !== hrFranchiseId) {
-      return res.status(403).json({
-        error: 'You can only approve leave for employees in your franchise.'
-      });
-    }
-
-    // HR cannot approve their own leave request
+    // Admin cannot approve their own leave request
     if (reqResult.rows[0].employee_id) {
       const selfCheck = await pool.query(
         'SELECT id FROM employees WHERE user_id = $1 AND id = $2',

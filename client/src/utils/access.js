@@ -18,8 +18,8 @@ export const can = (user, action) => {
 
     // Leave
     'leave.apply':               ['HR', 'Consultant'],
-    'leave.approve':             ['HR'],
-    'leave.viewAll':             ['HR'], 
+    'leave.approve':             ['Admin'],
+    'leave.viewAll':             ['Admin'],
 
     // Messaging
     'messages.send':             ['Admin', 'HR', 'Consultant'],

@@ -40,8 +40,7 @@ function workingDays(start, end) {
 export default function Leave() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const isManager = user?.role === 'HR';
-  const isAdmin = user?.role === 'Admin';
+  const isManager = user?.role === 'Admin'; // Admin approves leave; HR/Consultant only see their own
 
   const [requests, setRequests] = useState([]);
   const [myEmployee, setMyEmployee] = useState(null);
@@ -67,7 +66,6 @@ export default function Leave() {
   const LIMIT = 20;
 
   useEffect(() => {
-    if (isAdmin) { setLoading(false); return; }
     fetchData(page);
   }, [page]);
 
@@ -182,8 +180,7 @@ export default function Leave() {
   const allRequests = isManager ? requests : requests;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
 
-  // Admin has no employee record and no leave management role — show info state
-  if (isAdmin) {
+  if (false) {
     return (
       <div style={{ maxWidth: '1000px' }}>
         <div style={S.pageHeader(isMobile)}>
@@ -192,10 +189,10 @@ export default function Leave() {
         <div style={{ ...S.card, padding: '48px 32px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🗓️</div>
           <h3 style={{ fontFamily: 'Sora', fontSize: '16px', fontWeight: '600', color: '#0f172a', margin: '0 0 8px' }}>
-            Leave management is handled by HR
+            Leave management is handled by Admin
           </h3>
           <p style={{ color: '#64748b', fontSize: '14px', maxWidth: '420px', margin: '0 auto' }}>
-            As an Admin, you oversee the system but leave requests are managed directly by HR users within their franchise. If you need to apply for leave yourself, ask HR to submit a request on your behalf.
+            Leave requests are managed by Admin.
           </p>
         </div>
       </div>
@@ -204,7 +201,7 @@ export default function Leave() {
 
   // ── Leave Request Detail Panel ────────────────────────────
   if (selectedRequest) {
-    const isHR = user?.role === 'HR' || user?.role === 'Admin';
+    const isHR = user?.role === 'Admin'; // Only Admin can approve/reject
     const isPending = selectedRequest.status === 'Pending';
 
     return (
