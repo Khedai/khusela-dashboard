@@ -62,14 +62,14 @@ export default function Login() {
             </div>
             <h1 style={{ fontFamily: 'Sora', fontSize: '40px', fontWeight: '800', color: 'white', lineHeight: '1.15', marginBottom: '20px' }}>
               Debt Management<br />
-              <span style={{ color: '#3b82f6' }}>Made Simple.</span>
+              <span style={{ color: '#818cf8' }}>Made Simple.</span>
             </h1>
             <p style={{ color: '#94a3b8', fontSize: '15px', lineHeight: '1.7', marginBottom: '40px' }}>
               Manage client applications, track employee records, and streamline your franchise operations.
             </p>
             {['Multi-franchise support', 'Role-based access control', 'Digital application processing'].map(item => (
               <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366f1', flexShrink: 0 }} />
                 <span style={{ color: '#64748b', fontSize: '14px' }}>{item}</span>
               </div>
             ))}
@@ -203,12 +203,12 @@ export default function Login() {
             disabled={loading}
             style={{
               width: '100%',
-              background: loading ? '#1d4ed8' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+              background: loading ? '#4f46e5' : 'linear-gradient(135deg, #6366f1, #4f46e5)',
               border: 'none', borderRadius: '10px', padding: '14px',
               color: 'white', fontSize: '15px', fontWeight: '600',
               fontFamily: 'DM Sans', cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.8 : 1, marginTop: '4px',
-              boxShadow: '0 4px 20px rgba(59,130,246,0.35)',
+              boxShadow: '0 4px 20px rgba(99,102,241,0.38)',
             }}
           >
             {loading ? 'Signing in...' : 'Sign In →'}

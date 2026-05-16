@@ -5,6 +5,25 @@ import { useIsMobile } from '../utils/useIsMobile';
 import logo from '../assets/khusela-logo.png';
 import api from '../utils/api';
 
+// ─── Minimal SVG icons ────────────────────────────
+const Icon = ({ path, size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+    style={{ flexShrink: 0 }}>
+    <path d={path} />
+  </svg>
+);
+
+const ICONS = {
+  Dashboard:         'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10',
+  Employees:         'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',
+  Applications:      'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2l6 6 M16 13H8 M16 17H8 M10 9H8',
+  Leave:             'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z',
+  Inbox:             'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6',
+  'User Management': 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M16 3.13a4 4 0 0 1 0 7.75 M21 15l-3-3 3-3',
+  Franchises:        'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+};
+
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true, roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/employees', label: 'Employees', roles: ['Admin', 'HR'] },
@@ -18,18 +37,58 @@ const ADMIN_ITEMS = [
   { to: '/franchises', label: 'Franchises' },
 ];
 
-const linkStyle = (isActive) => ({
-  display: 'block',
-  padding: '10px 14px',
-  borderRadius: '7px',
-  marginBottom: '2px',
-  textDecoration: 'none',
-  fontSize: '14px',
-  fontWeight: isActive ? '600' : '400',
-  color: isActive ? 'white' : '#64748b',
-  background: isActive ? 'rgba(59,130,246,0.18)' : 'transparent',
-  borderLeft: isActive ? '3px solid #3b82f6' : '3px solid transparent',
-});
+const ROLE_COLOR = {
+  Admin:      { bg: 'rgba(99,102,241,0.18)', color: '#a5b4fc' },
+  HR:         { bg: 'rgba(56,189,248,0.15)', color: '#7dd3fc' },
+  Consultant: { bg: 'rgba(52,211,153,0.15)', color: '#6ee7b7' },
+};
+
+function NavItem({ to, label, end, onNavigate, badge }) {
+  const iconPath = ICONS[label];
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onNavigate}
+      style={({ isActive }) => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '9px 12px',
+        borderRadius: '10px',
+        marginBottom: '2px',
+        textDecoration: 'none',
+        fontSize: '13.5px',
+        fontWeight: isActive ? '600' : '400',
+        color: isActive ? '#fff' : '#8892a4',
+        background: isActive
+          ? 'linear-gradient(135deg, rgba(99,102,241,0.28), rgba(79,70,229,0.22))'
+          : 'transparent',
+        border: isActive ? '1px solid rgba(99,102,241,0.25)' : '1px solid transparent',
+        boxShadow: isActive ? '0 2px 10px rgba(99,102,241,0.18)' : 'none',
+        transition: 'all 160ms ease',
+      })}
+    >
+      {iconPath && <Icon path={iconPath} size={15} />}
+      <span style={{ flex: 1 }}>{label}</span>
+      {badge > 0 && (
+        <span style={{
+          background: label === 'Inbox' ? '#ef4444' : '#f59e0b',
+          color: 'white',
+          borderRadius: '10px',
+          fontSize: '10px',
+          fontWeight: '700',
+          padding: '1px 6px',
+          minWidth: '18px',
+          textAlign: 'center',
+          lineHeight: '16px',
+        }}>
+          {badge}
+        </span>
+      )}
+    </NavLink>
+  );
+}
 
 function SidebarContent({ user, onNavigate }) {
   const { logout, franchise } = useAuth();
@@ -66,127 +125,124 @@ function SidebarContent({ user, onNavigate }) {
     try {
       const res = await api.get('/applications/pending-count');
       setPendingCount(res.data.count);
-    } catch {}
-  };
-
-  const markAllRead = async () => {
-    try {
-      await api.patch('/notifications/read-all');
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     } catch { }
   };
+
+  const roleStyle = ROLE_COLOR[user?.role] || ROLE_COLOR.Consultant;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Logo */}
-      <div style={{ padding: '24px 18px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-       <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: '8px' }}>
-          <img
-            src={logo}
-            alt="Khusela"
-            style={{
-              width: '140px',
-              height: 'auto',
-              filter: 'brightness(0) invert(1)',
-              display: 'block',
-            }}
-          />
-        </div>
-        <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '7px', padding: '9px 11px' }}>
-          <p style={{ color: '#475569', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 2px' }}>
-            {user?.role}
-          </p>
-          <p style={{ color: 'white', fontSize: '13px', fontWeight: '600', margin: '0 0 6px' }}>
-            {user?.username}
-          </p>
-          {/* Branch identifier */}
+      <div style={{ padding: '22px 16px 16px' }}>
+        <img
+          src={logo}
+          alt="Khusela"
+          style={{ width: '130px', height: 'auto', filter: 'brightness(0) invert(1)', display: 'block', marginBottom: '20px' }}
+        />
+
+        {/* User card */}
+        <div style={{
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+          padding: '12px 13px',
+          backdropFilter: 'blur(8px)',
+        }}>
+          <div style={{ marginBottom: '8px' }}>
+            <p style={{ color: 'white', fontSize: '13px', fontWeight: '600', margin: '0 0 4px', lineHeight: 1.3 }}>
+              {user?.username}
+            </p>
+            <span style={{
+              display: 'inline-block',
+              background: roleStyle.bg, color: roleStyle.color,
+              fontSize: '10px', fontWeight: '700', padding: '1px 7px',
+              borderRadius: '10px', letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}>
+              {user?.role}
+            </span>
+          </div>
           <div style={{
             display: 'flex', alignItems: 'center', gap: '5px',
-            background: 'rgba(59,130,246,0.12)',
-            border: '1px solid rgba(59,130,246,0.22)',
-            borderRadius: '5px',
+            background: 'rgba(99,102,241,0.1)',
+            border: '1px solid rgba(99,102,241,0.2)',
+            borderRadius: '7px',
             padding: '4px 8px',
           }}>
-            <span style={{ fontSize: '9px', color: '#3b82f6', lineHeight: 1 }}>📍</span>
+            <span style={{ fontSize: '9px', color: '#818cf8' }}>◉</span>
             <span style={{
-              color: '#93c5fd',
-              fontSize: '11px',
-              fontWeight: '600',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: '148px',
-              display: 'block',
+              color: '#a5b4fc', fontSize: '11px', fontWeight: '500',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              maxWidth: '148px', display: 'block',
             }}>
-              {user?.role === 'Admin'
-                ? 'All Branches'
-                : franchise?.franchise_name || 'No branch assigned'}
+              {user?.role === 'Admin' ? 'All Branches' : franchise?.franchise_name || 'No branch assigned'}
             </span>
           </div>
         </div>
       </div>
 
+      <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '0 16px' }} />
+
       {/* Nav */}
       <nav style={{ flex: 1, padding: '14px 10px', overflowY: 'auto' }}>
-        <p style={{ color: '#334155', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.09em', padding: '0 10px', marginBottom: '6px' }}>
+        <p style={{
+          color: '#3d4a5c', fontSize: '10px', fontWeight: '700',
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          padding: '0 10px', marginBottom: '6px', marginTop: '2px',
+        }}>
           Menu
         </p>
         {NAV_ITEMS.filter(i => i.roles.includes(user?.role)).map(item => (
-          <NavLink key={item.to} to={item.to} end={item.end} onClick={onNavigate}
-            style={({ isActive }) => linkStyle(isActive)}>
-            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              {item.label}
-              {item.to === '/inbox' && unread > 0 && (
-                <span style={{
-                  background: '#dc2626', color: 'white', borderRadius: '10px',
-                  fontSize: '10px', fontWeight: '700', padding: '1px 6px',
-                  minWidth: '18px', textAlign: 'center', lineHeight: '16px',
-                }}>
-                  {unread}
-                </span>
-              )}
-              {item.to === '/applications' && pendingCount > 0 && (
-                <span style={{
-                  background: '#d97706', color: 'white',
-                  borderRadius: '10px', fontSize: '10px',
-                  fontWeight: '700', padding: '1px 6px',
-                }}>
-                  {pendingCount}
-                </span>
-              )}
-            </span>
-          </NavLink>
+          <NavItem
+            key={item.to}
+            to={item.to}
+            label={item.label}
+            end={item.end}
+            onNavigate={onNavigate}
+            badge={item.to === '/inbox' ? unread : item.to === '/applications' ? pendingCount : 0}
+          />
         ))}
 
         {user?.role === 'Admin' && (
           <>
-            <p style={{ color: '#334155', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.09em', padding: '14px 10px 6px', margin: 0 }}>
+            <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '12px 2px 10px' }} />
+            <p style={{
+              color: '#3d4a5c', fontSize: '10px', fontWeight: '700',
+              textTransform: 'uppercase', letterSpacing: '0.1em',
+              padding: '0 10px', marginBottom: '6px',
+            }}>
               Admin
             </p>
             {ADMIN_ITEMS.map(item => (
-              <NavLink key={item.to} to={item.to} onClick={onNavigate}
-                style={({ isActive }) => linkStyle(isActive)}>
-                {item.label}
-              </NavLink>
+              <NavItem key={item.to} to={item.to} label={item.label} onNavigate={onNavigate} badge={0} />
             ))}
           </>
         )}
       </nav>
 
-      {/* Inbox badge shown in nav; dropdown removed (Inbox page handles details) */}
-
-      {/* Logout */}
-      <div style={{ padding: '8px 10px 10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+      {/* Sign out */}
+      <div style={{ padding: '8px 10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <button
           onClick={handleLogout}
           style={{
-            width: '100%', padding: '9px 14px', borderRadius: '7px',
-            border: 'none', background: 'transparent', color: '#475569',
-            fontSize: '13.5px', cursor: 'pointer', textAlign: 'left', fontFamily: 'DM Sans',
+            width: '100%', padding: '9px 12px', borderRadius: '10px',
+            border: '1px solid transparent', background: 'transparent',
+            color: '#64748b', fontSize: '13px', cursor: 'pointer',
+            textAlign: 'left', fontFamily: 'DM Sans', fontWeight: '500',
+            display: 'flex', alignItems: 'center', gap: '8px',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#f87171'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#475569'; }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(239,68,68,0.08)';
+            e.currentTarget.style.color = '#f87171';
+            e.currentTarget.style.borderColor = 'rgba(239,68,68,0.2)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = '#64748b';
+            e.currentTarget.style.borderColor = 'transparent';
+          }}
         >
+          <Icon path="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9" size={14} />
           Sign out
         </button>
       </div>
@@ -199,12 +255,12 @@ export default function Sidebar() {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
 
-  // Desktop sidebar
   if (!isMobile) {
     return (
       <div style={{
-        width: '224px', minWidth: '224px', height: '100vh',
-        background: '#0f172a', borderRight: '1px solid rgba(255,255,255,0.05)',
+        width: '230px', minWidth: '230px', height: '100vh',
+        background: 'linear-gradient(180deg, #0c1220 0%, #0f1828 100%)',
+        borderRight: '1px solid rgba(255,255,255,0.05)',
         flexShrink: 0,
       }}>
         <SidebarContent user={user} />
@@ -212,23 +268,23 @@ export default function Sidebar() {
     );
   }
 
-  // Mobile — hamburger + drawer
   return (
     <>
-      {/* Top bar */}
+      {/* Mobile top bar */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.05)',
-        padding: '14px 18px', display: 'flex', alignItems: 'center',
+        background: 'linear-gradient(90deg, #0c1220, #0f1828)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        padding: '12px 18px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', height: '56px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <img src={logo} alt="Khusela" style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '6px', filter: 'brightness(0) invert(1)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src={logo} alt="Khusela" style={{ width: '32px', height: '32px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
           <span style={{ color: 'white', fontSize: '16px', fontWeight: '700', fontFamily: 'Sora' }}>Khusela</span>
         </div>
         <button onClick={() => setOpen(true)} style={{
-          background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: '7px',
-          padding: '7px 10px', cursor: 'pointer', color: 'white', fontSize: '16px',
+          background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '8px', padding: '7px 11px', cursor: 'pointer', color: '#94a3b8', fontSize: '15px',
         }}>
           ☰
         </button>
@@ -237,23 +293,25 @@ export default function Sidebar() {
       {/* Overlay */}
       {open && (
         <div onClick={() => setOpen(false)} style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          zIndex: 200, backdropFilter: 'blur(2px)',
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+          zIndex: 200, backdropFilter: 'blur(3px)',
         }} />
       )}
 
       {/* Drawer */}
       <div style={{
         position: 'fixed', top: 0, left: 0, bottom: 0,
-        width: '260px', background: '#0f172a', zIndex: 300,
+        width: '264px',
+        background: 'linear-gradient(180deg, #0c1220 0%, #0f1828 100%)',
+        zIndex: 300,
         transform: open ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.25s ease',
-        boxShadow: open ? '4px 0 24px rgba(0,0,0,0.4)' : 'none',
+        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+        boxShadow: open ? '6px 0 32px rgba(0,0,0,0.45)' : 'none',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 14px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 12px 0' }}>
           <button onClick={() => setOpen(false)} style={{
-            background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: '6px',
-            padding: '6px 10px', cursor: 'pointer', color: '#94a3b8', fontSize: '14px',
+            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '7px', padding: '5px 10px', cursor: 'pointer', color: '#94a3b8', fontSize: '13px',
           }}>
             ✕
           </button>

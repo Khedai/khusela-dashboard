@@ -19,9 +19,9 @@ function ProtectedLayout({ children }) {
   const isMobile = useIsMobile();
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'linear-gradient(180deg, #0c1220 0%, #0f1828 100%)', flexDirection: 'column', gap: '16px' }}>
       <Spinner size="lg" />
-      <span style={{ color: '#475569', fontFamily: 'DM Sans', fontSize: '13px' }}>Loading...</span>
+      <span style={{ color: '#64748b', fontFamily: 'DM Sans', fontSize: '13px' }}>Loading...</span>
     </div>
   );
   if (!user) return <Navigate to="/login" />;
@@ -32,7 +32,7 @@ function ProtectedLayout({ children }) {
       <main style={{
         flex: 1,
         overflowY: 'auto',
-        background: '#f8fafc',
+        background: '#eef1f8',
         padding: isMobile ? '72px 16px 24px' : '32px 36px',
       }}>
         {children}

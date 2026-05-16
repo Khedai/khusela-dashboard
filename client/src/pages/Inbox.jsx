@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
@@ -8,6 +9,7 @@ import Spinner from '../components/Spinner';
 
 export default function Inbox() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const isManager = user?.role === 'Admin' || user?.role === 'HR' || user?.role === 'Consultant';
 
@@ -204,12 +206,15 @@ export default function Inbox() {
           ) : notifications.length === 0 ? (
             <EmptyState icon="✓" title="No notifications" subtitle="Notifications will appear here." />
           ) : notifications.map((n, i) => (
-            <div key={n.id} onClick={() => !n.is_read && markNotifRead(n.id)}
+            <div key={n.id} onClick={async () => {
+                if (!n.is_read) await markNotifRead(n.id);
+                if (n.link) navigate(n.link);
+              }}
               style={{
                 display: 'flex', gap: '14px', alignItems: 'flex-start',
                 padding: '14px 20px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none',
                 background: n.is_read ? 'white' : '#f8faff',
-                cursor: n.is_read ? 'default' : 'pointer',
+                cursor: n.link ? 'pointer' : (n.is_read ? 'default' : 'pointer'),
               }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>

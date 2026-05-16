@@ -1,7 +1,27 @@
+// ─── Design Tokens ────────────────────────────────────────
+export const C = {
+  primary:      '#6366f1',
+  primaryDark:  '#4f46e5',
+  primaryLight: '#e0e7ff',
+  primaryGlow:  'rgba(99,102,241,0.28)',
+  bg:           '#eef1f8',
+  card:         '#ffffff',
+  sidebar:      '#0c1220',
+  text:         '#0f172a',
+  textSub:      '#64748b',
+  textMuted:    '#94a3b8',
+  border:       '#e4e8f0',
+  borderLight:  'rgba(0,0,0,0.05)',
+  success:      '#10b981',
+  warning:      '#f59e0b',
+  danger:       '#ef4444',
+};
+
 export const card = {
-  background: 'white',
-  borderRadius: '12px',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+  background: C.card,
+  borderRadius: '16px',
+  border: `1px solid ${C.border}`,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.05)',
   overflow: 'hidden',
 };
 
@@ -9,67 +29,71 @@ export const pageTitle = {
   fontFamily: 'Sora',
   fontSize: '22px',
   fontWeight: '700',
-  color: '#0f172a',
+  color: C.text,
   margin: 0,
+  letterSpacing: '-0.3px',
 };
 
 export const sectionLabel = {
-  color: '#94a3b8',
+  color: C.textMuted,
   fontSize: '10px',
-  fontWeight: '600',
+  fontWeight: '700',
   textTransform: 'uppercase',
-  letterSpacing: '0.08em',
+  letterSpacing: '0.1em',
 };
 
 export const tableHeader = {
-  padding: '10px 22px',
-  color: '#94a3b8',
+  padding: '11px 22px',
+  color: C.textMuted,
   fontSize: '11px',
-  fontWeight: '600',
+  fontWeight: '700',
   textTransform: 'uppercase',
-  letterSpacing: '0.06em',
-  background: '#f8fafc',
+  letterSpacing: '0.07em',
+  background: '#f7f9fc',
   textAlign: 'left',
+  borderBottom: `1px solid ${C.border}`,
 };
 
 export const tableCell = {
   padding: '13px 22px',
-  color: '#0f172a',
+  color: C.text,
   fontSize: '13.5px',
-  borderTop: '1px solid #f1f5f9',
+  borderTop: `1px solid #f3f6fb`,
 };
 
 export const input = {
   width: '100%',
-  border: '1px solid #e2e8f0',
-  borderRadius: '8px',
+  border: `1px solid ${C.border}`,
+  borderRadius: '10px',
   padding: '10px 13px',
   fontSize: '13.5px',
-  color: '#0f172a',
+  color: C.text,
   fontFamily: 'DM Sans',
   outline: 'none',
-  background: 'white',
+  background: '#fafbfe',
+  transition: 'border-color 150ms, box-shadow 150ms',
 };
 
 export const primaryBtn = {
-  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+  background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
   border: 'none',
-  borderRadius: '8px',
-  padding: '10px 18px',
+  borderRadius: '10px',
+  padding: '10px 20px',
   color: 'white',
   fontSize: '13.5px',
   fontWeight: '600',
   fontFamily: 'DM Sans',
   cursor: 'pointer',
-  boxShadow: '0 2px 8px rgba(59,130,246,0.25)',
+  boxShadow: `0 2px 10px ${C.primaryGlow}`,
+  letterSpacing: '0.01em',
 };
 
 export const ghostBtn = {
-  background: '#f1f5f9',
-  border: 'none',
-  borderRadius: '8px',
+  background: '#f1f4fb',
+  border: `1px solid ${C.border}`,
+  borderRadius: '10px',
   padding: '10px 18px',
-  color: '#475569',
+  color: C.textSub,
   fontSize: '13.5px',
   fontWeight: '500',
   fontFamily: 'DM Sans',
@@ -78,25 +102,27 @@ export const ghostBtn = {
 
 export const badge = (type) => {
   const map = {
-    Admin:     { background: '#f5f3ff', color: '#7c3aed' },
-    HR:        { background: '#eff6ff', color: '#2563eb' },
-    Consultant:{ background: '#f0fdf4', color: '#16a34a' },
-    Active:    { background: '#f0fdf4', color: '#16a34a' },
-    Inactive:  { background: '#fef2f2', color: '#dc2626' },
-    Draft:     { background: '#f1f5f9', color: '#64748b' },
-    Submitted: { background: '#eff6ff', color: '#2563eb' },
-    'Pending Docs': { background: '#fffbeb', color: '#d97706' },
-    Approved:  { background: '#f0fdf4', color: '#16a34a' },
-    Rejected:  { background: '#fef2f2', color: '#dc2626' },
+    Admin:           { background: '#ede9fe', color: '#7c3aed' },
+    HR:              { background: '#e0e7ff', color: '#4338ca' },
+    Consultant:      { background: '#d1fae5', color: '#065f46' },
+    Active:          { background: '#d1fae5', color: '#065f46' },
+    Inactive:        { background: '#fee2e2', color: '#991b1b' },
+    Draft:           { background: '#f1f5f9', color: '#475569' },
+    Submitted:       { background: '#e0e7ff', color: '#4338ca' },
+    'Pending Docs':  { background: '#fef3c7', color: '#92400e' },
+    Approved:        { background: '#d1fae5', color: '#065f46' },
+    Rejected:        { background: '#fee2e2', color: '#991b1b' },
+    Pending:         { background: '#fef3c7', color: '#92400e' },
   };
   return {
-    ...(map[type] || { background: '#f1f5f9', color: '#64748b' }),
+    ...(map[type] || { background: '#f1f5f9', color: '#475569' }),
     padding: '3px 10px',
     borderRadius: '20px',
     fontSize: '11px',
-    fontWeight: '600',
+    fontWeight: '700',
     whiteSpace: 'nowrap',
     display: 'inline-block',
+    letterSpacing: '0.02em',
   };
 };
 
@@ -106,13 +132,13 @@ export const formSection = {
 
 export const formSectionTitle = {
   fontSize: '11px',
-  fontWeight: '600',
-  color: '#94a3b8',
+  fontWeight: '700',
+  color: C.textMuted,
   textTransform: 'uppercase',
-  letterSpacing: '0.08em',
+  letterSpacing: '0.09em',
   marginBottom: '14px',
   paddingBottom: '8px',
-  borderBottom: '1px solid #f1f5f9',
+  borderBottom: `1px solid ${C.border}`,
 };
 
 export const responsiveGrid = (isMobile) => ({
