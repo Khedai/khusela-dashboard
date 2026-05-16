@@ -64,8 +64,8 @@ router.get('/', verifyToken, async (req, res) => {
     if (franchise_id) {
       conditions.push(`a.franchise_id = $${params.length + 1}`);
       params.push(franchise_id);
-    } else if (req.user.role === 'Consultant') {
-      // Consultants always locked to their franchise — no override
+    } else if (req.user.role === 'Consultant' || req.user.role === 'HR') {
+      // Non-admins always locked to their own franchise — no override
       conditions.push(`a.franchise_id = $${params.length + 1}`);
       params.push(req.user.franchise_id || null);
     }

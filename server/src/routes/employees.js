@@ -94,7 +94,7 @@ router.get('/terminated', requireRole('Admin', 'HR'), async (req, res) => {
 });
 
 // ─── GET SINGLE EMPLOYEE BY ID ────────────────────────────
-router.get('/:id', requireRole('Admin', 'HR'), async (req, res) => {
+router.get('/:id', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT e.*, f.franchise_name
@@ -108,7 +108,14 @@ router.get('/:id', requireRole('Admin', 'HR'), async (req, res) => {
       return res.status(404).json({ error: 'Employee not found.' });
     }
 
-    res.json(result.rows[0]);
+    const emp = result.rows[0];
+
+    // Consultants may only see employees within their own franchise
+    if (req.user.role === 'Consultant' && emp.franchise_id !== req.user.franchise_id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    res.json(emp);
   } catch (err) {
     console.error('Get employee error:', err.message);
     res.status(500).json({ error: 'Failed to fetch employee.' });

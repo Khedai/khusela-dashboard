@@ -14,7 +14,7 @@ import { getIcon } from '../components/fileUploadUtils';
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
 const ACCOUNT_TYPES = ['Cheque', 'Savings', 'Transmission'];
-const POSITIONS = ['Admin', 'HR', 'Consultant'];
+const POSITIONS = ['Administrator', 'Human Resources', 'Consultant'];
 const FOLDER_CATEGORIES = [
   { key: 'Identity',             icon: '', color: '#7c3aed', bg: '#f5f3ff' },
   { key: 'Employment Contract',  icon: '', color: '#2563eb', bg: '#eff6ff' },
@@ -65,7 +65,10 @@ export default function Employees() {
   const [pastLoading, setPastLoading] = useState(false);
   const [showPast, setShowPast] = useState(false);
 
-  useEffect(() => { fetchFranchises(); fetchPastEmployees(); }, []);
+  useEffect(() => {
+    fetchFranchises();
+    if (user?.role !== 'Consultant') fetchPastEmployees();
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -120,10 +123,12 @@ export default function Employees() {
     setUploadFolder(null);
     setUploadDocType('');
     setFolderDocs([]);
-    setFolderLoading(true);
     setEmpLeave(null);
-    fetchFolderDocs(emp.id);
-    fetchEmpLeave(emp.id);
+    if (user?.role !== 'Consultant') {
+      setFolderLoading(true);
+      fetchFolderDocs(emp.id);
+      fetchEmpLeave(emp.id);
+    }
   };
 
   const fetchFolderDocs = async (employeeId) => {
@@ -422,6 +427,41 @@ export default function Employees() {
             style={{ ...S.primaryBtn, opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CONSULTANT DETAIL VIEW (limited) ───────────────────
+  if (view === 'detail' && selected && user?.role === 'Consultant') {
+    return (
+      <div style={{ maxWidth: '600px' }}>
+        <button onClick={() => setView('list')}
+          style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: '0 0 16px' }}>
+          ← Back
+        </button>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+            <h2 style={{ ...S.pageTitle, fontSize: '16px', margin: 0 }}>
+              {selected.title} {selected.first_name} {selected.last_name}
+            </h2>
+            {selected.job_title && (
+              <p style={{ color: '#64748b', fontSize: '12px', margin: '3px 0 0' }}>{selected.job_title}</p>
+            )}
+          </div>
+          <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[
+              { label: 'Email',     value: selected.email },
+              { label: 'Cell',      value: selected.cell },
+              { label: 'WhatsApp',  value: selected.whatsapp },
+              { label: 'Branch',    value: selected.franchise_name },
+            ].filter(r => r.value).map(r => (
+              <div key={r.label} style={{ display: 'flex', gap: '16px' }}>
+                <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', width: '80px', flexShrink: 0, paddingTop: '1px' }}>{r.label}</span>
+                <span style={{ color: '#0f172a', fontSize: '13.5px' }}>{r.value}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -791,7 +831,7 @@ export default function Employees() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
               <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['Name', 'ID Number', 'Position', 'Cell', 'Franchise', 'Actions'].map(h => (
+                {['Name', ...(user?.role !== 'Consultant' ? ['ID Number'] : []), 'Position', 'Cell', 'Franchise', 'Actions'].map(h => (
                   <th key={h} style={{
                     padding: '10px 22px', textAlign: 'left',
                     color: '#94a3b8', fontSize: '11px', fontWeight: '600',
@@ -806,9 +846,11 @@ export default function Employees() {
                   <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>
                     {emp.first_name} {emp.last_name}
                   </td>
-                  <td style={{ padding: '12px 22px', color: '#64748b' }}>
-                    {emp.id_number || '—'}
-                  </td>
+                  {user?.role !== 'Consultant' && (
+                    <td style={{ padding: '12px 22px', color: '#64748b' }}>
+                      {emp.id_number || '—'}
+                    </td>
+                  )}
                   <td style={{ padding: '12px 22px', color: '#64748b' }}>
                     {emp.job_title || '—'}
                   </td>
@@ -818,7 +860,7 @@ export default function Employees() {
                   <td style={{ padding: '12px 22px' }}>
                     {emp.franchise_name ? (
                       <span style={{
-                        background: '#eff6ff', color: '#2563eb',
+                        background: '#e0e7ff', color: '#6366f1',
                         padding: '2px 8px', borderRadius: '4px',
                         fontSize: '11px', fontWeight: '600',
                       }}>{emp.franchise_name}</span>
@@ -827,7 +869,7 @@ export default function Employees() {
                   <td style={{ padding: '12px 22px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={() => openDetail(emp)}
-                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+                        style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
                         View
                       </button>
                       {(user?.role === 'Admin' || emp?.user_id === user?.id) && (

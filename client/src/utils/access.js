@@ -7,10 +7,10 @@ export const can = (user, action) => {
     'applications.create':       ['Admin', 'HR', 'Consultant'],
     'applications.changeStatus': ['Admin', 'HR'],
     'applications.delete':       ['Admin'],
-    'applications.viewAll':      ['Admin', 'HR'], // toggle to see all franchises
+    'applications.viewAll':      ['Admin'], // toggle to see all franchises
     
     // Employees
-    'employees.view':            ['Admin', 'HR'],
+    'employees.view':            ['Admin', 'HR', 'Consultant'],
     'employees.create':          ['Admin'],
     'employees.edit':            ['Admin', 'HR'],
     'employees.delete':          ['Admin'],
@@ -35,7 +35,7 @@ export const can = (user, action) => {
     'franchises.delete':         ['Admin'],
 
     // Dashboard
-    'dashboard.viewAll':         ['Admin', 'HR'], 
+    'dashboard.viewAll':         ['Admin'],
     'dashboard.employeeCount':   ['Admin', 'HR'],
   };
 

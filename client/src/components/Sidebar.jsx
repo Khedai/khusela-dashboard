@@ -26,7 +26,7 @@ const ICONS = {
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true, roles: ['Admin', 'HR', 'Consultant'] },
-  { to: '/employees', label: 'Employees', roles: ['Admin', 'HR'] },
+  { to: '/employees', label: 'Employees', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/applications', label: 'Applications', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/leave', label: 'Leave', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/inbox', label: 'Inbox', roles: ['Admin', 'HR', 'Consultant'] },
