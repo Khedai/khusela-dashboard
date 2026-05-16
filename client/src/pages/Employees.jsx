@@ -445,7 +445,7 @@ export default function Employees() {
             <button onClick={async () => await generateEmployeeForm(selected)} style={S.ghostBtn}>
               ↓ PDF
             </button>
-            {can(user, 'employees.edit') && (
+            {(user?.role === 'Admin' || selected?.user_id === user?.id) && (
               <button onClick={() => openEdit(selected)} style={S.primaryBtn}>
                 Edit Details
               </button>
@@ -554,7 +554,7 @@ export default function Employees() {
           )}
 
           {/* ── PERSONAL FOLDER ── */}
-          {can(user, 'employees.uploadDocs') && (
+          {(user?.role === 'Admin' || selected?.user_id === user?.id) && (
             <div style={{ marginTop: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div>
@@ -830,7 +830,7 @@ export default function Employees() {
                         style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
                         View
                       </button>
-                      {can(user, 'employees.edit') && (
+                      {(user?.role === 'Admin' || emp?.user_id === user?.id) && (
                         <button onClick={() => openEdit(emp)}
                           style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
                           Edit

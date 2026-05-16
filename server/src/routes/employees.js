@@ -172,6 +172,13 @@ router.post('/', requireRole('Admin', 'HR'), async (req, res) => {
 
 // ─── UPDATE EMPLOYEE ──────────────────────────────────────
 router.put('/:id', requireRole('Admin', 'HR'), async (req, res) => {
+  // HR can only edit their own employee record
+  if (req.user.role === 'HR') {
+    const check = await pool.query('SELECT user_id FROM employees WHERE id = $1', [req.params.id]);
+    if (check.rows.length === 0 || check.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only edit your own employee record.' });
+    }
+  }
   const {
     title, first_name, last_name, id_number, tax_number,
     birth_date, marital_status, email, home_phone, alternate_phone,
