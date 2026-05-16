@@ -20,6 +20,7 @@ export default function Users() {
   const [togglingId, setTogglingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [resettingId, setResettingId] = useState(null);
+  const [promotingId, setPromotingId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -98,6 +99,18 @@ export default function Users() {
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete user.');
     } finally { setDeletingId(null); }
+  };
+
+  const handlePromote = async (u) => {
+    if (!window.confirm(`Promote @${u.username} from HR to Admin? This gives them full management access.`)) return;
+    setPromotingId(u.id); setError(''); setSuccess('');
+    try {
+      await api.patch(`/users/${u.id}/promote`);
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: 'Admin' } : x));
+      setSuccess(`@${u.username} has been promoted to Admin.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to promote user.');
+    } finally { setPromotingId(null); }
   };
 
   const handleResetPassword = async (u) => {
@@ -337,7 +350,13 @@ export default function Users() {
                     {resettingId === u.id ? 'Saving...' : 'Reset Password'}
                   </button>
                   {u.id !== user?.id && (
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {u.role === 'HR' && (
+                        <button onClick={() => handlePromote(u)} disabled={promotingId === u.id}
+                          style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                          {promotingId === u.id ? '...' : '↑ Promote to Admin'}
+                        </button>
+                      )}
                       <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
                         style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
                         {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
@@ -399,6 +418,12 @@ export default function Users() {
                       </button>
                       {u.id !== user?.id && (
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          {u.role === 'HR' && (
+                            <button onClick={() => handlePromote(u)} disabled={promotingId === u.id}
+                              style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                              {promotingId === u.id ? '...' : '↑ Promote to Admin'}
+                            </button>
+                          )}
                           <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
                             style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
                             {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
