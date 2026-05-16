@@ -136,8 +136,15 @@ router.patch('/:id/promote', async (req, res) => {
 });
 
 // ─── DELETE USER ──────────────────────────────────────────
+const PROTECTED_USERNAMES = ['Ayabonga', 'Admin'];
+
 router.delete('/:id', async (req, res) => {
   try {
+    const target = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id]);
+    if (target.rows.length > 0 && PROTECTED_USERNAMES.includes(target.rows[0].username)) {
+      return res.status(403).json({ error: 'This account is protected and cannot be deleted.' });
+    }
+
     const result = await pool.query(
       'DELETE FROM users WHERE id = $1 RETURNING id',
       [req.params.id]

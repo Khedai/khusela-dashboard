@@ -6,6 +6,7 @@ import * as S from '../utils/styles';
 import Spinner from '../components/Spinner';
 
 const ROLES = ['Admin', 'HR', 'Consultant'];
+const PROTECTED = ['Ayabonga', 'Admin'];
 
 export default function Users() {
   const { user } = useAuth();
@@ -361,10 +362,12 @@ export default function Users() {
                         style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
                         {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
                       </button>
-                      <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
-                        style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                        {deletingId === u.id ? '...' : 'Delete'}
-                      </button>
+                      {!PROTECTED.includes(u.username) && (
+                        <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
+                          style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                          {deletingId === u.id ? '...' : 'Delete'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -428,10 +431,12 @@ export default function Users() {
                             style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
                             {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
                           </button>
-                          <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
-                            style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                            {deletingId === u.id ? '...' : 'Delete'}
-                          </button>
+                          {!PROTECTED.includes(u.username) && (
+                            <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
+                              style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                              {deletingId === u.id ? '...' : 'Delete'}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
