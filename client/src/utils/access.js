@@ -11,7 +11,7 @@ export const can = (user, action) => {
     
     // Employees
     'employees.view':            ['Admin', 'HR'],
-    'employees.create':          ['Admin', 'HR'],
+    'employees.create':          ['Admin'],
     'employees.edit':            ['Admin', 'HR'],
     'employees.delete':          ['Admin'],
     'employees.uploadDocs':      ['Admin', 'HR'],

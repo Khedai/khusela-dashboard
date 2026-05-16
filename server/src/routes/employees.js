@@ -116,7 +116,7 @@ router.get('/:id', requireRole('Admin', 'HR'), async (req, res) => {
 });
 
 // ─── CREATE NEW EMPLOYEE ──────────────────────────────────
-router.post('/', requireRole('Admin', 'HR'), async (req, res) => {
+router.post('/', requireRole('Admin'), async (req, res) => {
   const {
     user_id, franchise_id,
     title, first_name, last_name, id_number, tax_number,

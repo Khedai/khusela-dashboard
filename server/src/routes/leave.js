@@ -225,6 +225,17 @@ router.patch('/request/:id', verifyToken, requireRole('HR'), async (req, res) =>
       });
     }
 
+    // HR cannot approve their own leave request
+    if (reqResult.rows[0].employee_id) {
+      const selfCheck = await pool.query(
+        'SELECT id FROM employees WHERE user_id = $1 AND id = $2',
+        [req.user.id, reqResult.rows[0].employee_id]
+      );
+      if (selfCheck.rows.length > 0) {
+        return res.status(403).json({ error: 'You cannot approve your own leave request.' });
+      }
+    }
+
     // Update
     const result = await pool.query(
       `UPDATE leave_requests

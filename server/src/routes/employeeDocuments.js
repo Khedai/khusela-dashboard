@@ -39,6 +39,14 @@ router.post('/upload', requireRole('Admin', 'HR'), upload.single('file'), async 
   const { employee_id, doc_type } = req.body;
   if (!employee_id || !doc_type) return res.status(400).json({ error: 'employee_id and doc_type required.' });
 
+  // HR can only upload to their own employee record
+  if (req.user.role === 'HR') {
+    const check = await pool.query('SELECT user_id FROM employees WHERE id = $1', [employee_id]);
+    if (check.rows.length === 0 || check.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only upload documents to your own employee record.' });
+    }
+  }
+
   // Derive extension from validated MIME type, never from user-supplied filename
   const MIME_TO_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
   const ext = MIME_TO_EXT[req.file.mimetype] || 'bin';
@@ -86,6 +94,14 @@ router.delete('/:id', requireRole('Admin', 'HR'), async (req, res) => {
     const result = await pool.query('SELECT * FROM documents WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found.' });
     const doc = result.rows[0];
+
+    // HR can only delete documents from their own employee record
+    if (req.user.role === 'HR') {
+      const check = await pool.query('SELECT user_id FROM employees WHERE id = $1', [doc.employee_id]);
+      if (check.rows.length === 0 || check.rows[0].user_id !== req.user.id) {
+        return res.status(403).json({ error: 'You can only delete documents from your own employee record.' });
+      }
+    }
     await r2Client.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: doc.r2_url }));
     await pool.query('DELETE FROM documents WHERE id = $1', [req.params.id]);
     res.json({ message: 'Deleted.' });
