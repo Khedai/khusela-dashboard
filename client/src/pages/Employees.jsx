@@ -791,7 +791,7 @@ export default function Employees() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
               <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['Name', 'ID Number', 'Job Title', 'Cell', 'Franchise', 'Actions'].map(h => (
+                {['Name', 'ID Number', 'Position', 'Cell', 'Franchise', 'Actions'].map(h => (
                   <th key={h} style={{
                     padding: '10px 22px', textAlign: 'left',
                     color: '#94a3b8', fontSize: '11px', fontWeight: '600',

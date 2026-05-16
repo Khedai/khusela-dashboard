@@ -180,25 +180,6 @@ export default function Leave() {
   const allRequests = isManager ? requests : requests;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
 
-  if (false) {
-    return (
-      <div style={{ maxWidth: '1000px' }}>
-        <div style={S.pageHeader(isMobile)}>
-          <h2 style={S.pageTitle}>Leave Management</h2>
-        </div>
-        <div style={{ ...S.card, padding: '48px 32px', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🗓️</div>
-          <h3 style={{ fontFamily: 'Sora', fontSize: '16px', fontWeight: '600', color: '#0f172a', margin: '0 0 8px' }}>
-            Leave management is handled by Admin
-          </h3>
-          <p style={{ color: '#64748b', fontSize: '14px', maxWidth: '420px', margin: '0 auto' }}>
-            Leave requests are managed by Admin.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // ── Leave Request Detail Panel ────────────────────────────
   if (selectedRequest) {
     const isHR = user?.role === 'Admin'; // Only Admin can approve/reject
