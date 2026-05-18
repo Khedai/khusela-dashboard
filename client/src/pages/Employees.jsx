@@ -15,6 +15,7 @@ const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
 const ACCOUNT_TYPES = ['Cheque', 'Savings', 'Transmission'];
 const POSITIONS = ['Administrator', 'Human Resources', 'Consultant', 'Marketing', 'IT', 'Training/Trainee'];
+const CITIES = ['Cape Town', 'Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Bloemfontein', 'East London', 'Other'];
 const FOLDER_CATEGORIES = [
   { key: 'Identity',             icon: '', color: '#7c3aed', bg: '#f5f3ff' },
   { key: 'Employment Contract',  icon: '', color: '#2563eb', bg: '#eff6ff' },
@@ -193,22 +194,10 @@ export default function Employees() {
   const f = (key) => form[key] || '';
   const set = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }));
 
-  // Date helpers for DD/MM/YYYY text inputs in the edit form
-  const toEditDate = (iso) => {
-    if (!iso) return '';
-    const s = String(iso).split('T')[0];
-    const parts = s.split('-');
-    if (parts.length !== 3 || !parts[0]) return '';
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  };
-  const setDate = (key) => (e) => {
-    const val = e.target.value;
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
-      const [d, m, y] = val.split('/');
-      setForm(p => ({ ...p, [key]: `${y}-${m}-${d}` }));
-    } else {
-      setForm(p => ({ ...p, [key]: val }));
-    }
+  // For type="date" inputs — value must be YYYY-MM-DD
+  const toDateInput = (val) => {
+    if (!val) return '';
+    return String(val).split('T')[0];
   };
 
   const filtered = employees.filter(e => {
@@ -273,7 +262,7 @@ export default function Employees() {
                 <input value={f('tax_number')} onChange={set('tax_number')} style={S.input} />
               </FormField>
               <FormField label="Date of Birth">
-                <input type="text" value={toEditDate(f('birth_date'))} onChange={setDate('birth_date')} placeholder="DD/MM/YYYY" maxLength={10} style={S.input} />
+                <input type="date" value={toDateInput(f('birth_date'))} onChange={set('birth_date')} style={S.input} />
               </FormField>
               <FormField label="Marital Status">
                 <select value={f('marital_status')} onChange={set('marital_status')} style={S.input}>
@@ -288,7 +277,7 @@ export default function Employees() {
                 </select>
               </FormField>
               <FormField label="Employment Date">
-                <input type="text" value={toEditDate(f('employment_date'))} onChange={setDate('employment_date')} placeholder="DD/MM/YYYY" maxLength={10} style={S.input} />
+                <input type="date" value={toDateInput(f('employment_date'))} onChange={set('employment_date')} style={S.input} />
               </FormField>
             </FormGrid>
           </FormSection>
@@ -321,7 +310,35 @@ export default function Employees() {
                 <input value={f('address_street')} onChange={set('address_street')} style={S.input} />
               </FormField>
               <FormField label="City">
-                <input value={f('address_city')} onChange={set('address_city')} style={S.input} />
+                {(() => {
+                  const PRESET = CITIES.filter(c => c !== 'Other');
+                  const isOther = f('address_city') !== '' && !PRESET.includes(f('address_city'));
+                  const dropdownVal = isOther ? 'Other' : f('address_city');
+                  return (
+                    <>
+                      <select
+                        value={dropdownVal}
+                        onChange={e => {
+                          if (e.target.value === 'Other') setForm(p => ({ ...p, address_city: '__other__' }));
+                          else setForm(p => ({ ...p, address_city: e.target.value }));
+                        }}
+                        style={S.input}
+                      >
+                        <option value="">— Select city —</option>
+                        {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {(isOther || f('address_city') === '__other__') && (
+                        <input
+                          value={f('address_city') === '__other__' ? '' : f('address_city')}
+                          onChange={set('address_city')}
+                          placeholder="Enter city name"
+                          style={{ ...S.input, marginTop: '6px' }}
+                          autoFocus
+                        />
+                      )}
+                    </>
+                  );
+                })()}
               </FormField>
               <FormField label="Postal Code">
                 <input value={f('postal_code')} onChange={set('postal_code')} style={S.input} />
