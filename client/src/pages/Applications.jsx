@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../utils/api';
 import { can } from '../utils/access';
@@ -1288,21 +1288,13 @@ export default function Applications() {
 
             {/* Date range */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-                title="From date"
-                style={{ ...S.input, width: '140px', margin: 0, fontSize: '12px', padding: '5px 10px', height: '32px' }}
-              />
+              <div style={{ width: '148px' }}>
+                <DatePicker value={dateFrom} onChange={setDateFrom} placeholder="From" compact />
+              </div>
               <span style={{ color: '#94a3b8', fontSize: '12px' }}>–</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-                title="To date"
-                style={{ ...S.input, width: '140px', margin: 0, fontSize: '12px', padding: '5px 10px', height: '32px' }}
-              />
+              <div style={{ width: '148px' }}>
+                <DatePicker value={dateTo} onChange={setDateTo} placeholder="To" compact />
+              </div>
             </div>
 
             {/* Consultant filter — Admin / HR only */}
@@ -1623,6 +1615,137 @@ function EditField({ label, value, onChange, type = 'text', options, span }) {
           onChange={e => onChange(e.target.value)}
           style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', boxSizing: 'border-box' }}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Custom DatePicker (always YYYY/MM/DD, escapes overflow via position:fixed) ──
+const DP_MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DP_WEEKDAYS = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+const dpNavBtn = {
+  background: '#f1f5f9', border: 'none', borderRadius: '6px', width: '26px', height: '26px',
+  cursor: 'pointer', color: '#64748b', fontSize: '15px', fontWeight: '700',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+};
+const dpSelStyle = {
+  border: '1px solid #e2e8f0', borderRadius: '6px', padding: '3px 4px', fontSize: '12px',
+  fontFamily: 'DM Sans', color: '#0f172a', cursor: 'pointer', background: 'white',
+};
+
+function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', compact = false }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos]   = useState({ top: 0, left: 0 });
+  const ref        = useRef(null);
+  const triggerRef = useRef(null);
+
+  const valid = value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const base  = valid ? new Date(value + 'T00:00:00') : new Date();
+  const [year, setYear]   = useState(base.getFullYear());
+  const [month, setMonth] = useState(base.getMonth());
+
+  const toggleOpen = () => {
+    if (!open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      const POPUP_W = 252, POPUP_H = 320;
+      const spaceBelow = window.innerHeight - r.bottom;
+      const top  = (spaceBelow < POPUP_H && r.top > POPUP_H) ? r.top - POPUP_H - 4 : r.bottom + 4;
+      let   left = r.left;
+      if (left + POPUP_W > window.innerWidth - 8) left = window.innerWidth - POPUP_W - 8;
+      setPos({ top, left });
+    }
+    setOpen(o => !o);
+  };
+
+  useEffect(() => {
+    if (open && valid) {
+      const d = new Date(value + 'T00:00:00');
+      setYear(d.getFullYear()); setMonth(d.getMonth());
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const pick = (day) => {
+    onChange(`${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`);
+    setOpen(false);
+  };
+
+  const shift = (delta) => {
+    let m = month + delta, y = year;
+    if (m < 0)  { m = 11; y--; }
+    if (m > 11) { m = 0;  y++; }
+    setMonth(m); setYear(y);
+  };
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const offset      = (new Date(year, month, 1).getDay() + 6) % 7;
+  const cells       = [...Array(offset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const display     = valid ? value.replace(/-/g, '/') : '';
+  const thisYear    = new Date().getFullYear();
+
+  const triggerStyle = compact
+    ? { ...S.input, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', fontSize: '12px', height: '32px' }
+    : { ...S.input, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div ref={triggerRef} onClick={toggleOpen} style={triggerStyle}>
+        <span style={{ color: display ? '#0f172a' : '#94a3b8' }}>{display || placeholder}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </div>
+      {open && (
+        <div style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 1000, background: 'white', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '12px', width: '252px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <button type="button" onClick={() => shift(-1)} style={dpNavBtn}>‹</button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <select value={month} onChange={e => setMonth(Number(e.target.value))} style={dpSelStyle}>
+                {DP_MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+              <select value={year} onChange={e => setYear(Number(e.target.value))} style={dpSelStyle}>
+                {Array.from({ length: 100 }, (_, i) => thisYear - 85 + i).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <button type="button" onClick={() => shift(1)} style={dpNavBtn}>›</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', marginBottom: '4px' }}>
+            {DP_WEEKDAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: '700', color: '#94a3b8', padding: '2px 0' }}>{d}</div>)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px' }}>
+            {cells.map((day, i) => {
+              if (day === null) return <div key={`e${i}`} />;
+              const iso   = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+              const isSel = valid && iso === value;
+              return (
+                <button type="button" key={day} onClick={() => pick(day)}
+                  onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = '#eef2ff'; }}
+                  onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
+                  style={{ border: 'none', borderRadius: '6px', padding: '6px 0', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', background: isSel ? '#6366f1' : 'transparent', color: isSel ? 'white' : '#0f172a', fontWeight: isSel ? '700' : '500' }}>
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+            <button type="button" onClick={() => { onChange(''); setOpen(false); }}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>Clear</button>
+            <button type="button" onClick={() => {
+              const t = new Date();
+              onChange(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`);
+              setOpen(false);
+            }} style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>Today</button>
+          </div>
+        </div>
       )}
     </div>
   );
