@@ -256,7 +256,15 @@ export default function Employees() {
   // For type="date" inputs — value must be YYYY-MM-DD
   const toDateInput = (val) => {
     if (!val) return '';
-    return String(val).split('T')[0];
+    const s = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;               // already YYYY-MM-DD
+    if (s.includes('T')) return s.split('T')[0];                // ISO timestamp
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {                     // old DD/MM/YYYY
+      const [d, m, y] = s.split('/');
+      return `${y}-${m}-${d}`;
+    }
+    if (/^\d{4}\/\d{2}\/\d{2}$/.test(s)) return s.replace(/\//g, '-'); // YYYY/MM/DD
+    return s.substring(0, 10);                                  // fallback
   };
 
   const filtered = employees.filter(e => {
