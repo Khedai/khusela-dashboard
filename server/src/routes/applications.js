@@ -42,17 +42,7 @@ router.get('/', verifyToken, async (req, res) => {
     const { franchise_id, page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    let query = `
-      SELECT
-        a.id, a.date, a.status,
-        a.is_med, a.is_dreview, a.is_drr, a.is_3in1, a.is_rent_to,
-        a.gross_salary, a.nett_salary, a.total_expenses,
-        a.mandate_status, a.mandate_signed, a.mandate_signed_date,
-        a.franchise_id,
-        c.first_name, c.last_name, c.cell, c.id_number,
-        e.first_name AS consultant_first, e.last_name AS consultant_last,
-        f.franchise_name,
-        (SELECT COUNT(*)::int FROM application_notes n WHERE n.application_id = a.id) AS note_count
+    const FROM = `
       FROM applications a
       LEFT JOIN clients c ON a.client_id = c.id
       LEFT JOIN employees e ON a.consultant_id = e.id
@@ -66,34 +56,42 @@ router.get('/', verifyToken, async (req, res) => {
       conditions.push(`a.franchise_id = $${params.length + 1}`);
       params.push(franchise_id);
     } else if (req.user.role === 'Consultant' || req.user.role === 'HR') {
-      // Non-admins always locked to their own franchise — no override
       conditions.push(`a.franchise_id = $${params.length + 1}`);
       params.push(req.user.franchise_id || null);
     }
 
-    // Never show unassigned applications to non-admins
     if (req.user.role !== 'Admin') {
       conditions.push(`a.franchise_id IS NOT NULL`);
     }
 
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(' AND ')}`;
-    }
+    const WHERE = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
 
-    // Count query for total
-    const countQuery = query
-      .replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) FROM')
-      .replace(/ORDER BY.*$/, '');
-    const countResult = await pool.query(countQuery.split('ORDER')[0], params);
+    // Count query — simple, no subqueries
+    const countResult = await pool.query(
+      `SELECT COUNT(*) ${FROM} ${WHERE}`,
+      params
+    );
     const total = parseInt(countResult.rows[0].count);
 
-    query += ` ORDER BY a.created_at DESC`;
+    // Data query — includes note_count subquery
+    const dataParams = [...params, parseInt(limit), (parseInt(page) - 1) * parseInt(limit)];
+    const query = `
+      SELECT
+        a.id, a.date, a.status,
+        a.is_med, a.is_dreview, a.is_drr, a.is_3in1, a.is_rent_to,
+        a.gross_salary, a.nett_salary, a.total_expenses,
+        a.mandate_status, a.mandate_signed, a.mandate_signed_date,
+        a.franchise_id,
+        c.first_name, c.last_name, c.cell, c.id_number,
+        e.first_name AS consultant_first, e.last_name AS consultant_last,
+        f.franchise_name,
+        (SELECT COUNT(*)::int FROM application_notes n WHERE n.application_id = a.id) AS note_count
+      ${FROM} ${WHERE}
+      ORDER BY a.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
 
-    // Add pagination to main query
-    query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(parseInt(limit), offset);
-
-    const result = await pool.query(query, params);
+    const result = await pool.query(query, dataParams);
     res.json({
       data: result.rows,
       pagination: {
