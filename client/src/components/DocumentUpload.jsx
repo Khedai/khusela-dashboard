@@ -124,7 +124,6 @@ export default function DocumentUpload({ applicationId, onUploadComplete, preset
       <option>Payslip</option>
       <option>Proof of Address</option>
       <option>Bank Statement</option>
-      <option>Signed Mandate</option>
       <option>Other</option>
     </select>
   );
