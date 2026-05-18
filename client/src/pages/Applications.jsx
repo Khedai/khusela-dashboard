@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../utils/api';
 import { can } from '../utils/access';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +10,7 @@ import { generateApplicationForm } from '../utils/pdfGenerator';
 import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
 import { useUnsavedWarning } from '../utils/useUnsavedWarning';
+import { downloadCsv } from '../utils/exportCsv';
 
 const EMPTY_FORM = {
   franchise_id: '',
@@ -98,11 +100,17 @@ function validateStep(step, form, creditors) {
 
 export default function Applications() {
   const { user, employeeId, franchise } = useAuth();
+  const location = useLocation();
   const [applications, setApplications] = useState([]);
   const [franchises, setFranchises] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter]   = useState(() => new URLSearchParams(location.search).get('status') || '');
+  const [typeFilter, setTypeFilter]       = useState('');   // '' | 'med' | 'dreview' | 'drr'
+  const [dateFrom, setDateFrom]           = useState('');
+  const [dateTo, setDateTo]               = useState('');
+  const [consultantFilter, setConsultantFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('list'); // 'list' | 'form' | 'detail'
   const [selectedApp, setSelectedApp] = useState(null);
@@ -124,6 +132,35 @@ export default function Applications() {
   const [success, setSuccess] = useState('');
   const [viewingId, setViewingId] = useState(null);       // which row's View btn is loading
   const [isFormDirty, setIsFormDirty] = useState(false);
+
+  // ── Bulk selection ────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const selectAll = () => setSelectedIds(new Set(filteredApps.map(a => a.id)));
+  const clearSelection = () => { setSelectedIds(new Set()); setBulkStatus(''); };
+
+  const handleBulkUpdate = async () => {
+    if (!bulkStatus || selectedIds.size === 0 || bulkUpdating) return;
+    setBulkUpdating(true);
+    try {
+      const res = await api.patch('/applications/bulk-status', {
+        ids: [...selectedIds],
+        status: bulkStatus,
+      });
+      setSuccess(`Updated ${res.data.updated} application${res.data.updated !== 1 ? 's' : ''} to "${bulkStatus}".`);
+      clearSelection();
+      fetchApplications(page);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Bulk update failed.');
+    } finally { setBulkUpdating(false); }
+  };
 
   // ── Inline notes panel (list view) ────────────────────────
   const [notesPanel, setNotesPanel] = useState(null);   // { appId, appName }
@@ -1156,13 +1193,27 @@ export default function Applications() {
   // ── Applications table ────────────────────────────────────
     const filteredApps = applications.filter(app => {
       const q = search.toLowerCase();
-      return (
+      const matchesSearch = (
         `${app.first_name} ${app.last_name}`.toLowerCase().includes(q) ||
         (app.id_number || '').toLowerCase().includes(q) ||
         (app.franchise_name || '').toLowerCase().includes(q) ||
         (app.status || '').toLowerCase().includes(q)
       );
+      const matchesStatus = !statusFilter || app.status === statusFilter;
+      const matchesType = !typeFilter || (
+        typeFilter === 'med'     ? app.is_med     :
+        typeFilter === 'dreview' ? app.is_dreview :
+        typeFilter === 'drr'     ? app.is_drr     : true
+      );
+      const appDate = app.date ? app.date.split('T')[0] : '';
+      const matchesFrom = !dateFrom || appDate >= dateFrom;
+      const matchesTo   = !dateTo   || appDate <= dateTo;
+      const matchesConsultant = !consultantFilter ||
+        String(app.consultant_id) === consultantFilter;
+      return matchesSearch && matchesStatus && matchesType && matchesFrom && matchesTo && matchesConsultant;
     });
+
+  const activeFilterCount = [typeFilter, dateFrom, dateTo, consultantFilter].filter(Boolean).length;
 
     return (
     <div style={{ maxWidth: '1100px' }}>
@@ -1175,6 +1226,15 @@ export default function Applications() {
               <span>Show All Branches</span>
             </label>
           )}
+          <button
+            onClick={() => {
+              const date = new Date().toISOString().split('T')[0];
+              downloadCsv(`applications-${date}.csv`, filteredApps,
+                ['first_name','last_name','date','franchise_name','status','nett_salary','total_expenses'],
+                { first_name:'First Name', last_name:'Last Name', date:'Date', franchise_name:'Branch', status:'Status', nett_salary:'Nett Salary', total_expenses:'Total Expenses' }
+              );
+            }}
+            style={S.ghostBtn}>↓ Export CSV</button>
           <button onClick={() => generateApplicationForm(null, null)} style={S.ghostBtn}>Empty Template</button>
           <button onClick={() => { setView('form'); setSuccess(''); setError(''); setStep(0); setFieldErrors({}); setForm(getInitialForm()); }}
             className="btn-primary" style={S.primaryBtn}>
@@ -1188,14 +1248,117 @@ export default function Applications() {
 
       <div style={S.card}>
         <div style={{ padding: '12px 26px 0 26px' }}>
-          <input
-            type="text"
-            placeholder="Search by client name, ID or branch..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ ...S.input, width: '320px', marginBottom: '16px' }}
-          />
+          {/* Row 1: search + status pills */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <input
+              type="text"
+              placeholder="Search by client name, ID or branch..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ ...S.input, width: '260px', margin: 0 }}
+            />
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {['', 'Draft', 'Submitted', 'Pending Docs', 'Approved', 'Rejected'].map(s => (
+                <button key={s} onClick={() => setStatusFilter(s)} style={{
+                  padding: '5px 12px', borderRadius: '20px', border: 'none',
+                  fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer',
+                  background: statusFilter === s ? '#0f172a' : '#f1f5f9',
+                  color: statusFilter === s ? 'white' : '#64748b',
+                  transition: 'all 0.12s',
+                }}>
+                  {s || 'All'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Row 2: type + date range + consultant + clear */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', paddingBottom: '12px' }}>
+            {/* Type filter */}
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              style={{ ...S.input, width: 'auto', margin: 0, fontSize: '12px', padding: '5px 10px', height: '32px' }}
+            >
+              <option value="">All Types</option>
+              <option value="med">MED</option>
+              <option value="dreview">Debt Review</option>
+              <option value="drr">DRR</option>
+            </select>
+
+            {/* Date range */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                title="From date"
+                style={{ ...S.input, width: '140px', margin: 0, fontSize: '12px', padding: '5px 10px', height: '32px' }}
+              />
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>–</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                title="To date"
+                style={{ ...S.input, width: '140px', margin: 0, fontSize: '12px', padding: '5px 10px', height: '32px' }}
+              />
+            </div>
+
+            {/* Consultant filter — Admin / HR only */}
+            {can(user, 'applications.viewAll') && employees.length > 0 && (
+              <select
+                value={consultantFilter}
+                onChange={e => setConsultantFilter(e.target.value)}
+                style={{ ...S.input, width: 'auto', maxWidth: '180px', margin: 0, fontSize: '12px', padding: '5px 10px', height: '32px' }}
+              >
+                <option value="">All Consultants</option>
+                {employees.map(e => (
+                  <option key={e.id} value={String(e.id)}>{e.first_name} {e.last_name}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Clear all filters */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => { setTypeFilter(''); setDateFrom(''); setDateTo(''); setConsultantFilter(''); }}
+                style={{ padding: '5px 12px', borderRadius: '20px', border: 'none', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', background: '#fef2f2', color: '#dc2626' }}
+              >
+                Clear filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+              </button>
+            )}
+          </div>
         </div>
+        {/* ── Bulk action bar ── */}
+        {can(user, 'applications.viewAll') && selectedIds.size > 0 && (
+          <div style={{ margin: '0 26px 12px', padding: '10px 16px', background: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#1d4ed8' }}>
+              {selectedIds.size} selected
+            </span>
+            <select
+              value={bulkStatus}
+              onChange={e => setBulkStatus(e.target.value)}
+              style={{ ...S.input, width: 'auto', margin: 0, fontSize: '12px', padding: '5px 10px', height: '32px' }}
+            >
+              <option value="">Set status…</option>
+              {['Draft','Submitted','Pending Docs','Approved','Rejected'].map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleBulkUpdate}
+              disabled={!bulkStatus || bulkUpdating}
+              style={{ padding: '6px 16px', borderRadius: '8px', border: 'none', background: bulkStatus ? '#2563eb' : '#e2e8f0', color: bulkStatus ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: bulkStatus ? 'pointer' : 'default', opacity: bulkUpdating ? 0.7 : 1 }}
+            >
+              {bulkUpdating ? 'Updating...' : 'Apply'}
+            </button>
+            <button onClick={clearSelection} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500' }}>
+              Clear
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <Spinner size="lg" dark label="Loading applications..." />
         ) : applications.length === 0 ? (
@@ -1210,6 +1373,16 @@ export default function Applications() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr>
+                {can(user, 'applications.viewAll') && (
+                  <th style={{ ...S.tableHeader, width: '36px', paddingLeft: '20px' }}>
+                    <input
+                      type="checkbox"
+                      checked={filteredApps.length > 0 && filteredApps.every(a => selectedIds.has(a.id))}
+                      onChange={e => e.target.checked ? selectAll() : clearSelection()}
+                      style={{ accentColor: '#2563eb', cursor: 'pointer' }}
+                    />
+                  </th>
+                )}
                 {['Client', 'Date', 'Branch', 'Type', 'Nett Salary', 'Total Expenses', 'Status', ''].map(h => (
                   <th key={h} style={{ ...S.tableHeader, textAlign: ['Nett Salary', 'Total Expenses'].includes(h) ? 'right' : 'left' }}>{h}</th>
                 ))}
@@ -1217,7 +1390,17 @@ export default function Applications() {
             </thead>
             <tbody>
               {filteredApps.map(app => (
-                <tr key={app.id} className="table-row">
+                <tr key={app.id} className="table-row" style={{ background: selectedIds.has(app.id) ? '#f0f7ff' : undefined }}>
+                  {can(user, 'applications.viewAll') && (
+                    <td style={{ ...S.tableCell, paddingLeft: '20px', width: '36px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(app.id)}
+                        onChange={() => toggleSelect(app.id)}
+                        style={{ accentColor: '#2563eb', cursor: 'pointer' }}
+                      />
+                    </td>
+                  )}
                   <td style={{ ...S.tableCell, fontWeight: '500' }}>{app.first_name} {app.last_name}</td>
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{app.date?.split('T')[0]}</td>
                   <td style={{ ...S.tableCell, color: '#64748b' }}>{app.franchise_name || '—'}</td>

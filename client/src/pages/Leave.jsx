@@ -177,6 +177,10 @@ export default function Leave() {
     } catch { /* ignore */ }
   };
 
+  const [calView, setCalView] = useState(false);
+  const [calYear, setCalYear]   = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth()); // 0-based
+
   const allRequests = isManager ? requests : requests;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
 
@@ -599,16 +603,40 @@ export default function Leave() {
         </div>
       )}
 
-      {/* Requests Table */}
+      {/* Requests Table / Calendar */}
       <div style={S.card}>
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9' }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>
             {isManager ? 'All Leave Requests' : 'My Leave Requests'}
           </h3>
+          {/* List / Calendar toggle */}
+          <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '2px' }}>
+            {[{ key: false, label: 'List' }, { key: true, label: 'Calendar' }].map(opt => (
+              <button key={String(opt.key)} onClick={() => setCalView(opt.key)}
+                style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', background: calView === opt.key ? 'white' : 'transparent', color: calView === opt.key ? '#0f172a' : '#94a3b8', boxShadow: calView === opt.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
           <Spinner size="lg" dark label="Loading leave data..." />
+        ) : calView ? (
+          <LeaveCalendar
+            requests={allRequests}
+            year={calYear} month={calMonth}
+            onPrev={() => {
+              if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+              else setCalMonth(m => m - 1);
+            }}
+            onNext={() => {
+              if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+              else setCalMonth(m => m + 1);
+            }}
+            isManager={isManager}
+            onSelect={openLeaveDetail}
+          />
         ) : allRequests.length === 0 ? (
           <EmptyState
             icon="🗓️"
@@ -736,6 +764,129 @@ export default function Leave() {
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Leave Calendar Component ──────────────────────────────
+const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CAL_DAYS   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+const STATUS_CAL = {
+  Approved: { bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
+  Pending:  { bg: '#fef9c3', color: '#ca8a04', border: '#fde68a' },
+  Rejected: { bg: '#fee2e2', color: '#dc2626', border: '#fecaca' },
+};
+
+function LeaveCalendar({ requests, year, month, onPrev, onNext, isManager, onSelect }) {
+  // Build days grid (Mon-first)
+  const firstDay = new Date(year, month, 1);
+  const lastDay  = new Date(year, month + 1, 0);
+  const startDow = (firstDay.getDay() + 6) % 7; // Mon=0
+  const totalCells = Math.ceil((startDow + lastDay.getDate()) / 7) * 7;
+
+  const cells = [];
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - startDow + 1;
+    cells.push(dayNum >= 1 && dayNum <= lastDay.getDate() ? dayNum : null);
+  }
+
+  // Map each day to overlapping requests
+  const dateStr = (y, m, d) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+  const dayEvents = {};
+  requests.forEach(r => {
+    const start = r.start_date?.split('T')[0];
+    const end   = r.end_date?.split('T')[0];
+    if (!start || !end) return;
+    // iterate days in month
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      const ds = dateStr(year, month, d);
+      if (ds >= start && ds <= end) {
+        if (!dayEvents[d]) dayEvents[d] = [];
+        dayEvents[d].push(r);
+      }
+    }
+  });
+
+  const today = new Date();
+  const isToday = (d) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  return (
+    <div style={{ padding: '0 0 16px' }}>
+      {/* Month nav */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 22px 14px' }}>
+        <button onClick={onPrev} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer', color: '#64748b', fontSize: '14px', fontFamily: 'DM Sans' }}>‹</button>
+        <span style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+          {CAL_MONTHS[month]} {year}
+        </span>
+        <button onClick={onNext} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer', color: '#64748b', fontSize: '14px', fontFamily: 'DM Sans' }}>›</button>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: '16px', padding: '0 22px 12px', flexWrap: 'wrap' }}>
+        {Object.entries(STATUS_CAL).map(([s, c]) => (
+          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: c.bg, border: `1px solid ${c.border}` }} />
+            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>{s}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Day headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', padding: '0 16px' }}>
+        {CAL_DAYS.map(d => (
+          <div key={d} style={{ textAlign: 'center', padding: '6px 4px', fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Cells grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', padding: '0 16px 8px' }}>
+        {cells.map((d, i) => {
+          const events = d ? (dayEvents[d] || []) : [];
+          return (
+            <div key={i} style={{
+              minHeight: '72px',
+              borderRadius: '8px',
+              background: d ? (isToday(d) ? '#eff6ff' : '#fafafa') : 'transparent',
+              border: d ? (isToday(d) ? '1.5px solid #bfdbfe' : '1px solid #f1f5f9') : 'none',
+              padding: '4px',
+            }}>
+              {d && (
+                <>
+                  <div style={{ fontSize: '11px', fontWeight: isToday(d) ? '700' : '400', color: isToday(d) ? '#2563eb' : '#64748b', textAlign: 'right', marginBottom: '3px', lineHeight: 1 }}>
+                    {d}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    {events.slice(0, 3).map(r => {
+                      const cs = STATUS_CAL[r.status] || STATUS_CAL.Pending;
+                      return (
+                        <button key={r.id} onClick={() => onSelect(r)}
+                          title={`${isManager ? `${r.first_name} ${r.last_name} — ` : ''}${r.leave_type} (${r.status})`}
+                          style={{
+                            display: 'block', width: '100%', border: `1px solid ${cs.border}`,
+                            borderRadius: '4px', background: cs.bg, color: cs.color,
+                            fontSize: '9px', fontWeight: '600', fontFamily: 'DM Sans',
+                            padding: '2px 4px', textAlign: 'left', cursor: 'pointer',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            lineHeight: '1.3',
+                          }}>
+                          {isManager ? `${r.first_name?.charAt(0)}. ${r.last_name}` : r.leave_type}
+                        </button>
+                      );
+                    })}
+                    {events.length > 3 && (
+                      <span style={{ fontSize: '9px', color: '#94a3b8', textAlign: 'center' }}>+{events.length - 3} more</span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

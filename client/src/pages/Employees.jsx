@@ -5,6 +5,7 @@ import { can } from '../utils/access';
 import api from '../utils/api';
 import * as S from '../utils/styles';
 import { generateEmployeeForm } from '../utils/pdfGenerator';
+import { downloadCsv } from '../utils/exportCsv';
 import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
 import Spinner from '../components/Spinner';
@@ -965,6 +966,17 @@ export default function Employees() {
             placeholder="Search name, ID, email..."
             style={{ ...S.input, width: isMobile ? '100%' : '220px', margin: 0 }}
           />
+          {can(user, 'employees.view') && (
+            <button
+              onClick={() => {
+                const date = new Date().toISOString().split('T')[0];
+                downloadCsv(`employees-${date}.csv`, filtered,
+                  ['first_name','last_name','job_title','email','cell','franchise_name'],
+                  { first_name:'First Name', last_name:'Last Name', job_title:'Position', email:'Email', cell:'Cell', franchise_name:'Branch' }
+                );
+              }}
+              style={S.ghostBtn}>↓ Export CSV</button>
+          )}
         </div>
       </div>
 

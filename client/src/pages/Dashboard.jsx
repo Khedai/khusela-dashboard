@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
@@ -25,6 +26,7 @@ const CARDS = [
 export default function Dashboard() {
   const { user, employeeId } = useAuth();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState(null);
@@ -129,10 +131,18 @@ export default function Dashboard() {
       {/* Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '10px', marginBottom: '20px' }}>
         {CARDS.map(card => (
-          <div key={card.key} style={{
-            background: 'white', borderRadius: '10px', padding: isMobile ? '14px' : '16px 18px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: `3px solid ${card.color}`,
-          }}>
+          <div
+            key={card.key}
+            onClick={() => card.key !== 'total' && navigate(`/applications?status=${encodeURIComponent(card.label)}`)}
+            style={{
+              background: 'white', borderRadius: '10px', padding: isMobile ? '14px' : '16px 18px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: `3px solid ${card.color}`,
+              cursor: card.key !== 'total' ? 'pointer' : 'default',
+              transition: 'transform 0.12s, box-shadow 0.12s',
+            }}
+            onMouseEnter={e => { if (card.key !== 'total') { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; } }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)'; }}
+          >
             <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
               {card.label}
             </p>

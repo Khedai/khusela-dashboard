@@ -203,6 +203,71 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
   }
 });
 
+// ─── BULK STATUS UPDATE ───────────────────────────────────
+router.patch('/bulk-status', requireRole('Admin', 'HR'), async (req, res) => {
+  const { ids, status } = req.body;
+  const VALID = ['Draft', 'Submitted', 'Pending Docs', 'Approved', 'Rejected'];
+  if (!Array.isArray(ids) || ids.length === 0)
+    return res.status(400).json({ error: 'ids array is required.' });
+  if (!VALID.includes(status))
+    return res.status(400).json({ error: 'Invalid status value.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // For HR — restrict to own franchise
+    let allowedIds = ids;
+    if (req.user.role === 'HR') {
+      const check = await client.query(
+        `SELECT id FROM applications WHERE id = ANY($1::int[]) AND franchise_id = $2`,
+        [ids, req.user.franchise_id]
+      );
+      allowedIds = check.rows.map(r => r.id);
+    }
+    if (allowedIds.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'No eligible applications to update.' });
+    }
+
+    // Get old statuses for logging
+    const oldRows = await client.query(
+      'SELECT id, status FROM applications WHERE id = ANY($1::int[])',
+      [allowedIds]
+    );
+    const oldMap = {};
+    oldRows.rows.forEach(r => { oldMap[r.id] = r.status; });
+
+    // Bulk update
+    await client.query(
+      `UPDATE applications SET status = $1, updated_at = NOW() WHERE id = ANY($2::int[])`,
+      [status, allowedIds]
+    );
+
+    // Insert log entries
+    const logVals = allowedIds.map((id, i) =>
+      `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`
+    ).join(', ');
+    const logParams = allowedIds.flatMap(id => [
+      id, req.user.id, 'status_change', `${oldMap[id] || '?'} → ${status}`
+    ]);
+    if (logParams.length > 0) {
+      await client.query(
+        `INSERT INTO application_logs (application_id, user_id, action, note) VALUES ${logVals}`,
+        logParams
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ updated: allowedIds.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Bulk status error:', err.message);
+    res.status(500).json({ error: 'Failed to update applications.' });
+  } finally {
+    client.release();
+  }
+});
+
 // ─── GET SINGLE APPLICATION WITH CREDITORS ────────────────
 router.get('/:id', requireRole('Admin', 'HR', 'Consultant'), async (req, res) => {
   try {

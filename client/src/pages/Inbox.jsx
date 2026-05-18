@@ -146,8 +146,24 @@ export default function Inbox() {
     return new Date(dateStr).toLocaleDateString('en-ZA');
   };
 
+  const [notifFilter, setNotifFilter] = useState('all'); // all | unread | leave | applications
+
   const unreadNotifs = notifications.filter(n => !n.is_read).length;
   const unreadMessages = messages.filter(m => !m.is_read).length;
+
+  const filteredNotifications = notifications.filter(n => {
+    if (notifFilter === 'unread') return !n.is_read;
+    if (notifFilter === 'leave') return /leave/i.test(n.title + ' ' + (n.message || ''));
+    if (notifFilter === 'applications') return /application/i.test(n.title + ' ' + (n.message || '')) || (n.link && n.link.startsWith('/applications'));
+    return true;
+  });
+
+  const NOTIF_FILTERS = [
+    { key: 'all',          label: 'All' },
+    { key: 'unread',       label: 'Unread',       count: unreadNotifs },
+    { key: 'leave',        label: 'Leave' },
+    { key: 'applications', label: 'Applications' },
+  ];
 
   const TABS = [
     { key: 'notifications', label: 'Notifications', count: unreadNotifs },
@@ -201,11 +217,36 @@ export default function Inbox() {
               </button>
             )}
           </div>
+
+          {/* Filter pills */}
+          <div style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {NOTIF_FILTERS.map(f => (
+              <button key={f.key} onClick={() => setNotifFilter(f.key)}
+                style={{
+                  padding: '4px 12px', borderRadius: '20px', border: 'none',
+                  fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer',
+                  background: notifFilter === f.key ? '#0f172a' : '#f1f5f9',
+                  color: notifFilter === f.key ? 'white' : '#64748b',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'background 0.15s, color 0.15s',
+                }}>
+                {f.label}
+                {f.count > 0 && (
+                  <span style={{
+                    background: notifFilter === f.key ? 'rgba(255,255,255,0.25)' : '#dc2626',
+                    color: 'white', borderRadius: '10px', fontSize: '10px',
+                    fontWeight: '700', padding: '1px 5px',
+                  }}>{f.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
           {loading ? (
             <Spinner dark label="Loading notifications..." />
-          ) : notifications.length === 0 ? (
-            <EmptyState icon="✓" title="No notifications" subtitle="Notifications will appear here." />
-          ) : notifications.map((n, i) => (
+          ) : filteredNotifications.length === 0 ? (
+            <EmptyState icon="✓" title="No notifications" subtitle={notifFilter === 'all' ? 'Notifications will appear here.' : `No ${notifFilter} notifications.`} />
+          ) : filteredNotifications.map((n, i) => (
             <div key={n.id} onClick={async () => {
                 if (!n.is_read) await markNotifRead(n.id);
                 if (n.link) navigate(n.link);
@@ -224,7 +265,26 @@ export default function Inbox() {
                     {!n.is_read && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#2563eb' }} />}
                   </div>
                 </div>
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b', lineHeight: '1.5' }}>{n.message}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '5px', flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b', lineHeight: '1.5' }}>{n.message}</p>
+                </div>
+                {(() => {
+                  const txt = (n.title + ' ' + (n.message || '')).toLowerCase();
+                  const isLeave = /leave/.test(txt);
+                  const isApp   = /application/.test(txt) || (n.link && n.link.startsWith('/applications'));
+                  if (!isLeave && !isApp) return null;
+                  return (
+                    <span style={{
+                      display: 'inline-block', marginTop: '5px',
+                      fontSize: '10px', fontWeight: '700', letterSpacing: '0.04em',
+                      padding: '2px 7px', borderRadius: '4px',
+                      background: isLeave ? '#f0fdf4' : '#eff6ff',
+                      color: isLeave ? '#16a34a' : '#2563eb',
+                    }}>
+                      {isLeave ? 'LEAVE' : 'APPLICATION'}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           ))}
