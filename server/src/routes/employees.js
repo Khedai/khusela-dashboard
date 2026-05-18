@@ -35,6 +35,8 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     conditions.push('e.terminated_at IS NULL');
+    // Exclude employees whose linked user account has been deleted
+    conditions.push('(e.user_id IS NULL OR EXISTS (SELECT 1 FROM users u WHERE u.id = e.user_id))');
 
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;
