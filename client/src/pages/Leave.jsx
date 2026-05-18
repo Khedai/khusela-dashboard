@@ -16,7 +16,7 @@ const fmtDate = (dateStr) => {
   const s = String(dateStr).split('T')[0];
   const parts = s.split('-');
   if (parts.length !== 3) return s;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return `${parts[0]}/${parts[1]}/${parts[2]}`;
 };
 
 const STATUS_STYLES = {

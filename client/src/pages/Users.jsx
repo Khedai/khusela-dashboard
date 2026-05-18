@@ -20,6 +20,7 @@ export default function Users() {
   const [success, setSuccess] = useState('');
   const [togglingId, setTogglingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [resettingId, setResettingId] = useState(null);
   const [promotingId, setPromotingId] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -91,7 +92,6 @@ export default function Users() {
   };
 
   const handleDeleteUser = async (u) => {
-    if (!window.confirm(`Are you sure you want to delete @${u.username}? This cannot be undone.`)) return;
     setDeletingId(u.id); setError(''); setSuccess('');
     try {
       await api.delete(`/users/${u.id}`);
@@ -99,7 +99,7 @@ export default function Users() {
       setSuccess(`@${u.username} has been deleted.`);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete user.');
-    } finally { setDeletingId(null); }
+    } finally { setDeletingId(null); setConfirmDeleteId(null); }
   };
 
   const handlePromote = async (u) => {
@@ -363,10 +363,23 @@ export default function Users() {
                         {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
                       </button>
                       {!PROTECTED.includes(u.username) && (
-                        <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
-                          style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {deletingId === u.id ? '...' : 'Delete'}
-                        </button>
+                        confirmDeleteId === u.id ? (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
+                              style={{ background: '#ef4444', border: 'none', borderRadius: '5px', padding: '3px 8px', color: 'white', fontSize: '11px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                              {deletingId === u.id ? '...' : 'Confirm'}
+                            </button>
+                            <button onClick={() => setConfirmDeleteId(null)}
+                              style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '11px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmDeleteId(u.id)}
+                            style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                            Delete
+                          </button>
+                        )
                       )}
                     </div>
                   )}
@@ -432,10 +445,23 @@ export default function Users() {
                             {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
                           </button>
                           {!PROTECTED.includes(u.username) && (
-                            <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
-                              style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                              {deletingId === u.id ? '...' : 'Delete'}
-                            </button>
+                            confirmDeleteId === u.id ? (
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
+                                  style={{ background: '#ef4444', border: 'none', borderRadius: '5px', padding: '4px 10px', color: 'white', fontSize: '12px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                                  {deletingId === u.id ? '...' : 'Confirm Delete'}
+                                </button>
+                                <button onClick={() => setConfirmDeleteId(null)}
+                                  style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setConfirmDeleteId(u.id)}
+                                style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                                Delete
+                              </button>
+                            )
                           )}
                         </div>
                       )}

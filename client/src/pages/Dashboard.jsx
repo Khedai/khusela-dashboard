@@ -210,7 +210,7 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b' }}>
-                  <span>{app.date?.split('T')[0]}</span>
+                  <span>{app.date?.split('T')[0]?.replace(/-/g, '/')}</span>
                   {app.nett_salary && <span>R {parseFloat(app.nett_salary).toLocaleString()}</span>}
                 </div>
               </div>
@@ -236,7 +236,7 @@ export default function Dashboard() {
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>{app.first_name} {app.last_name}</td>
-                    <td style={{ padding: '12px 22px', color: '#64748b' }}>{app.date?.split('T')[0]}</td>
+                    <td style={{ padding: '12px 22px', color: '#64748b' }}>{app.date?.split('T')[0]?.replace(/-/g, '/')}</td>
                     <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.nett_salary ? `R ${parseFloat(app.nett_salary).toLocaleString()}` : '—'}</td>
                     <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}</td>
                     <td style={{ padding: '12px 22px' }}>

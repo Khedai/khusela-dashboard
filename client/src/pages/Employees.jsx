@@ -35,7 +35,7 @@ const fmtDate = (dateStr) => {
   const s = String(dateStr).split('T')[0];
   const parts = s.split('-');
   if (parts.length !== 3) return s;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return `${parts[0]}/${parts[1]}/${parts[2]}`;
 };
 
 export default function Employees() {
@@ -70,6 +70,7 @@ export default function Employees() {
   const [manualLeaveForm, setManualLeaveForm] = useState({ leave_type: 'Annual', days: '', description: '' });
   const [manualLeaveSubmitting, setManualLeaveSubmitting] = useState(false);
   const [deletingEmployeeId, setDeletingEmployeeId] = useState(null);
+  const [confirmDeleteEmpId, setConfirmDeleteEmpId] = useState(null);
 
   const [pastEmployees, setPastEmployees] = useState([]);
   const [pastLoading, setPastLoading] = useState(false);
@@ -199,7 +200,6 @@ export default function Employees() {
   };
 
   const handleDeleteEmployee = async (empId) => {
-    if (!window.confirm('Permanently delete this employee record? This cannot be undone.')) return;
     setDeletingEmployeeId(empId);
     try {
       await api.delete(`/employees/${empId}`);
@@ -208,7 +208,7 @@ export default function Employees() {
       setSelected(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete employee.');
-    } finally { setDeletingEmployeeId(null); }
+    } finally { setDeletingEmployeeId(null); setConfirmDeleteEmpId(null); }
   };
 
   const handleFolderDocDelete = async (docId) => {
@@ -573,12 +573,24 @@ export default function Employees() {
               </button>
             )}
             {user?.role === 'Admin' && (
-              <button
-                onClick={() => handleDeleteEmployee(selected.id)}
-                disabled={deletingEmployeeId === selected.id}
-                style={{ background: 'none', border: '1px solid #fecaca', borderRadius: '8px', padding: '9px 14px', color: '#ef4444', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
-                {deletingEmployeeId === selected.id ? 'Deleting...' : 'Delete'}
-              </button>
+              confirmDeleteEmpId === selected.id ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '7px 12px' }}>
+                  <span style={{ fontSize: '12px', color: '#991b1b', fontWeight: '600' }}>Delete this record?</span>
+                  <button onClick={() => handleDeleteEmployee(selected.id)} disabled={deletingEmployeeId === selected.id}
+                    style={{ background: '#ef4444', border: 'none', borderRadius: '6px', padding: '4px 10px', color: 'white', fontSize: '12px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                    {deletingEmployeeId === selected.id ? '...' : 'Yes, Delete'}
+                  </button>
+                  <button onClick={() => setConfirmDeleteEmpId(null)}
+                    style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDeleteEmpId(selected.id)}
+                  style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 14px', color: '#94a3b8', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                  Delete
+                </button>
+              )
             )}
           </div>
         </div>
@@ -1065,12 +1077,6 @@ export default function Employees() {
                         <button onClick={() => openEdit(emp)}
                           style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
                           Edit
-                        </button>
-                      )}
-                      {user?.role === 'Admin' && (
-                        <button onClick={() => handleDeleteEmployee(emp.id)}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
-                          Delete
                         </button>
                       )}
                     </div>
