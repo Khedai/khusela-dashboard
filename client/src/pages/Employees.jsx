@@ -14,7 +14,7 @@ import { getIcon } from '../components/fileUploadUtils';
 const TITLES = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
 const ACCOUNT_TYPES = ['Cheque', 'Savings', 'Transmission'];
-const POSITIONS = ['Administrator', 'Human Resources', 'Consultant'];
+const POSITIONS = ['Administrator', 'Human Resources', 'Consultant', 'Marketing', 'IT', 'Training/Trainee'];
 const FOLDER_CATEGORIES = [
   { key: 'Identity',             icon: '', color: '#7c3aed', bg: '#f5f3ff' },
   { key: 'Employment Contract',  icon: '', color: '#2563eb', bg: '#eff6ff' },
