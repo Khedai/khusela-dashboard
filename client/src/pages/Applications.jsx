@@ -124,6 +124,35 @@ export default function Applications() {
   const [success, setSuccess] = useState('');
   const [viewingId, setViewingId] = useState(null);       // which row's View btn is loading
   const [isFormDirty, setIsFormDirty] = useState(false);
+
+  // ── Inline notes panel (list view) ────────────────────────
+  const [notesPanel, setNotesPanel] = useState(null);   // { appId, appName }
+  const [panelNotes, setPanelNotes] = useState([]);
+  const [panelLoading, setPanelLoading] = useState(false);
+  const [panelNote, setPanelNote] = useState('');
+  const [panelPosting, setPanelPosting] = useState(false);
+
+  const openNotesPanel = async (app) => {
+    setNotesPanel({ appId: app.id, appName: `${app.first_name} ${app.last_name}` });
+    setPanelLoading(true); setPanelNotes([]); setPanelNote('');
+    try {
+      const res = await api.get(`/applications/${app.id}/notes`);
+      setPanelNotes(res.data);
+    } catch { } finally { setPanelLoading(false); }
+  };
+
+  const postPanelNote = async () => {
+    if (!panelNote.trim() || panelPosting) return;
+    setPanelPosting(true);
+    try {
+      const res = await api.post(`/applications/${notesPanel.appId}/notes`, { note: panelNote.trim() });
+      setPanelNotes(prev => [...prev, res.data]);
+      setPanelNote('');
+      setApplications(prev => prev.map(a =>
+        a.id === notesPanel.appId ? { ...a, note_count: (a.note_count || 0) + 1 } : a
+      ));
+    } catch { } finally { setPanelPosting(false); }
+  };
   useUnsavedWarning(isFormDirty && view === 'form');
 
   const STEPS = getSteps(form);
@@ -1202,14 +1231,41 @@ export default function Applications() {
                     {app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}
                   </td>
                   <td style={S.tableCell}><span style={S.badge(app.status)}>{app.status}</span></td>
-                  <td style={S.tableCell}>
-                    <button
-                      onClick={() => openDetail(app)}
-                      disabled={viewingId === app.id}
-                      className="btn-link"
-                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: viewingId === app.id ? 'default' : 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: '4px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      {viewingId === app.id ? <><Spinner size="sm" dark inline /> Opening...</> : 'View'}
-                    </button>
+                  <td style={{ ...S.tableCell, whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <button
+                        onClick={() => openDetail(app)}
+                        disabled={viewingId === app.id}
+                        className="btn-link"
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: viewingId === app.id ? 'default' : 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {viewingId === app.id ? <><Spinner size="sm" dark inline /> Opening...</> : 'View'}
+                      </button>
+                      {/* Notes badge */}
+                      <div style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+                        <button
+                          onClick={() => openNotesPanel(app)}
+                          title={app.note_count > 0 ? `${app.note_count} note${app.note_count > 1 ? 's' : ''}` : 'Add note'}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', color: app.note_count > 0 ? '#2563eb' : '#cbd5e1', lineHeight: 1 }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#2563eb'}
+                          onMouseLeave={e => e.currentTarget.style.color = app.note_count > 0 ? '#2563eb' : '#cbd5e1'}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                        </button>
+                        {app.note_count > 0 && (
+                          <span style={{
+                            position: 'absolute', top: '-5px', right: '-7px',
+                            background: '#2563eb', color: 'white',
+                            borderRadius: '10px', fontSize: '9px', fontWeight: '700',
+                            padding: '1px 4px', minWidth: '14px', textAlign: 'center',
+                            lineHeight: '13px', pointerEvents: 'none',
+                          }}>
+                            {app.note_count}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1217,6 +1273,79 @@ export default function Applications() {
           </table>
         )}
       </div>
+
+      {/* ── NOTES PANEL MODAL ── */}
+      {notesPanel && (
+        <div
+          onClick={() => setNotesPanel(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'white', borderRadius: '14px', width: '100%', maxWidth: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}
+          >
+            {/* Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <div>
+                <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Notes</h3>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#94a3b8' }}>{notesPanel.appName}</p>
+              </div>
+              <button onClick={() => setNotesPanel(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px', fontFamily: 'DM Sans' }}>×</button>
+            </div>
+
+            {/* Notes list */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {panelLoading ? (
+                <p style={{ padding: '32px', color: '#94a3b8', fontSize: '13px', textAlign: 'center', margin: 0 }}>Loading...</p>
+              ) : panelNotes.length === 0 ? (
+                <p style={{ padding: '32px', color: '#94a3b8', fontSize: '13px', textAlign: 'center', margin: 0, fontStyle: 'italic' }}>No notes yet — add one below.</p>
+              ) : panelNotes.map((note, i) => {
+                const rc = ({ Admin: { bg: '#f5f3ff', color: '#7c3aed' }, HR: { bg: '#eff6ff', color: '#2563eb' }, Consultant: { bg: '#f0fdf4', color: '#16a34a' } })[note.role] || { bg: '#f0fdf4', color: '#16a34a' };
+                return (
+                  <div key={note.id} style={{ padding: '14px 20px', borderTop: i > 0 ? '1px solid #f8fafc' : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '7px', flexWrap: 'wrap' }}>
+                      <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                        {note.username?.charAt(0).toUpperCase()}
+                      </div>
+                      <span style={{ fontWeight: '600', fontSize: '12.5px', color: '#0f172a' }}>@{note.username}</span>
+                      <span style={{ background: rc.bg, color: rc.color, padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>{note.role}</span>
+                      {note.franchise_name && <span style={{ color: '#94a3b8', fontSize: '11px' }}>· {note.franchise_name}</span>}
+                      <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: 'auto' }}>
+                        {new Date(note.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6', paddingLeft: '34px', whiteSpace: 'pre-wrap' }}>
+                      {note.note}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Add note */}
+            <div style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', background: '#fafafa', flexShrink: 0 }}>
+              <textarea
+                value={panelNote}
+                onChange={e => setPanelNote(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) postPanelNote(); }}
+                placeholder="Add a note... (Ctrl+Enter to post)"
+                rows={2}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', resize: 'none', boxSizing: 'border-box', color: '#0f172a', outline: 'none', background: 'white' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                <span style={{ color: '#94a3b8', fontSize: '11px' }}>Ctrl+Enter to post</span>
+                <button
+                  onClick={postPanelNote}
+                  disabled={panelPosting || !panelNote.trim()}
+                  style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: panelNote.trim() ? '#0f172a' : '#f1f5f9', color: panelNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: panelNote.trim() ? 'pointer' : 'default', opacity: panelPosting ? 0.7 : 1 }}
+                >
+                  {panelPosting ? 'Posting...' : 'Post Note'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

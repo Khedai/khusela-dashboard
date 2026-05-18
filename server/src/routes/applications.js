@@ -43,7 +43,7 @@ router.get('/', verifyToken, async (req, res) => {
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     let query = `
-      SELECT 
+      SELECT
         a.id, a.date, a.status,
         a.is_med, a.is_dreview, a.is_drr, a.is_3in1, a.is_rent_to,
         a.gross_salary, a.nett_salary, a.total_expenses,
@@ -51,7 +51,8 @@ router.get('/', verifyToken, async (req, res) => {
         a.franchise_id,
         c.first_name, c.last_name, c.cell, c.id_number,
         e.first_name AS consultant_first, e.last_name AS consultant_last,
-        f.franchise_name
+        f.franchise_name,
+        (SELECT COUNT(*)::int FROM application_notes n WHERE n.application_id = a.id) AS note_count
       FROM applications a
       LEFT JOIN clients c ON a.client_id = c.id
       LEFT JOIN employees e ON a.consultant_id = e.id
