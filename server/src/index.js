@@ -15,6 +15,28 @@ if (JWT_SECRET.length < 32) {
 const pool = require('./config/db');
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMPTZ').catch(() => {});
 
+// Create manual leave adjustments table if it doesn't exist
+pool.query(`
+  CREATE TABLE IF NOT EXISTS leave_manual_adjustments (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    leave_type VARCHAR(50) NOT NULL,
+    days DECIMAL(4,1) NOT NULL,
+    description TEXT,
+    year INTEGER NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+  )
+`).catch(() => {});
+
+// Terminate orphaned employees (user account deleted before terminate-on-delete existed)
+pool.query(`
+  UPDATE employees SET terminated_at = NOW(), user_id = NULL
+  WHERE terminated_at IS NULL
+    AND user_id IS NOT NULL
+    AND user_id NOT IN (SELECT id FROM users)
+`).catch(() => {});
+
 const app = express();
 app.set('trust proxy', 1); // Required for Render/Heroku
 

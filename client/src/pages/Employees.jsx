@@ -16,6 +16,9 @@ const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
 const ACCOUNT_TYPES = ['Cheque', 'Savings', 'Transmission'];
 const POSITIONS = ['Administrator', 'Human Resources', 'Consultant', 'Marketing', 'IT', 'Training/Trainee'];
 const CITIES = ['Cape Town', 'Johannesburg', 'Durban', 'Pretoria', 'Port Elizabeth', 'Bloemfontein', 'East London', 'Other'];
+const BANKS = ['ABSA', 'African Bank', 'Bidvest Bank', 'Capitec', 'Discovery Bank', 'FNB', 'Investec', 'Nedbank', 'Standard Bank', 'TymeBank', 'Other'];
+const RELATIONSHIPS = ['Spouse', 'Partner', 'Mother', 'Father', 'Daughter', 'Son', 'Sister', 'Brother', 'Grandmother', 'Grandfather', 'Aunt', 'Uncle', 'Cousin', 'Guardian', 'Friend', 'Other'];
+const LEAVE_TYPES = ['Annual', 'Sick', 'Family Responsibility'];
 const FOLDER_CATEGORIES = [
   { key: 'Identity',             icon: '', color: '#7c3aed', bg: '#f5f3ff' },
   { key: 'Employment Contract',  icon: '', color: '#2563eb', bg: '#eff6ff' },
@@ -61,6 +64,12 @@ export default function Employees() {
 
   const [empLeave, setEmpLeave] = useState(null);
   const [empLeaveLoading, setEmpLeaveLoading] = useState(false);
+
+  const [manualLeaves, setManualLeaves] = useState([]);
+  const [addingManualLeave, setAddingManualLeave] = useState(false);
+  const [manualLeaveForm, setManualLeaveForm] = useState({ leave_type: 'Annual', days: '', description: '' });
+  const [manualLeaveSubmitting, setManualLeaveSubmitting] = useState(false);
+  const [deletingEmployeeId, setDeletingEmployeeId] = useState(null);
 
   const [pastEmployees, setPastEmployees] = useState([]);
   const [pastLoading, setPastLoading] = useState(false);
@@ -125,10 +134,13 @@ export default function Employees() {
     setUploadDocType('');
     setFolderDocs([]);
     setEmpLeave(null);
+    setManualLeaves([]);
+    setAddingManualLeave(false);
     if (user?.role !== 'Consultant') {
       setFolderLoading(true);
       fetchFolderDocs(emp.id);
       fetchEmpLeave(emp.id);
+      if (user?.role === 'Admin') fetchManualLeaves(emp.id);
     }
   };
 
@@ -150,6 +162,53 @@ export default function Employees() {
       setEmpLeave(res.data);
     } catch { /* ignore */ }
     finally { setEmpLeaveLoading(false); }
+  };
+
+  const fetchManualLeaves = async (employeeId) => {
+    try {
+      const res = await api.get(`/leave/manual/${employeeId}`);
+      setManualLeaves(Array.isArray(res.data) ? res.data : []);
+    } catch { /* ignore */ }
+  };
+
+  const handleAddManualLeave = async () => {
+    if (!manualLeaveForm.days || parseFloat(manualLeaveForm.days) <= 0) return;
+    setManualLeaveSubmitting(true);
+    try {
+      await api.post('/leave/manual', {
+        employee_id: selected.id,
+        leave_type: manualLeaveForm.leave_type,
+        days: parseFloat(manualLeaveForm.days),
+        description: manualLeaveForm.description,
+        year: new Date().getFullYear(),
+      });
+      setManualLeaveForm({ leave_type: 'Annual', days: '', description: '' });
+      setAddingManualLeave(false);
+      fetchManualLeaves(selected.id);
+      fetchEmpLeave(selected.id); // refresh balance
+    } catch { /* ignore */ }
+    finally { setManualLeaveSubmitting(false); }
+  };
+
+  const handleDeleteManualLeave = async (id) => {
+    try {
+      await api.delete(`/leave/manual/${id}`);
+      setManualLeaves(prev => prev.filter(m => m.id !== id));
+      fetchEmpLeave(selected.id);
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteEmployee = async (empId) => {
+    if (!window.confirm('Permanently delete this employee record? This cannot be undone.')) return;
+    setDeletingEmployeeId(empId);
+    try {
+      await api.delete(`/employees/${empId}`);
+      setEmployees(prev => prev.filter(e => e.id !== empId));
+      setView('list');
+      setSelected(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete employee.');
+    } finally { setDeletingEmployeeId(null); }
   };
 
   const handleFolderDocDelete = async (docId) => {
@@ -374,7 +433,10 @@ export default function Employees() {
                 <input value={f('ec_last_name')} onChange={set('ec_last_name')} style={S.input} />
               </FormField>
               <FormField label="Relationship">
-                <input value={f('ec_relationship')} onChange={set('ec_relationship')} style={S.input} placeholder="e.g. Spouse, Parent" />
+                <select value={f('ec_relationship')} onChange={set('ec_relationship')} style={S.input}>
+                  <option value="">— Select —</option>
+                  {RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
               </FormField>
               <FormField label="Primary Phone">
                 <input value={f('ec_primary_phone')} onChange={set('ec_primary_phone')} style={S.input} />
@@ -392,7 +454,10 @@ export default function Employees() {
           <FormSection title="Banking Details">
             <FormGrid>
               <FormField label="Bank Name">
-                <input value={f('bank_name')} onChange={set('bank_name')} style={S.input} placeholder="e.g. ABSA, FNB, Nedbank" />
+                <select value={f('bank_name')} onChange={set('bank_name')} style={S.input}>
+                  <option value="">— Select bank —</option>
+                  {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
               </FormField>
               <FormField label="Account Name">
                 <input value={f('account_name')} onChange={set('account_name')} style={S.input} />
@@ -498,13 +563,21 @@ export default function Employees() {
               {selected.title} {selected.first_name} {selected.last_name}
             </h2>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={async () => await generateEmployeeForm(selected)} style={S.ghostBtn}>
               ↓ PDF
             </button>
             {(user?.role === 'Admin' || selected?.user_id === user?.id) && (
               <button onClick={() => openEdit(selected)} style={S.primaryBtn}>
                 Edit Details
+              </button>
+            )}
+            {user?.role === 'Admin' && (
+              <button
+                onClick={() => handleDeleteEmployee(selected.id)}
+                disabled={deletingEmployeeId === selected.id}
+                style={{ background: 'none', border: '1px solid #fecaca', borderRadius: '8px', padding: '9px 14px', color: '#ef4444', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                {deletingEmployeeId === selected.id ? 'Deleting...' : 'Delete'}
               </button>
             )}
           </div>
@@ -605,6 +678,67 @@ export default function Employees() {
                   )) : (
                     <p style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '12px', margin: 0, fontStyle: 'italic' }}>No leave requests on record.</p>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── PAST LEAVE RECORDS ── */}
+          {user?.role === 'Admin' && (
+            <div style={{ marginTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 2px' }}>Past Leave Records</h3>
+                  <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Manual adjustments — deducted from current year balance</p>
+                </div>
+                <button
+                  onClick={() => setAddingManualLeave(v => !v)}
+                  style={{ background: addingManualLeave ? '#f1f5f9' : 'linear-gradient(135deg,#6366f1,#4f46e5)', border: 'none', borderRadius: '8px', padding: '7px 14px', color: addingManualLeave ? '#64748b' : 'white', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                  {addingManualLeave ? '✕ Cancel' : '+ Add Entry'}
+                </button>
+              </div>
+
+              {addingManualLeave && (
+                <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e4e8f0', padding: '16px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>Leave Type</label>
+                      <select value={manualLeaveForm.leave_type} onChange={e => setManualLeaveForm(p => ({ ...p, leave_type: e.target.value }))} style={S.input}>
+                        {LEAVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>Days Taken</label>
+                      <input type="number" min="0.5" step="0.5" value={manualLeaveForm.days} onChange={e => setManualLeaveForm(p => ({ ...p, days: e.target.value }))} placeholder="e.g. 3" style={S.input} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>Description</label>
+                      <input value={manualLeaveForm.description} onChange={e => setManualLeaveForm(p => ({ ...p, description: e.target.value }))} placeholder="e.g. Taken Jan 2025" style={S.input} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={handleAddManualLeave} disabled={manualLeaveSubmitting || !manualLeaveForm.days} style={{ ...S.primaryBtn, opacity: (!manualLeaveForm.days || manualLeaveSubmitting) ? 0.6 : 1 }}>
+                      {manualLeaveSubmitting ? 'Saving...' : 'Save Entry'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {manualLeaves.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>No past leave entries recorded.</p>
+              ) : (
+                <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e4e8f0', overflow: 'hidden' }}>
+                  {manualLeaves.map((m, i) => (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', padding: '11px 16px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none', gap: '12px' }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{m.leave_type}</span>
+                        <span style={{ color: '#ef4444', fontSize: '13px', fontWeight: '700', marginLeft: '8px' }}>−{m.days}d</span>
+                        {m.description && <span style={{ color: '#94a3b8', fontSize: '12px', marginLeft: '8px' }}>{m.description}</span>}
+                      </div>
+                      <span style={{ color: '#94a3b8', fontSize: '11px' }}>{m.year} · {m.created_by_username}</span>
+                      <button onClick={() => handleDeleteManualLeave(m.id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Remove</button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -931,6 +1065,12 @@ export default function Employees() {
                         <button onClick={() => openEdit(emp)}
                           style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
                           Edit
+                        </button>
+                      )}
+                      {user?.role === 'Admin' && (
+                        <button onClick={() => handleDeleteEmployee(emp.id)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+                          Delete
                         </button>
                       )}
                     </div>

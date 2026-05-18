@@ -5,6 +5,25 @@ const { sanitize } = require('../utils/sanitize');
 
 router.use(verifyToken);
 
+// ─── HELPER: merge manual adjustments into balance ───────
+async function withManualAdjustments(balance, employeeId, year) {
+  const manual = await pool.query(
+    `SELECT leave_type, SUM(days)::float AS total
+     FROM leave_manual_adjustments
+     WHERE employee_id = $1 AND year = $2
+     GROUP BY leave_type`,
+    [employeeId, year]
+  );
+  const adj = {};
+  for (const r of manual.rows) adj[r.leave_type] = r.total;
+  return {
+    ...balance,
+    annual_used:  (balance.annual_used  || 0) + (adj['Annual']               || 0),
+    sick_used:    (balance.sick_used    || 0) + (adj['Sick']                  || 0),
+    family_used:  (balance.family_used  || 0) + (adj['Family Responsibility'] || 0),
+  };
+}
+
 // ─── GET LEAVE BALANCE FOR EMPLOYEE ──────────────────────
 router.get('/balance/:employee_id', async (req, res) => {
   const year = new Date().getFullYear();
@@ -13,15 +32,13 @@ router.get('/balance/:employee_id', async (req, res) => {
       'SELECT * FROM leave_balances WHERE employee_id = $1 AND year = $2',
       [req.params.employee_id, year]
     );
-    // Auto-create balance record if it doesn't exist
     if (result.rows.length === 0) {
       result = await pool.query(
-        `INSERT INTO leave_balances (employee_id, year)
-         VALUES ($1, $2) RETURNING *`,
+        `INSERT INTO leave_balances (employee_id, year) VALUES ($1, $2) RETURNING *`,
         [req.params.employee_id, year]
       );
     }
-    res.json(result.rows[0]);
+    res.json(await withManualAdjustments(result.rows[0], req.params.employee_id, year));
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch balance.' });
@@ -72,7 +89,16 @@ router.get('/employee/:employee_id', verifyToken, requireRole('Admin', 'HR'), as
        ORDER BY lr.created_at DESC`,
       [req.params.employee_id]
     );
-    res.json({ balance: balResult.rows[0], requests: reqResult.rows });
+    const manualResult = await pool.query(
+      `SELECT lma.*, u.username AS created_by_username
+       FROM leave_manual_adjustments lma
+       LEFT JOIN users u ON lma.created_by = u.id
+       WHERE lma.employee_id = $1
+       ORDER BY lma.created_at DESC`,
+      [req.params.employee_id]
+    );
+    const balance = await withManualAdjustments(balResult.rows[0], req.params.employee_id, year);
+    res.json({ balance, requests: reqResult.rows, manualAdjustments: manualResult.rows });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to fetch employee leave.' });
@@ -271,6 +297,57 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to update request.' });
+  }
+});
+
+// ─── GET MANUAL ADJUSTMENTS FOR EMPLOYEE ─────────────────
+router.get('/manual/:employee_id', verifyToken, requireRole('Admin'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT lma.*, u.username AS created_by_username
+       FROM leave_manual_adjustments lma
+       LEFT JOIN users u ON lma.created_by = u.id
+       WHERE lma.employee_id = $1
+       ORDER BY lma.created_at DESC`,
+      [req.params.employee_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch manual adjustments.' });
+  }
+});
+
+// ─── ADD MANUAL ADJUSTMENT (Admin only) ──────────────────
+router.post('/manual', verifyToken, requireRole('Admin'), async (req, res) => {
+  const { employee_id, leave_type, days, description, year } = req.body;
+  if (!employee_id || !leave_type || !days) {
+    return res.status(400).json({ error: 'Employee, leave type and days are required.' });
+  }
+  const validTypes = ['Annual', 'Sick', 'Family Responsibility'];
+  if (!validTypes.includes(leave_type)) {
+    return res.status(400).json({ error: 'Invalid leave type.' });
+  }
+  const adjYear = year || new Date().getFullYear();
+  try {
+    const result = await pool.query(
+      `INSERT INTO leave_manual_adjustments (employee_id, leave_type, days, description, year, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [employee_id, leave_type, parseFloat(days), sanitize(description) || null, adjYear, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to add manual adjustment.' });
+  }
+});
+
+// ─── DELETE MANUAL ADJUSTMENT (Admin only) ───────────────
+router.delete('/manual/:id', verifyToken, requireRole('Admin'), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM leave_manual_adjustments WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Deleted.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete manual adjustment.' });
   }
 });
 
