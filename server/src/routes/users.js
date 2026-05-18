@@ -6,6 +6,8 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 router.use(verifyToken);
 router.use(requireRole('Admin'));
 
+const SUPERUSER = 'Ayabonga'; // only this account can promote/demote to Admin
+
 // ─── GET ALL USERS ────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
@@ -34,6 +36,10 @@ router.post('/', async (req, res) => {
   const validRoles = ['Admin', 'HR', 'Consultant'];
   if (!validRoles.includes(role)) {
     return res.status(400).json({ error: 'Invalid role.' });
+  }
+
+  if (role === 'Admin' && req.user.username !== SUPERUSER) {
+    return res.status(403).json({ error: 'Only Ayabonga can create Admin accounts.' });
   }
 
   if (password.length < 10 || !/[0-9!@#$%^&*]/.test(password)) {
@@ -117,21 +123,54 @@ router.patch('/:id/password', async (req, res) => {
   }
 });
 
-// ─── PROMOTE TO ADMIN ────────────────────────────────────
+// ─── PROMOTE TO ADMIN (Ayabonga only) ────────────────────
 router.patch('/:id/promote', async (req, res) => {
+  if (req.user.username !== SUPERUSER) {
+    return res.status(403).json({ error: 'Only Ayabonga can promote users to Admin.' });
+  }
   try {
     const result = await pool.query(
-      `UPDATE users SET role = 'Admin' WHERE id = $1 AND role = 'HR'
+      `UPDATE users SET role = 'Admin' WHERE id = $1 AND role != 'Admin'
        RETURNING id, username, role`,
       [req.params.id]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'HR user not found.' });
+      return res.status(404).json({ error: 'User not found or already Admin.' });
     }
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Promote user error:', err.message);
     res.status(500).json({ error: 'Failed to promote user.' });
+  }
+});
+
+// ─── DEMOTE FROM ADMIN (Ayabonga only) ───────────────────
+router.patch('/:id/demote', async (req, res) => {
+  if (req.user.username !== SUPERUSER) {
+    return res.status(403).json({ error: 'Only Ayabonga can demote Admin users.' });
+  }
+  try {
+    // Cannot demote yourself
+    if (req.params.id == req.user.id) {
+      return res.status(403).json({ error: 'You cannot demote yourself.' });
+    }
+    // Cannot demote the superuser account
+    const target = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id]);
+    if (target.rows[0]?.username === SUPERUSER) {
+      return res.status(403).json({ error: 'The superuser account cannot be demoted.' });
+    }
+    const result = await pool.query(
+      `UPDATE users SET role = 'HR' WHERE id = $1 AND role = 'Admin'
+       RETURNING id, username, role`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin user not found.' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Demote user error:', err.message);
+    res.status(500).json({ error: 'Failed to demote user.' });
   }
 });
 

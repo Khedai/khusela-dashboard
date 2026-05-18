@@ -23,7 +23,9 @@ export default function Users() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [resettingId, setResettingId] = useState(null);
   const [promotingId, setPromotingId] = useState(null);
+  const [demotingId, setDemotingId] = useState(null);
   const [creating, setCreating] = useState(false);
+  const isSuperuser = user?.username === 'Ayabonga';
   const [showPassword, setShowPassword] = useState(false);
 
   const [form, setForm] = useState({
@@ -103,7 +105,7 @@ export default function Users() {
   };
 
   const handlePromote = async (u) => {
-    if (!window.confirm(`Promote @${u.username} from HR to Admin? This gives them full management access.`)) return;
+    if (!window.confirm(`Promote @${u.username} to Admin? This gives them full management access.`)) return;
     setPromotingId(u.id); setError(''); setSuccess('');
     try {
       await api.patch(`/users/${u.id}/promote`);
@@ -112,6 +114,18 @@ export default function Users() {
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to promote user.');
     } finally { setPromotingId(null); }
+  };
+
+  const handleDemote = async (u) => {
+    if (!window.confirm(`Demote @${u.username} from Admin to HR? They will lose full management access.`)) return;
+    setDemotingId(u.id); setError(''); setSuccess('');
+    try {
+      await api.patch(`/users/${u.id}/demote`);
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: 'HR' } : x));
+      setSuccess(`@${u.username} has been demoted to HR.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to demote user.');
+    } finally { setDemotingId(null); }
   };
 
   const handleResetPassword = async (u) => {
@@ -195,7 +209,7 @@ export default function Users() {
               Role *
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
-              {ROLES.map(r => (
+              {ROLES.filter(r => r !== 'Admin' || isSuperuser).map(r => (
                 <button key={r} onClick={() => setForm(p => ({ ...p, role: r }))}
                   style={{
                     flex: 1, padding: '10px', borderRadius: '8px',
@@ -352,10 +366,16 @@ export default function Users() {
                   </button>
                   {u.id !== user?.id && (
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      {u.role === 'HR' && (
+                      {isSuperuser && u.role !== 'Admin' && (
                         <button onClick={() => handlePromote(u)} disabled={promotingId === u.id}
                           style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {promotingId === u.id ? '...' : '↑ Promote to Admin'}
+                          {promotingId === u.id ? '...' : '↑ Make Admin'}
+                        </button>
+                      )}
+                      {isSuperuser && u.role === 'Admin' && !PROTECTED.includes(u.username) && (
+                        <button onClick={() => handleDemote(u)} disabled={demotingId === u.id}
+                          style={{ background: 'none', border: 'none', color: '#d97706', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                          {demotingId === u.id ? '...' : '↓ Demote to HR'}
                         </button>
                       )}
                       <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
@@ -434,10 +454,16 @@ export default function Users() {
                       </button>
                       {u.id !== user?.id && (
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                          {u.role === 'HR' && (
+                          {isSuperuser && u.role !== 'Admin' && (
                             <button onClick={() => handlePromote(u)} disabled={promotingId === u.id}
                               style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                              {promotingId === u.id ? '...' : '↑ Promote to Admin'}
+                              {promotingId === u.id ? '...' : '↑ Make Admin'}
+                            </button>
+                          )}
+                          {isSuperuser && u.role === 'Admin' && !PROTECTED.includes(u.username) && (
+                            <button onClick={() => handleDemote(u)} disabled={demotingId === u.id}
+                              style={{ background: 'none', border: 'none', color: '#d97706', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                              {demotingId === u.id ? '...' : '↓ Demote to HR'}
                             </button>
                           )}
                           <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
