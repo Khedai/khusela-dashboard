@@ -573,40 +573,6 @@ router.patch('/:id/status', requireRole('Admin', 'HR'), async (req, res) => {
   }
 });
 
-// ─── MANDATE STATUS UPDATE (Admin/HR only) ───────────────
-router.patch('/:id/mandate', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
-  const { mandate_status } = req.body;
-  const validStatuses = ['Pending', 'Uploaded', 'Verified'];
-
-  if (!validStatuses.includes(mandate_status)) {
-    return res.status(400).json({ error: 'Invalid mandate status.' });
-  }
-
-  try {
-    const result = await pool.query(
-      `UPDATE applications 
-       SET mandate_status = $1,
-           mandate_signed = $2,
-           mandate_signed_date = $3
-       WHERE id = $4 RETURNING *`,
-      [
-        mandate_status,
-        mandate_status === 'Verified',
-        mandate_status === 'Verified' ? new Date() : null,
-        req.params.id,
-      ]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Application not found.' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Failed to update mandate status.' });
-  }
-});
 
 // ─── DELETE APPLICATION ───────────────────────────────────
 router.delete('/:id', requireRole('Admin'), async (req, res) => {

@@ -19,7 +19,7 @@ export const can = (user, action) => {
     // Leave
     'leave.apply':               ['HR', 'Consultant'],
     'leave.approve':             ['Admin'],
-    'leave.viewAll':             ['Admin'],
+    'leave.viewAll':             ['Admin', 'HR'],
 
     // Messaging
     'messages.send':             ['Admin', 'HR', 'Consultant'],
@@ -29,7 +29,7 @@ export const can = (user, action) => {
     'users.manage':              ['Admin'],
 
     // Franchises
-    'franchises.view':           ['Admin', 'HR', 'Consultant'],
+    'franchises.view':           ['Admin', 'HR'],
     'franchises.create':         ['Admin'],
     'franchises.edit':           ['Admin'],
     'franchises.delete':         ['Admin'],

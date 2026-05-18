@@ -34,7 +34,7 @@ const NAV_ITEMS = [
 
 const ADMIN_ITEMS = [
   { to: '/users', label: 'User Management' },
-  { to: '/franchises', label: 'Franchises' },
+  { to: '/franchises', label: 'Franchises', roles: ['Admin', 'HR'] },
 ];
 
 const ROLE_COLOR = {
@@ -203,7 +203,7 @@ function SidebarContent({ user, onNavigate }) {
           />
         ))}
 
-        {user?.role === 'Admin' && (
+        {(user?.role === 'Admin' || user?.role === 'HR') && (
           <>
             <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '12px 2px 10px' }} />
             <p style={{
@@ -213,7 +213,7 @@ function SidebarContent({ user, onNavigate }) {
             }}>
               Admin
             </p>
-            {ADMIN_ITEMS.map(item => (
+            {ADMIN_ITEMS.filter(i => !i.roles || i.roles.includes(user?.role)).map(item => (
               <NavItem key={item.to} to={item.to} label={item.label} onNavigate={onNavigate} badge={0} />
             ))}
           </>

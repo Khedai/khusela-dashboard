@@ -55,7 +55,7 @@ export default function Franchises() {
     <div style={{ maxWidth: '1000px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={S.pageTitle}>Franchises</h2>
-        {(user?.role === 'Admin' || user?.role === 'HR') && (
+        {user?.role === 'Admin' && (
           <button
             onClick={() => { setShowForm(!showForm); setEditing(null); setForm({ franchise_name: '', location: '' }); setError(''); setSuccess(''); }}
             style={S.primaryBtn}>
@@ -117,7 +117,7 @@ export default function Franchises() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
-                {(user?.role === 'Admin' || user?.role === 'HR') && (
+                {user?.role === 'Admin' && (
                   <button onClick={() => handleEdit(f)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>Edit</button>
                 )}
                 {user?.role === 'Admin' && (
