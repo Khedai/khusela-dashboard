@@ -47,7 +47,7 @@ router.get('/', verifyToken, async (req, res) => {
     const countResult = await pool.query(countQuery.split('ORDER')[0], params);
     const total = parseInt(countResult.rows[0].count);
 
-    query += ` ORDER BY e.created_at DESC`;
+    query += ` ORDER BY e.job_title NULLS LAST, e.first_name ASC`;
 
     // Add pagination to main query
     query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;

@@ -811,20 +811,39 @@ export default function Employees() {
           />
         ) : isMobile ? (
           <div>
-            {filtered.map((emp, i) => (
-              <div key={emp.id} onClick={() => openDetail(emp)}
-                style={{ padding: '14px 18px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                  <span style={{ fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>
-                    {emp.first_name} {emp.last_name}
-                  </span>
-                  <span style={{ color: '#2563eb', fontSize: '12px', fontWeight: '600' }}>View</span>
+            {filtered.reduce((rows, emp, i) => {
+              const prev = filtered[i - 1];
+              const dept = emp.job_title || 'No Position';
+              const prevDept = prev?.job_title || 'No Position';
+              if (i === 0 || dept !== prevDept) {
+                rows.push(
+                  <div key={`dept-${dept}`} style={{
+                    padding: '6px 18px 5px',
+                    background: '#f8fafc',
+                    borderTop: i === 0 ? 'none' : '2px solid #e4e8f0',
+                    fontSize: '10px', fontWeight: '700', color: '#94a3b8',
+                    textTransform: 'uppercase', letterSpacing: '0.1em',
+                  }}>
+                    {dept}
+                  </div>
+                );
+              }
+              rows.push(
+                <div key={emp.id} onClick={() => openDetail(emp)}
+                  style={{ padding: '14px 18px', borderTop: '1px solid #f1f5f9', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <span style={{ fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>
+                      {emp.first_name} {emp.last_name}
+                    </span>
+                    <span style={{ color: '#6366f1', fontSize: '12px', fontWeight: '600' }}>View</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                    {emp.franchise_name || 'No branch'}
+                  </p>
                 </div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                  {emp.job_title || 'No title'} · {emp.franchise_name || 'No branch'}
-                </p>
-              </div>
-            ))}
+              );
+              return rows;
+            }, [])}
           </div>
         ) : (
           <>
@@ -841,7 +860,26 @@ export default function Employees() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(emp => (
+              {filtered.reduce((rows, emp, i) => {
+                const prev = filtered[i - 1];
+                const dept = emp.job_title || 'No Position';
+                const prevDept = prev?.job_title || 'No Position';
+                if (i === 0 || dept !== prevDept) {
+                  rows.push(
+                    <tr key={`dept-${dept}`}>
+                      <td colSpan={user?.role !== 'Consultant' ? 6 : 5} style={{
+                        padding: '8px 22px 6px',
+                        background: '#f8fafc',
+                        borderTop: i === 0 ? 'none' : '2px solid #e4e8f0',
+                        fontSize: '10px', fontWeight: '700', color: '#94a3b8',
+                        textTransform: 'uppercase', letterSpacing: '0.1em',
+                      }}>
+                        {dept}
+                      </td>
+                    </tr>
+                  );
+                }
+                rows.push(
                 <tr key={emp.id} className="table-row" style={{ borderTop: '1px solid #f1f5f9' }}>
                   <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>
                     {emp.first_name} {emp.last_name}
@@ -881,7 +919,9 @@ export default function Employees() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+                return rows;
+              }, [])}
               </tbody>
             </table>
             {pagination && (
