@@ -61,6 +61,16 @@ export default function Leave() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [leaveDocs, setLeaveDocs] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+
+  // Leave request notes (comment thread)
+  const [reqNotes, setReqNotes] = useState([]);
+  const [reqNotesLoading, setReqNotesLoading] = useState(false);
+  const [newReqNote, setNewReqNote] = useState('');
+  const [postingReqNote, setPostingReqNote] = useState(false);
+  const [deletingReqNoteId, setDeletingReqNoteId] = useState(null);
+
+  // Employee balance shown to Admin when reviewing a request
+  const [reqBalance, setReqBalance] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const LIMIT = 20;
@@ -152,14 +162,45 @@ export default function Leave() {
 
   const openLeaveDetail = async (req) => {
     setSelectedRequest(req);
-    setLoadingDocs(true);
+    setReqNotes([]); setNewReqNote(''); setReqBalance(null);
+    setLoadingDocs(true); setReqNotesLoading(true);
     try {
-      const res = await api.get(`/documents/leave/${req.id}`);
-      setLeaveDocs(Array.isArray(res.data) ? res.data : []);
+      const [docsRes, notesRes] = await Promise.all([
+        api.get(`/documents/leave/${req.id}`),
+        api.get(`/leave/request/${req.id}/notes`),
+      ]);
+      setLeaveDocs(Array.isArray(docsRes.data) ? docsRes.data : []);
+      setReqNotes(Array.isArray(notesRes.data) ? notesRes.data : []);
     } catch { /* ignore */ }
-    finally {
-      setLoadingDocs(false);
+    finally { setLoadingDocs(false); setReqNotesLoading(false); }
+
+    // Admin: also pull the employee's current leave balance
+    if (isManager && req.employee_id) {
+      try {
+        const balRes = await api.get(`/leave/balance/${req.employee_id}`);
+        setReqBalance(balRes.data);
+      } catch { /* ignore */ }
     }
+  };
+
+  const postReqNote = async () => {
+    if (!newReqNote.trim() || postingReqNote || !selectedRequest) return;
+    setPostingReqNote(true);
+    try {
+      const res = await api.post(`/leave/request/${selectedRequest.id}/notes`, { note: newReqNote.trim() });
+      setReqNotes(prev => [...prev, res.data]);
+      setNewReqNote('');
+    } catch { /* ignore */ }
+    finally { setPostingReqNote(false); }
+  };
+
+  const deleteReqNote = async (noteId) => {
+    setDeletingReqNoteId(noteId);
+    try {
+      await api.delete(`/leave/request/${selectedRequest.id}/notes/${noteId}`);
+      setReqNotes(prev => prev.filter(n => n.id !== noteId));
+    } catch { /* ignore */ }
+    finally { setDeletingReqNoteId(null); }
   };
 
   const handleLeaveDocDelete = async (docId) => {
@@ -296,6 +337,40 @@ export default function Leave() {
             </div>
           )}
         </div>
+
+        {/* Leave Balance (Admin only) */}
+        {isManager && reqBalance && (
+          <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+              <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
+                {selectedRequest.first_name}'s Leave Balance
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8' }}>{new Date().getFullYear()} · remaining days</p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              {[
+                { label: 'Annual', total: reqBalance.annual_total, used: reqBalance.annual_used, color: '#2563eb' },
+                { label: 'Sick', total: reqBalance.sick_total, used: reqBalance.sick_used, color: '#0891b2' },
+                { label: 'Family Resp.', total: reqBalance.family_total, used: reqBalance.family_used, color: '#16a34a' },
+              ].map((b, i) => {
+                const remaining = (b.total || 0) - (b.used || 0);
+                const pct = b.total ? Math.min(((b.used || 0) / b.total) * 100, 100) : 0;
+                return (
+                  <div key={b.label} style={{ padding: '14px 16px', borderRight: i < 2 ? '1px solid #f1f5f9' : 'none' }}>
+                    <p style={{ margin: '0 0 6px', fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{b.label}</p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', marginBottom: '6px' }}>
+                      <span style={{ fontFamily: 'Sora', fontSize: '22px', fontWeight: '700', color: remaining <= 0 ? '#dc2626' : '#0f172a', lineHeight: 1 }}>{remaining}</span>
+                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>/ {b.total}</span>
+                    </div>
+                    <div style={{ height: '3px', borderRadius: '2px', background: '#f1f5f9', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: '2px', background: remaining <= 0 ? '#dc2626' : b.color, width: `${pct}%`, transition: 'width 0.3s' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Supporting Documents */}
         <div
@@ -496,6 +571,72 @@ export default function Leave() {
             </div>
           </div>
         )}
+
+        {/* ── Notes / Comments ── */}
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px' }}>Comments</h3>
+              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Internal notes visible to HR and Admin</p>
+            </div>
+            {reqNotes.length > 0 && (
+              <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '20px', fontSize: '11px', fontWeight: '700', padding: '2px 9px' }}>
+                {reqNotes.length}
+              </span>
+            )}
+          </div>
+
+          {/* Add comment */}
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f8fafc' }}>
+            <textarea
+              value={newReqNote}
+              onChange={e => setNewReqNote(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) postReqNote(); }}
+              placeholder="Add a comment... (Ctrl+Enter to post)"
+              rows={2}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', resize: 'none', boxSizing: 'border-box', color: '#0f172a', outline: 'none' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button onClick={postReqNote} disabled={postingReqNote || !newReqNote.trim()}
+                style={{ padding: '6px 16px', borderRadius: '8px', border: 'none', background: newReqNote.trim() ? '#0f172a' : '#f1f5f9', color: newReqNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: newReqNote.trim() ? 'pointer' : 'default', opacity: postingReqNote ? 0.7 : 1 }}>
+                {postingReqNote ? 'Posting...' : 'Post'}
+              </button>
+            </div>
+          </div>
+
+          {/* Comments list */}
+          {reqNotesLoading ? (
+            <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0, textAlign: 'center' }}>Loading...</p>
+          ) : reqNotes.length === 0 ? (
+            <p style={{ padding: '20px', color: '#94a3b8', fontSize: '12.5px', margin: 0, textAlign: 'center', fontStyle: 'italic' }}>No comments yet.</p>
+          ) : reqNotes.map((note) => {
+            const rc = ({ Admin: { bg: '#f5f3ff', color: '#7c3aed' }, HR: { bg: '#eff6ff', color: '#2563eb' }, Consultant: { bg: '#f0fdf4', color: '#16a34a' } })[note.role] || { bg: '#f1f5f9', color: '#64748b' };
+            const isOwn = note.username === user?.username;
+            return (
+              <div key={note.id} style={{ padding: '12px 20px', borderTop: '1px solid #f8fafc', background: isOwn ? '#fafbff' : 'white' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                    {note.username?.charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{ fontWeight: '600', fontSize: '12.5px', color: '#0f172a' }}>@{note.username}</span>
+                  <span style={{ background: rc.bg, color: rc.color, padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>{note.role}</span>
+                  <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: 'auto' }}>
+                    {new Date(note.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {(isOwn || user?.role === 'Admin') && (
+                    <button onClick={() => deleteReqNote(note.id)} disabled={deletingReqNoteId === note.id}
+                      style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0, fontSize: '14px', lineHeight: 1 }}
+                      onMouseEnter={e => e.target.style.color = '#dc2626'}
+                      onMouseLeave={e => e.target.style.color = '#cbd5e1'}>
+                      {deletingReqNoteId === note.id ? '...' : '×'}
+                    </button>
+                  )}
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6', paddingLeft: '34px', whiteSpace: 'pre-wrap' }}>{note.note}</p>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }

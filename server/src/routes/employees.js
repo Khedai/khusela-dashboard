@@ -361,4 +361,56 @@ router.patch('/:id/link-user', requireRole('Admin', 'HR'), async (req, res) => {
   }
 });
 
+// ─── WRITTEN WARNINGS ────────────────────────────────────
+
+router.get('/:id/warnings', requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT w.*, u.username AS issued_by_username
+       FROM written_warnings w
+       LEFT JOIN users u ON w.issued_by = u.id
+       WHERE w.employee_id = $1
+       ORDER BY COALESCE(w.issued_date, w.created_at::date) DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch warnings.' });
+  }
+});
+
+router.post('/:id/warnings', requireRole('Admin', 'HR'), async (req, res) => {
+  const { warning_type, reason, issued_date, notes } = req.body;
+  if (!reason?.trim()) return res.status(400).json({ error: 'Reason is required.' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO written_warnings (employee_id, warning_type, reason, issued_date, notes, issued_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [
+        req.params.id,
+        warning_type || 'Written Warning',
+        sanitize(reason),
+        issued_date || null,
+        notes?.trim() ? sanitize(notes) : null,
+        req.user.id
+      ]
+    );
+    res.status(201).json({ ...result.rows[0], issued_by_username: req.user.username });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create warning.' });
+  }
+});
+
+router.delete('/:id/warnings/:warnId', requireRole('Admin'), async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM written_warnings WHERE id = $1 AND employee_id = $2',
+      [req.params.warnId, req.params.id]
+    );
+    res.json({ message: 'Deleted.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete warning.' });
+  }
+});
+
 module.exports = router;

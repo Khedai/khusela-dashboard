@@ -351,4 +351,56 @@ router.delete('/manual/:id', verifyToken, requireRole('Admin'), async (req, res)
   }
 });
 
+// ─── LEAVE REQUEST NOTES (comments thread) ───────────────
+
+router.get('/request/:id/notes', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT n.id, n.note, n.created_at,
+              u.username, u.role,
+              f.franchise_name
+       FROM leave_request_notes n
+       LEFT JOIN users u ON n.user_id = u.id
+       LEFT JOIN franchises f ON u.franchise_id = f.id
+       WHERE n.leave_request_id = $1
+       ORDER BY n.created_at ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch notes.' });
+  }
+});
+
+router.post('/request/:id/notes', async (req, res) => {
+  const { note } = req.body;
+  if (!note?.trim()) return res.status(400).json({ error: 'Note cannot be empty.' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO leave_request_notes (leave_request_id, user_id, note)
+       VALUES ($1, $2, $3) RETURNING id, note, created_at`,
+      [req.params.id, req.user.id, note.trim()]
+    );
+    res.status(201).json({ ...result.rows[0], username: req.user.username, role: req.user.role });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add note.' });
+  }
+});
+
+router.delete('/request/:id/notes/:noteId', async (req, res) => {
+  try {
+    const check = await pool.query(
+      'SELECT user_id FROM leave_request_notes WHERE id = $1',
+      [req.params.noteId]
+    );
+    if (!check.rows.length) return res.status(404).json({ error: 'Note not found.' });
+    if (req.user.role !== 'Admin' && check.rows[0].user_id !== req.user.id)
+      return res.status(403).json({ error: 'Cannot delete this note.' });
+    await pool.query('DELETE FROM leave_request_notes WHERE id = $1', [req.params.noteId]);
+    res.json({ message: 'Deleted.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete note.' });
+  }
+});
+
 module.exports = router;

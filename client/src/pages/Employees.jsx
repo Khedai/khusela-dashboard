@@ -73,6 +73,24 @@ export default function Employees() {
   const [deletingEmployeeId, setDeletingEmployeeId] = useState(null);
   const [confirmDeleteEmpId, setConfirmDeleteEmpId] = useState(null);
 
+  // Written warnings
+  const [warnings, setWarnings] = useState([]);
+  const [warningsLoading, setWarningsLoading] = useState(false);
+  const [showWarnForm, setShowWarnForm] = useState(false);
+  const [warnForm, setWarnForm] = useState({ warning_type: 'Written Warning', reason: '', issued_date: '', notes: '' });
+  const [savingWarn, setSavingWarn] = useState(false);
+  const [deletingWarnId, setDeletingWarnId] = useState(null);
+
+  // Add employee form
+  const EMPTY_ADD = { first_name: '', last_name: '', job_title: '', email: '', home_phone: '', birth_date: '', franchise_id: '' };
+  const [addForm, setAddForm] = useState(EMPTY_ADD);
+  const [addSaving, setAddSaving] = useState(false);
+
+  // Birthday calendar
+  const [bdayView, setBdayView] = useState(false);
+  const [bdayYear, setBdayYear]   = useState(new Date().getFullYear());
+  const [bdayMonth, setBdayMonth] = useState(new Date().getMonth());
+
   const [pastEmployees, setPastEmployees] = useState([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [showPast, setShowPast] = useState(false);
@@ -138,12 +156,64 @@ export default function Employees() {
     setEmpLeave(null);
     setManualLeaves([]);
     setAddingManualLeave(false);
+    setWarnings([]); setShowWarnForm(false);
+    setWarnForm({ warning_type: 'Written Warning', reason: '', issued_date: '', notes: '' });
     if (user?.role !== 'Consultant') {
       setFolderLoading(true);
       fetchFolderDocs(emp.id);
       fetchEmpLeave(emp.id);
       if (user?.role === 'Admin') fetchManualLeaves(emp.id);
+      if (user?.role === 'Admin' || user?.role === 'HR') fetchWarnings(emp.id);
     }
+  };
+
+  const fetchWarnings = async (empId) => {
+    setWarningsLoading(true);
+    try {
+      const res = await api.get(`/employees/${empId}/warnings`);
+      setWarnings(Array.isArray(res.data) ? res.data : []);
+    } catch { /* ignore */ }
+    finally { setWarningsLoading(false); }
+  };
+
+  const handleSaveWarning = async () => {
+    if (!warnForm.reason.trim() || savingWarn) return;
+    setSavingWarn(true);
+    try {
+      const res = await api.post(`/employees/${selected.id}/warnings`, warnForm);
+      setWarnings(prev => [res.data, ...prev]);
+      setShowWarnForm(false);
+      setWarnForm({ warning_type: 'Written Warning', reason: '', issued_date: '', notes: '' });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save warning.');
+    } finally { setSavingWarn(false); }
+  };
+
+  const handleDeleteWarning = async (warnId) => {
+    setDeletingWarnId(warnId);
+    try {
+      await api.delete(`/employees/${selected.id}/warnings/${warnId}`);
+      setWarnings(prev => prev.filter(w => w.id !== warnId));
+    } catch { /* ignore */ }
+    finally { setDeletingWarnId(null); }
+  };
+
+  const handleAddEmployee = async () => {
+    if (!addForm.first_name.trim() || !addForm.last_name.trim()) {
+      setError('First name and last name are required.');
+      return;
+    }
+    setAddSaving(true); setError('');
+    try {
+      const payload = { ...addForm, franchise_id: addForm.franchise_id || user?.franchise_id || undefined };
+      const res = await api.post('/employees', payload);
+      setEmployees(prev => [res.data, ...prev]);
+      setView('list');
+      setAddForm(EMPTY_ADD);
+      setSuccess('Employee added successfully.');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to add employee.');
+    } finally { setAddSaving(false); }
   };
 
   const fetchFolderDocs = async (employeeId) => {
@@ -519,6 +589,93 @@ export default function Employees() {
             style={{ ...S.primaryBtn, opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ADD EMPLOYEE VIEW ──────────────────────────────────
+  if (view === 'add') {
+    return (
+      <div style={{ maxWidth: '600px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => { setView('list'); setError(''); setAddForm(EMPTY_ADD); }}
+              style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+              ← Back
+            </button>
+            <h2 style={{ ...S.pageTitle, margin: 0 }}>Add Employee</h2>
+          </div>
+          <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>No user account required — you can link one later</p>
+        </div>
+
+        {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'visible' }}>
+          <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+            <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Basic Details</p>
+          </div>
+          <div style={{ padding: '22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            {/* Required fields */}
+            <div>
+              <label style={{ display: 'block', color: '#dc2626', fontSize: '12px', marginBottom: '5px' }}>First Name *</label>
+              <input value={addForm.first_name} onChange={e => setAddForm(p => ({ ...p, first_name: e.target.value }))}
+                placeholder="First name" style={S.input} />
+            </div>
+            <div>
+              <label style={{ display: 'block', color: '#dc2626', fontSize: '12px', marginBottom: '5px' }}>Last Name *</label>
+              <input value={addForm.last_name} onChange={e => setAddForm(p => ({ ...p, last_name: e.target.value }))}
+                placeholder="Last name" style={S.input} />
+            </div>
+
+            {/* Optional fields */}
+            <div>
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Position</label>
+              <select value={addForm.job_title} onChange={e => setAddForm(p => ({ ...p, job_title: e.target.value }))} style={S.input}>
+                <option value="">— Select —</option>
+                {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Email</label>
+              <input type="email" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))}
+                placeholder="email@example.com" style={S.input} />
+            </div>
+            <div>
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Cell / Phone</label>
+              <input value={addForm.home_phone} onChange={e => setAddForm(p => ({ ...p, home_phone: e.target.value }))}
+                placeholder="0821234567" style={S.input} />
+            </div>
+            <div>
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Date of Birth</label>
+              <DatePicker value={addForm.birth_date} onChange={v => setAddForm(p => ({ ...p, birth_date: v }))} />
+            </div>
+
+            {/* Franchise — Admin can pick, others locked to their own */}
+            {user?.role === 'Admin' && franchises.length > 0 && (
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Branch / Franchise</label>
+                <select value={addForm.franchise_id} onChange={e => setAddForm(p => ({ ...p, franchise_id: e.target.value }))} style={S.input}>
+                  <option value="">— Auto (your branch) —</option>
+                  {franchises.map(f => <option key={f.id} value={f.id}>{f.franchise_name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div style={{ gridColumn: 'span 2', background: '#f0fdf4', borderRadius: '8px', padding: '12px 14px', border: '1px solid #bbf7d0' }}>
+              <p style={{ margin: 0, fontSize: '12.5px', color: '#166534' }}>
+                <strong>No login profile needed.</strong> This employee record will be created immediately. You can link it to a user account later from the employee's detail page.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ padding: '16px 22px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button onClick={() => { setView('list'); setError(''); setAddForm(EMPTY_ADD); }} style={S.ghostBtn}>Cancel</button>
+            <button onClick={handleAddEmployee} disabled={addSaving || !addForm.first_name.trim() || !addForm.last_name.trim()}
+              style={{ ...S.primaryBtn, opacity: (addSaving || !addForm.first_name.trim() || !addForm.last_name.trim()) ? 0.6 : 1 }}>
+              {addSaving ? 'Saving...' : 'Add Employee'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -949,24 +1106,160 @@ export default function Employees() {
               )}
             </div>
           )}
+
+          {/* ── Written Warnings ── */}
+          {(user?.role === 'Admin' || user?.role === 'HR') && (
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
+              <div style={{ padding: '13px 20px', borderBottom: '1px solid #f1f5f9', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#92400e' }}>Disciplinary Records</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#b45309' }}>Written warnings and formal notices</p>
+                </div>
+                <button onClick={() => setShowWarnForm(p => !p)}
+                  style={{ padding: '5px 14px', borderRadius: '8px', border: 'none', background: showWarnForm ? '#f1f5f9' : '#d97706', color: showWarnForm ? '#64748b' : 'white', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                  {showWarnForm ? 'Cancel' : '+ Add Record'}
+                </button>
+              </div>
+
+              {/* Add warning form */}
+              {showWarnForm && (
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '4px' }}>Warning Type</label>
+                      <select value={warnForm.warning_type} onChange={e => setWarnForm(p => ({ ...p, warning_type: e.target.value }))} style={S.input}>
+                        {['Verbal Warning', 'Written Warning', 'Final Written Warning', 'Suspension', 'Dismissal'].map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '4px' }}>Date Issued</label>
+                      <DatePicker value={warnForm.issued_date} onChange={v => setWarnForm(p => ({ ...p, issued_date: v }))} />
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={{ display: 'block', color: '#dc2626', fontSize: '12px', marginBottom: '4px' }}>Reason / Offence *</label>
+                      <textarea value={warnForm.reason} onChange={e => setWarnForm(p => ({ ...p, reason: e.target.value }))}
+                        placeholder="Describe the reason for this disciplinary action..."
+                        rows={3} style={{ ...S.input, resize: 'vertical', lineHeight: '1.5' }} />
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '4px' }}>Additional Notes</label>
+                      <textarea value={warnForm.notes} onChange={e => setWarnForm(p => ({ ...p, notes: e.target.value }))}
+                        placeholder="Any further context, actions agreed, or follow-up details..."
+                        rows={2} style={{ ...S.input, resize: 'vertical', lineHeight: '1.5' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button onClick={() => setShowWarnForm(false)} style={S.ghostBtn}>Cancel</button>
+                    <button onClick={handleSaveWarning} disabled={savingWarn || !warnForm.reason.trim()}
+                      style={{ ...S.primaryBtn, background: 'linear-gradient(135deg,#d97706,#b45309)', boxShadow: '0 2px 6px rgba(217,119,6,0.25)', opacity: (savingWarn || !warnForm.reason.trim()) ? 0.6 : 1 }}>
+                      {savingWarn ? 'Saving...' : 'Save Record'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings list */}
+              {warningsLoading ? (
+                <p style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading...</p>
+              ) : warnings.length === 0 ? (
+                <p style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '13px', margin: 0, fontStyle: 'italic' }}>No disciplinary records on file.</p>
+              ) : warnings.map((w, i) => {
+                const typeColors = {
+                  'Verbal Warning':        { bg: '#fef9c3', color: '#ca8a04', border: '#fde68a' },
+                  'Written Warning':       { bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+                  'Final Written Warning': { bg: '#fee2e2', color: '#dc2626', border: '#fecaca' },
+                  'Suspension':            { bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' },
+                  'Dismissal':             { bg: '#fef2f2', color: '#7f1d1d', border: '#fca5a5' },
+                };
+                const tc = typeColors[w.warning_type] || typeColors['Written Warning'];
+                return (
+                  <div key={w.id} style={{ padding: '14px 20px', borderTop: i > 0 ? '1px solid #f8fafc' : 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ background: tc.bg, color: tc.color, border: `1px solid ${tc.border}`, padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
+                          {w.warning_type}
+                        </span>
+                        {w.issued_date && (
+                          <span style={{ color: '#64748b', fontSize: '12px' }}>
+                            {fmtDate(w.issued_date)}
+                          </span>
+                        )}
+                        {w.issued_by_username && (
+                          <span style={{ color: '#94a3b8', fontSize: '11px' }}>by @{w.issued_by_username}</span>
+                        )}
+                      </div>
+                      {user?.role === 'Admin' && (
+                        <button onClick={() => handleDeleteWarning(w.id)} disabled={deletingWarnId === w.id}
+                          style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }}
+                          onMouseEnter={e => e.target.style.color = '#dc2626'}
+                          onMouseLeave={e => e.target.style.color = '#cbd5e1'}>
+                          {deletingWarnId === w.id ? '...' : '×'}
+                        </button>
+                      )}
+                    </div>
+                    <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#334155', lineHeight: '1.6' }}>{w.reason}</p>
+                    {w.notes && (
+                      <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#64748b', lineHeight: '1.5', background: '#f8fafc', borderRadius: '6px', padding: '8px 10px' }}>{w.notes}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   // ── LIST VIEW ──────────────────────────────────────────
+
+  // Birthday calendar data
+  const empWithBday = employees.filter(e => e.birth_date);
+  const bdayFirstDay = new Date(bdayYear, bdayMonth, 1);
+  const bdayLastDay  = new Date(bdayYear, bdayMonth + 1, 0);
+  const bdayOffset   = (bdayFirstDay.getDay() + 6) % 7;
+  const bdayCells    = [...Array(bdayOffset).fill(null), ...Array.from({ length: bdayLastDay.getDate() }, (_, i) => i + 1)];
+  const bdays = {}; // day -> [employees]
+  empWithBday.forEach(e => {
+    const d = new Date(e.birth_date + 'T00:00:00');
+    if (d.getMonth() === bdayMonth) {
+      const day = d.getDate();
+      if (!bdays[day]) bdays[day] = [];
+      bdays[day].push(e);
+    }
+  });
+  const thisMonthBdays = Object.entries(bdays)
+    .map(([day, emps]) => ({ day: parseInt(day), emps }))
+    .sort((a, b) => a.day - b.day);
+  const CAL_MONTHS_BD = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const CAL_DAYS_BD   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
   return (
     <div style={{ maxWidth: '1100px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-        <h2 style={S.pageTitle}>Employees</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h2 style={S.pageTitle}>Employees</h2>
+          {user?.role === 'Admin' && (
+            <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '2px' }}>
+              {[{ key: false, label: 'List' }, { key: true, label: 'Birthdays' }].map(opt => (
+                <button key={String(opt.key)} onClick={() => setBdayView(opt.key)}
+                  style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', background: bdayView === opt.key ? 'white' : 'transparent', color: bdayView === opt.key ? '#0f172a' : '#94a3b8', boxShadow: bdayView === opt.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, ID, email..."
-            style={{ ...S.input, width: isMobile ? '100%' : '220px', margin: 0 }}
-          />
-          {can(user, 'employees.view') && (
+          {!bdayView && (
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search name, ID, email..."
+              style={{ ...S.input, width: isMobile ? '100%' : '220px', margin: 0 }}
+            />
+          )}
+          {can(user, 'employees.view') && !bdayView && (
             <button
               onClick={() => {
                 const date = new Date().toISOString().split('T')[0];
@@ -977,12 +1270,96 @@ export default function Employees() {
               }}
               style={S.ghostBtn}>↓ Export CSV</button>
           )}
+          {(user?.role === 'Admin' || user?.role === 'HR') && !bdayView && (
+            <button onClick={() => { setView('add'); setError(''); setAddForm(EMPTY_ADD); }} style={S.primaryBtn}>
+              + Add Employee
+            </button>
+          )}
         </div>
       </div>
 
+      {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
 
-      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+      {/* ── Birthday Calendar ── */}
+      {bdayView && user?.role === 'Admin' && (
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Employee Birthdays</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button onClick={() => { if (bdayMonth === 0) { setBdayMonth(11); setBdayYear(y => y - 1); } else setBdayMonth(m => m - 1); }}
+                style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '7px', padding: '4px 11px', cursor: 'pointer', color: '#64748b', fontSize: '14px', fontFamily: 'DM Sans' }}>‹</button>
+              <span style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a', minWidth: '130px', textAlign: 'center' }}>{CAL_MONTHS_BD[bdayMonth]} {bdayYear}</span>
+              <button onClick={() => { if (bdayMonth === 11) { setBdayMonth(0); setBdayYear(y => y + 1); } else setBdayMonth(m => m + 1); }}
+                style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '7px', padding: '4px 11px', cursor: 'pointer', color: '#64748b', fontSize: '14px', fontFamily: 'DM Sans' }}>›</button>
+            </div>
+          </div>
+
+          <div style={{ padding: '16px 16px 8px' }}>
+            {/* Day headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: '4px' }}>
+              {CAL_DAYS_BD.map(d => (
+                <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 0' }}>{d}</div>
+              ))}
+            </div>
+            {/* Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '3px' }}>
+              {bdayCells.map((day, i) => {
+                const hasBday = day && bdays[day];
+                const today = new Date();
+                const isToday = day && day === today.getDate() && bdayMonth === today.getMonth() && bdayYear === today.getFullYear();
+                return (
+                  <div key={i} style={{
+                    minHeight: '60px', borderRadius: '8px', padding: '4px',
+                    background: hasBday ? '#fdf2f8' : (day ? (isToday ? '#eff6ff' : '#fafafa') : 'transparent'),
+                    border: hasBday ? '1.5px solid #fbcfe8' : (day ? (isToday ? '1.5px solid #bfdbfe' : '1px solid #f1f5f9') : 'none'),
+                  }}>
+                    {day && (
+                      <>
+                        <div style={{ fontSize: '10px', fontWeight: isToday ? '700' : '400', color: isToday ? '#2563eb' : '#94a3b8', textAlign: 'right', lineHeight: 1, marginBottom: '3px' }}>{day}</div>
+                        {hasBday && bdays[day].map(e => (
+                          <div key={e.id} style={{ background: '#db2777', color: 'white', borderRadius: '4px', fontSize: '9px', fontWeight: '600', padding: '2px 5px', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            🎂 {e.first_name} {e.last_name?.charAt(0)}.
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* This month's birthday list */}
+          <div style={{ borderTop: '1px solid #f1f5f9', padding: '14px 22px' }}>
+            <p style={{ margin: '0 0 10px', fontFamily: 'Sora', fontSize: '12px', fontWeight: '700', color: '#0f172a' }}>
+              {thisMonthBdays.length === 0 ? 'No birthdays this month' : `Birthdays in ${CAL_MONTHS_BD[bdayMonth]} (${thisMonthBdays.length})`}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {thisMonthBdays.map(({ day, emps }) => emps.map(e => {
+                const age = bdayYear - new Date(e.birth_date + 'T00:00:00').getFullYear();
+                return (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', background: '#fdf2f8', border: '1px solid #fbcfe8' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#db2777', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '700', flexShrink: 0 }}>
+                      {e.first_name?.charAt(0)}{e.last_name?.charAt(0)}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontWeight: '600', fontSize: '13.5px', color: '#0f172a' }}>{e.first_name} {e.last_name}</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>{e.job_title || 'Employee'} · {e.franchise_name || ''}</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '16px', fontWeight: '700', color: '#db2777' }}>{CAL_MONTHS_BD[bdayMonth].slice(0, 3)} {day}</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>Turns {age}</p>
+                    </div>
+                  </div>
+                );
+              }))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!bdayView && <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
         {loading ? (
           <Spinner size="lg" dark label="Loading employees..." />
         ) : filtered.length === 0 ? (
@@ -991,7 +1368,7 @@ export default function Employees() {
             title="No employees yet"
             subtitle="Add your first employee to get started."
             action="+ Add Employee"
-            onAction={() => setView('form')}
+            onAction={() => { setView('add'); setAddForm(EMPTY_ADD); }}
           />
         ) : isMobile ? (
           <div>
@@ -1119,7 +1496,7 @@ export default function Employees() {
             )}
           </>
         )}
-      </div>
+      </div>}
 
       {/* ── PAST EMPLOYEES ── */}
       {can(user, 'employees.view') && (

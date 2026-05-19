@@ -15,6 +15,31 @@ if (JWT_SECRET.length < 32) {
 const pool = require('./config/db');
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMPTZ').catch(() => {});
 
+// Leave request comments thread
+pool.query(`
+  CREATE TABLE IF NOT EXISTS leave_request_notes (
+    id SERIAL PRIMARY KEY,
+    leave_request_id INTEGER NOT NULL REFERENCES leave_requests(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    note TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+  )
+`).catch(() => {});
+
+// Formal disciplinary / written warning records
+pool.query(`
+  CREATE TABLE IF NOT EXISTS written_warnings (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    warning_type VARCHAR(60) NOT NULL DEFAULT 'Written Warning',
+    reason TEXT NOT NULL,
+    issued_date DATE,
+    notes TEXT,
+    issued_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+  )
+`).catch(() => {});
+
 // Create manual leave adjustments table if it doesn't exist
 pool.query(`
   CREATE TABLE IF NOT EXISTS leave_manual_adjustments (
