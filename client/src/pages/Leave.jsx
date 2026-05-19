@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
@@ -40,7 +40,7 @@ function workingDays(start, end) {
 export default function Leave() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const isManager = user?.role === 'Admin'; // Admin approves leave; HR/Consultant only see their own
+  const isManager = user?.role === 'Admin' || user?.role === 'HR'; // Admin + HR see all leave; Consultant only sees their own
 
   const [requests, setRequests] = useState([]);
   const [myEmployee, setMyEmployee] = useState(null);
@@ -227,7 +227,7 @@ export default function Leave() {
 
   // ── Leave Request Detail Panel ────────────────────────────
   if (selectedRequest) {
-    const isHR = user?.role === 'Admin'; // Only Admin can approve/reject
+    const isHR = user?.role === 'Admin'; // Only Admin can approve/reject (HR can view/comment)
     const isPending = selectedRequest.status === 'Pending';
 
     return (
@@ -708,13 +708,21 @@ export default function Leave() {
               <div />
               <div>
                 <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Start Date *</label>
-                <input type="date" value={form.start_date} onChange={e => setForm(p => ({ ...p, start_date: e.target.value }))}
-                  min={new Date().toISOString().split('T')[0]} required style={S.input} />
+                <DatePicker
+                  value={form.start_date}
+                  onChange={v => setForm(p => ({ ...p, start_date: v }))}
+                  minDate={new Date().toISOString().split('T')[0]}
+                  placeholder="YYYY/MM/DD"
+                />
               </div>
               <div>
                 <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>End Date *</label>
-                <input type="date" value={form.end_date} onChange={e => setForm(p => ({ ...p, end_date: e.target.value }))}
-                  min={form.start_date || new Date().toISOString().split('T')[0]} required style={S.input} />
+                <DatePicker
+                  value={form.end_date}
+                  onChange={v => setForm(p => ({ ...p, end_date: v }))}
+                  minDate={form.start_date || new Date().toISOString().split('T')[0]}
+                  placeholder="YYYY/MM/DD"
+                />
               </div>
             </div>
 
@@ -907,6 +915,152 @@ export default function Leave() {
         )}
       </div>
     </div>
+  );
+}
+
+// ── DatePicker Component ──────────────────────────────────
+const DP_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DP_WEEKDAYS = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+const dpNavBtn = { background: '#f1f5f9', border: 'none', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: 'DM Sans', fontSize: '16px', color: '#0f172a', lineHeight: 1 };
+const dpSelStyle = { border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontFamily: 'DM Sans', fontSize: '13px', color: '#0f172a', background: 'white', cursor: 'pointer', outline: 'none' };
+
+function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', minDate }) {
+  const today = new Date();
+  const [open, setOpen] = useState(false);
+  const [viewYear, setViewYear] = useState(value ? parseInt(value.slice(0,4)) : today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(value ? parseInt(value.slice(5,7)) - 1 : today.getMonth());
+  const triggerRef = useRef(null);
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
+
+  const selected = value || null;
+
+  const openPicker = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const popupH = 320;
+      setPopupPos({
+        top: spaceBelow >= popupH ? rect.bottom + window.scrollY + 4 : rect.top + window.scrollY - popupH - 4,
+        left: Math.min(rect.left + window.scrollX, window.innerWidth + window.scrollX - 280),
+      });
+    }
+    setOpen(o => !o);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (!e.target.closest('[data-dp-popup]') && !e.target.closest('[data-dp-trigger]')) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const firstDay = new Date(viewYear, viewMonth, 1);
+  const lastDay  = new Date(viewYear, viewMonth + 1, 0);
+  const startDow = (firstDay.getDay() + 6) % 7;
+  const totalCells = Math.ceil((startDow + lastDay.getDate()) / 7) * 7;
+  const cells = [];
+  for (let i = 0; i < totalCells; i++) {
+    const d = i - startDow + 1;
+    cells.push(d >= 1 && d <= lastDay.getDate() ? d : null);
+  }
+
+  const fmt = (y, m, d) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const display = selected ? `${selected.slice(0,4)}/${selected.slice(5,7)}/${selected.slice(8,10)}` : '';
+
+  const isDisabled = (y, m, d) => {
+    if (!minDate) return false;
+    return fmt(y, m, d) < minDate;
+  };
+
+  const years = [];
+  for (let y = today.getFullYear() - 5; y <= today.getFullYear() + 10; y++) years.push(y);
+
+  return (
+    <>
+      <div
+        ref={triggerRef}
+        data-dp-trigger
+        onClick={openPicker}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+          background: 'white', cursor: 'pointer', fontFamily: 'DM Sans', fontSize: '13.5px',
+          color: display ? '#0f172a' : '#94a3b8', userSelect: 'none',
+          minWidth: '140px',
+        }}
+      >
+        <span>{display || placeholder}</span>
+        <span style={{ color: '#94a3b8', fontSize: '14px', marginLeft: '8px' }}>📅</span>
+      </div>
+
+      {open && (
+        <div
+          data-dp-popup
+          style={{
+            position: 'fixed', top: popupPos.top, left: popupPos.left,
+            zIndex: 9999, background: 'white', borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.14)', padding: '14px', width: '270px',
+          }}
+        >
+          {/* Nav */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '6px' }}>
+            <button style={dpNavBtn} onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1); } else setViewMonth(m => m-1); }}>‹</button>
+            <div style={{ display: 'flex', gap: '4px', flex: 1, justifyContent: 'center' }}>
+              <select value={viewMonth} onChange={e => setViewMonth(+e.target.value)} style={dpSelStyle}>
+                {DP_MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+              <select value={viewYear} onChange={e => setViewYear(+e.target.value)} style={dpSelStyle}>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <button style={dpNavBtn} onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1); } else setViewMonth(m => m+1); }}>›</button>
+          </div>
+
+          {/* Weekday headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: '4px' }}>
+            {DP_WEEKDAYS.map(d => (
+              <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: '700', color: '#94a3b8', padding: '2px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{d}</div>
+            ))}
+          </div>
+
+          {/* Day cells */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px' }}>
+            {cells.map((d, i) => {
+              if (!d) return <div key={i} />;
+              const ds = fmt(viewYear, viewMonth, d);
+              const isSel = ds === selected;
+              const isToday = ds === today.toISOString().split('T')[0];
+              const disabled = isDisabled(viewYear, viewMonth, d);
+              return (
+                <button
+                  key={i}
+                  disabled={disabled}
+                  onClick={() => { onChange(ds); setOpen(false); }}
+                  style={{
+                    border: 'none', borderRadius: '6px', padding: '5px 0', textAlign: 'center',
+                    fontSize: '12px', fontFamily: 'DM Sans', cursor: disabled ? 'default' : 'pointer',
+                    background: isSel ? '#0f172a' : isToday ? '#eff6ff' : 'transparent',
+                    color: isSel ? 'white' : isToday ? '#2563eb' : disabled ? '#cbd5e1' : '#0f172a',
+                    fontWeight: isSel || isToday ? '700' : '400',
+                  }}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+
+          {selected && (
+            <button
+              onClick={() => { onChange(''); setOpen(false); }}
+              style={{ marginTop: '10px', width: '100%', background: 'none', border: '1px solid #e2e8f0', borderRadius: '7px', padding: '5px', fontSize: '12px', color: '#94a3b8', fontFamily: 'DM Sans', cursor: 'pointer' }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
