@@ -10,23 +10,27 @@ router.use(verifyToken);
 router.get('/birthdays', requireRole('Admin', 'HR'), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT e.id, e.first_name, e.last_name, e.birth_date, e.id_number, f.franchise_name
+      `SELECT e.id, e.first_name, e.last_name, e.id_number, f.franchise_name
        FROM employees e
        LEFT JOIN franchises f ON e.franchise_id = f.id
        WHERE e.terminated_at IS NULL
-         AND (e.birth_date IS NOT NULL OR (e.id_number IS NOT NULL AND length(e.id_number) >= 6))
+         AND e.id_number IS NOT NULL
+         AND length(e.id_number) >= 6
        ORDER BY e.first_name, e.last_name`
     );
-    const rows = result.rows.map(e => {
-      if (!e.birth_date && e.id_number && e.id_number.length >= 6 && /^\d{6}/.test(e.id_number)) {
+    const currentYY = new Date().getFullYear() % 100;
+    const rows = result.rows
+      .filter(e => /^\d{6}/.test(e.id_number))
+      .map(e => {
         const yy = parseInt(e.id_number.substring(0, 2));
         const mm = e.id_number.substring(2, 4);
         const dd = e.id_number.substring(4, 6);
-        const century = yy > (new Date().getFullYear() % 100) ? '19' : '20';
-        e.birth_date = `${century}${yy.toString().padStart(2, '0')}-${mm}-${dd}`;
-      }
-      return e;
-    });
+        const century = yy > currentYY ? '19' : '20';
+        return {
+          ...e,
+          birth_date: `${century}${yy.toString().padStart(2, '0')}-${mm}-${dd}`,
+        };
+      });
     res.json(rows);
   } catch (err) {
     console.error(err.message);
