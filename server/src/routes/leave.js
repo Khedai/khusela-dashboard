@@ -45,10 +45,9 @@ router.get('/balance/:employee_id', async (req, res) => {
   }
 });
 
-// ─── GET ALL LEAVE REQUESTS (Admin only) ─────────────────
-router.get('/requests', verifyToken, requireRole('Admin'), async (req, res) => {
+// ─── GET ALL LEAVE REQUESTS (Admin + HR) ─────────────────
+router.get('/requests', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
   try {
-    // Admin sees all leave requests across all franchises
     const result = await pool.query(
       `SELECT
         lr.*,
@@ -64,6 +63,56 @@ router.get('/requests', verifyToken, requireRole('Admin'), async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch leave requests.' });
+  }
+});
+
+// ─── GET ALL EMPLOYEE LEAVE BALANCES (Admin + HR) ────────
+router.get('/balances', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+  const year = new Date().getFullYear();
+  try {
+    const result = await pool.query(
+      `SELECT
+        e.id AS employee_id, e.first_name, e.last_name,
+        f.franchise_name,
+        COALESCE(lb.annual_total, 15) AS annual_total,
+        COALESCE(lb.annual_used, 0)  AS annual_used,
+        COALESCE(lb.sick_total, 30)  AS sick_total,
+        COALESCE(lb.sick_used, 0)    AS sick_used,
+        COALESCE(lb.family_total, 3) AS family_total,
+        COALESCE(lb.family_used, 0)  AS family_used
+       FROM employees e
+       LEFT JOIN leave_balances lb ON lb.employee_id = e.id AND lb.year = $1
+       LEFT JOIN franchises f ON e.franchise_id = f.id
+       WHERE e.terminated_at IS NULL
+       ORDER BY e.first_name, e.last_name`,
+      [year]
+    );
+    // merge manual adjustments for each employee
+    const manual = await pool.query(
+      `SELECT employee_id, leave_type, SUM(days)::float AS total
+       FROM leave_manual_adjustments
+       WHERE year = $1
+       GROUP BY employee_id, leave_type`,
+      [year]
+    );
+    const adjMap = {};
+    for (const r of manual.rows) {
+      if (!adjMap[r.employee_id]) adjMap[r.employee_id] = {};
+      adjMap[r.employee_id][r.leave_type] = r.total;
+    }
+    const rows = result.rows.map(e => {
+      const adj = adjMap[e.employee_id] || {};
+      return {
+        ...e,
+        annual_used:  parseFloat(e.annual_used)  + (adj['Annual'] || 0),
+        sick_used:    parseFloat(e.sick_used)     + (adj['Sick'] || 0),
+        family_used:  parseFloat(e.family_used)   + (adj['Family Responsibility'] || 0),
+      };
+    });
+    res.json(rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to fetch leave balances.' });
   }
 });
 

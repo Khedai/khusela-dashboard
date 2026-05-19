@@ -75,6 +75,11 @@ export default function Leave() {
   const [pagination, setPagination] = useState(null);
   const LIMIT = 20;
 
+  // Leave balances overview (Admin + HR)
+  const [allBalances, setAllBalances] = useState([]);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+  const [balanceSearch, setBalanceSearch] = useState('');
+
   useEffect(() => {
     fetchData(page);
   }, [page]);
@@ -84,6 +89,15 @@ export default function Leave() {
     window.scrollTo(0, 0);
   };
 
+  const fetchBalances = async () => {
+    setBalancesLoading(true);
+    try {
+      const res = await api.get('/leave/balances');
+      setAllBalances(res.data);
+    } catch { /* balances tab just won't load */ }
+    finally { setBalancesLoading(false); }
+  };
+
   const fetchData = async (p = page) => {
     setLoading(true);
     try {
@@ -91,6 +105,8 @@ export default function Leave() {
         const res = await api.get(`/leave/requests?page=${p}&limit=${LIMIT}`);
         setRequests(res.data.data ? res.data.data : res.data);
         if (res.data.pagination) setPagination(res.data.pagination);
+        // Also load balances for the Balances tab
+        fetchBalances();
       } else {
         try {
           const empRes = await api.get('/leave/my-employee');
@@ -190,8 +206,9 @@ export default function Leave() {
       const res = await api.post(`/leave/request/${selectedRequest.id}/notes`, { note: newReqNote.trim() });
       setReqNotes(prev => [...prev, res.data]);
       setNewReqNote('');
-    } catch { /* ignore */ }
-    finally { setPostingReqNote(false); }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to post comment.');
+    } finally { setPostingReqNote(false); }
   };
 
   const deleteReqNote = async (noteId) => {
@@ -199,8 +216,9 @@ export default function Leave() {
     try {
       await api.delete(`/leave/request/${selectedRequest.id}/notes/${noteId}`);
       setReqNotes(prev => prev.filter(n => n.id !== noteId));
-    } catch { /* ignore */ }
-    finally { setDeletingReqNoteId(null); }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete comment.');
+    } finally { setDeletingReqNoteId(null); }
   };
 
   const handleLeaveDocDelete = async (docId) => {
@@ -218,7 +236,7 @@ export default function Leave() {
     } catch { /* ignore */ }
   };
 
-  const [calView, setCalView] = useState(false);
+  const [viewTab, setViewTab] = useState('list'); // 'list' | 'calendar' | 'balances'
   const [calYear, setCalYear]   = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth()); // 0-based
 
@@ -233,7 +251,7 @@ export default function Leave() {
     return (
       <div style={{ maxWidth: '700px' }}>
         <button
-          onClick={() => { setSelectedRequest(null); setLeaveDocs([]); }}
+          onClick={() => { setSelectedRequest(null); setLeaveDocs([]); setError(''); }}
           style={{
             background: 'none',
             border: 'none',
@@ -248,6 +266,8 @@ export default function Leave() {
         >
           Back
         </button>
+
+        {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13.5px', marginBottom: '16px' }}>{error}</div>}
 
         {/* Request summary */}
         <div
@@ -756,13 +776,17 @@ export default function Leave() {
       <div style={S.card}>
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>
-            {isManager ? 'All Leave Requests' : 'My Leave Requests'}
+            {viewTab === 'balances' ? 'Employee Leave Balances' : isManager ? 'All Leave Requests' : 'My Leave Requests'}
           </h3>
-          {/* List / Calendar toggle */}
+          {/* List / Calendar / Balances toggle */}
           <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '2px' }}>
-            {[{ key: false, label: 'List' }, { key: true, label: 'Calendar' }].map(opt => (
-              <button key={String(opt.key)} onClick={() => setCalView(opt.key)}
-                style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', background: calView === opt.key ? 'white' : 'transparent', color: calView === opt.key ? '#0f172a' : '#94a3b8', boxShadow: calView === opt.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
+            {[
+              { key: 'list', label: 'List' },
+              { key: 'calendar', label: 'Calendar' },
+              ...(isManager ? [{ key: 'balances', label: 'Balances' }] : []),
+            ].map(opt => (
+              <button key={opt.key} onClick={() => setViewTab(opt.key)}
+                style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', background: viewTab === opt.key ? 'white' : 'transparent', color: viewTab === opt.key ? '#0f172a' : '#94a3b8', boxShadow: viewTab === opt.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
                 {opt.label}
               </button>
             ))}
@@ -771,7 +795,73 @@ export default function Leave() {
 
         {loading ? (
           <Spinner size="lg" dark label="Loading leave data..." />
-        ) : calView ? (
+        ) : viewTab === 'balances' && isManager ? (
+          /* ── Balances Tab ── */
+          balancesLoading ? (
+            <Spinner size="lg" dark label="Loading balances..." />
+          ) : (
+            <div>
+              <div style={{ padding: '12px 22px', borderBottom: '1px solid #f1f5f9' }}>
+                <input
+                  placeholder="Search employees..."
+                  value={balanceSearch}
+                  onChange={e => setBalanceSearch(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', width: '100%', maxWidth: '280px', boxSizing: 'border-box', outline: 'none', color: '#0f172a' }}
+                />
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+                  <thead>
+                    <tr>
+                      {['Employee', 'Franchise', 'Annual', 'Sick', 'Family Resp.'].map(h => (
+                        <th key={h} style={S.tableHeader}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allBalances
+                      .filter(e => {
+                        if (!balanceSearch.trim()) return true;
+                        const s = balanceSearch.toLowerCase();
+                        return `${e.first_name} ${e.last_name}`.toLowerCase().includes(s) ||
+                               (e.franchise_name || '').toLowerCase().includes(s);
+                      })
+                      .map(e => {
+                        const annualLeft = (e.annual_total || 0) - (e.annual_used || 0);
+                        const sickLeft   = (e.sick_total || 0)   - (e.sick_used || 0);
+                        const familyLeft = (e.family_total || 0) - (e.family_used || 0);
+                        const balCell = (left, total, color) => (
+                          <td style={S.tableCell}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: '700', fontSize: '14px', color: left <= 0 ? '#dc2626' : '#0f172a', fontFamily: 'Sora', minWidth: '28px' }}>{left}</span>
+                              <div style={{ flex: 1, maxWidth: '80px' }}>
+                                <div style={{ height: '4px', borderRadius: '2px', background: '#f1f5f9', overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', borderRadius: '2px', background: left <= 0 ? '#dc2626' : color, width: `${total ? Math.min(((total - left) / total) * 100, 100) : 0}%`, transition: 'width 0.3s' }} />
+                                </div>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#94a3b8' }}>/ {total}</span>
+                            </div>
+                          </td>
+                        );
+                        return (
+                          <tr key={e.employee_id} className="table-row">
+                            <td style={{ ...S.tableCell, fontWeight: '500' }}>{e.first_name} {e.last_name}</td>
+                            <td style={{ ...S.tableCell, color: '#64748b' }}>{e.franchise_name || '—'}</td>
+                            {balCell(annualLeft, e.annual_total, '#2563eb')}
+                            {balCell(sickLeft, e.sick_total, '#0891b2')}
+                            {balCell(familyLeft, e.family_total, '#16a34a')}
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+                {allBalances.length === 0 && (
+                  <p style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No employees found.</p>
+                )}
+              </div>
+            </div>
+          )
+        ) : viewTab === 'calendar' ? (
           <LeaveCalendar
             requests={allRequests}
             year={calYear} month={calMonth}
