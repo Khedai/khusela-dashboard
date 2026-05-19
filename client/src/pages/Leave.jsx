@@ -93,9 +93,10 @@ export default function Leave() {
     setBalancesLoading(true);
     try {
       const res = await api.get('/leave/balances');
-      setAllBalances(res.data);
-    } catch { /* balances tab just won't load */ }
-    finally { setBalancesLoading(false); }
+      setAllBalances(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Balances error:', err.response?.data || err.message);
+    } finally { setBalancesLoading(false); }
   };
 
   const fetchData = async (p = page) => {

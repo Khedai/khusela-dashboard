@@ -90,6 +90,8 @@ export default function Employees() {
   const [bdayView, setBdayView] = useState(false);
   const [bdayYear, setBdayYear]   = useState(new Date().getFullYear());
   const [bdayMonth, setBdayMonth] = useState(new Date().getMonth());
+  const [bdayEmployees, setBdayEmployees] = useState([]);
+  const [bdayLoading, setBdayLoading] = useState(false);
 
   const [pastEmployees, setPastEmployees] = useState([]);
   const [pastLoading, setPastLoading] = useState(false);
@@ -99,6 +101,19 @@ export default function Employees() {
     fetchFranchises();
     if (user?.role !== 'Consultant') fetchPastEmployees();
   }, []);
+
+  useEffect(() => {
+    if (bdayView && bdayEmployees.length === 0) fetchBirthdayEmployees();
+  }, [bdayView]);
+
+  const fetchBirthdayEmployees = async () => {
+    setBdayLoading(true);
+    try {
+      const res = await api.get('/employees/birthdays');
+      setBdayEmployees(res.data);
+    } catch { /* ignore */ }
+    finally { setBdayLoading(false); }
+  };
 
   useEffect(() => {
     setPage(1);
@@ -1213,8 +1228,8 @@ export default function Employees() {
 
   // ── LIST VIEW ──────────────────────────────────────────
 
-  // Birthday calendar data
-  const empWithBday = employees.filter(e => e.birth_date);
+  // Birthday calendar data (uses dedicated endpoint — all employees, not paginated)
+  const empWithBday = bdayEmployees.filter(e => e.birth_date);
   const bdayFirstDay = new Date(bdayYear, bdayMonth, 1);
   const bdayLastDay  = new Date(bdayYear, bdayMonth + 1, 0);
   const bdayOffset   = (bdayFirstDay.getDay() + 6) % 7;
@@ -1283,6 +1298,9 @@ export default function Employees() {
 
       {/* ── Birthday Calendar ── */}
       {bdayView && user?.role === 'Admin' && (
+        bdayLoading ? (
+          <Spinner size="lg" dark label="Loading birthdays..." />
+        ) : (
         <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
           <div style={{ padding: '14px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Employee Birthdays</h3>
@@ -1357,6 +1375,7 @@ export default function Employees() {
             </div>
           </div>
         </div>
+        )
       )}
 
       {!bdayView && <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>

@@ -6,6 +6,34 @@ const { sanitize } = require('../utils/sanitize');
 // All employee routes require a valid token
 router.use(verifyToken);
 
+// ─── GET ALL EMPLOYEE BIRTHDAYS (lightweight, no pagination) ─
+router.get('/birthdays', requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT e.id, e.first_name, e.last_name, e.birth_date, e.id_number, f.franchise_name
+       FROM employees e
+       LEFT JOIN franchises f ON e.franchise_id = f.id
+       WHERE e.terminated_at IS NULL
+         AND (e.birth_date IS NOT NULL OR (e.id_number IS NOT NULL AND length(e.id_number) >= 6))
+       ORDER BY e.first_name, e.last_name`
+    );
+    const rows = result.rows.map(e => {
+      if (!e.birth_date && e.id_number && e.id_number.length >= 6 && /^\d{6}/.test(e.id_number)) {
+        const yy = parseInt(e.id_number.substring(0, 2));
+        const mm = e.id_number.substring(2, 4);
+        const dd = e.id_number.substring(4, 6);
+        const century = yy > (new Date().getFullYear() % 100) ? '19' : '20';
+        e.birth_date = `${century}${yy.toString().padStart(2, '0')}-${mm}-${dd}`;
+      }
+      return e;
+    });
+    res.json(rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to fetch birthdays.' });
+  }
+});
+
 // ─── GET ALL EMPLOYEES ────────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {

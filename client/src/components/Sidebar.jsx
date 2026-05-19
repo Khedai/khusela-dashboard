@@ -34,7 +34,7 @@ const NAV_ITEMS = [
 
 const ADMIN_ITEMS = [
   { to: '/users', label: 'User Management' },
-  { to: '/franchises', label: 'Franchises', roles: ['Admin', 'HR'] },
+  { to: '/franchises', label: 'Franchises' },
 ];
 
 const ROLE_COLOR = {
@@ -203,7 +203,7 @@ function SidebarContent({ user, onNavigate }) {
           />
         ))}
 
-        {(user?.role === 'Admin' || user?.role === 'HR') && (
+        {user?.role === 'Admin' && (
           <>
             <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '12px 2px 10px' }} />
             <p style={{
