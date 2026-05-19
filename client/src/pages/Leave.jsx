@@ -40,7 +40,7 @@ function workingDays(start, end) {
 export default function Leave() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const isManager = user?.role === 'Admin' || user?.role === 'HR'; // Admin + HR see all leave; Consultant only sees their own
+  const isManager = user?.role === 'Admin'; // Only Admin manages leave; HR + Consultant see & apply for their own
 
   const [requests, setRequests] = useState([]);
   const [myEmployee, setMyEmployee] = useState(null);
@@ -673,7 +673,7 @@ export default function Leave() {
             </p>
           )}
         </div>
-        {!isManager && (
+        {!isManager && myEmployee && (
           <button onClick={() => { setShowForm(!showForm); setError(''); setWarning(''); }}
             className="btn-primary" style={S.primaryBtn}>
             {showForm ? 'Cancel' : '+ Apply for Leave'}
@@ -685,7 +685,20 @@ export default function Leave() {
       {warning && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', fontSize: '13.5px', marginBottom: '16px' }}>{warning}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13.5px', marginBottom: '16px' }}>{success}</div>}
 
-      {/* Leave Balance for Consultants */}
+      {/* No employee record linked — show info banner */}
+      {!isManager && !loading && !myEmployee && (
+        <div style={{ padding: '14px 16px', borderRadius: '10px', background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+          <span style={{ fontSize: '18px', lineHeight: 1 }}>ℹ️</span>
+          <div>
+            <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: '#1e40af' }}>No employee record linked</p>
+            <p style={{ margin: 0, fontSize: '12.5px', color: '#3b82f6' }}>
+              Your account isn't linked to an employee profile yet. Ask an Admin to link your user account to your employee record so you can apply for leave and view your balance.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Balance for Consultants / HR */}
       {!isManager && balance && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
           {[

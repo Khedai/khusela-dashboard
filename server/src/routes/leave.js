@@ -45,8 +45,8 @@ router.get('/balance/:employee_id', async (req, res) => {
   }
 });
 
-// ─── GET ALL LEAVE REQUESTS (Admin + HR) ─────────────────
-router.get('/requests', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+// ─── GET ALL LEAVE REQUESTS (Admin only) ─────────────────
+router.get('/requests', verifyToken, requireRole('Admin'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT
@@ -66,8 +66,8 @@ router.get('/requests', verifyToken, requireRole('Admin', 'HR'), async (req, res
   }
 });
 
-// ─── GET ALL EMPLOYEE LEAVE BALANCES (Admin + HR) ────────
-router.get('/balances', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+// ─── GET ALL EMPLOYEE LEAVE BALANCES (Admin only) ────────
+router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
   const year = new Date().getFullYear();
   try {
     const result = await pool.query(
