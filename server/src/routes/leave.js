@@ -87,19 +87,20 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
        ORDER BY e.first_name, e.last_name`,
       [year]
     );
-    // merge manual adjustments for each employee
-    const manual = await pool.query(
-      `SELECT employee_id, leave_type, SUM(days)::float AS total
-       FROM leave_manual_adjustments
-       WHERE year = $1
-       GROUP BY employee_id, leave_type`,
-      [year]
-    );
-    const adjMap = {};
-    for (const r of manual.rows) {
-      if (!adjMap[r.employee_id]) adjMap[r.employee_id] = {};
-      adjMap[r.employee_id][r.leave_type] = r.total;
-    }
+    let adjMap = {};
+    try {
+      const manual = await pool.query(
+        `SELECT employee_id, leave_type, SUM(days)::float AS total
+         FROM leave_manual_adjustments
+         WHERE year = $1
+         GROUP BY employee_id, leave_type`,
+        [year]
+      );
+      for (const r of manual.rows) {
+        if (!adjMap[r.employee_id]) adjMap[r.employee_id] = {};
+        adjMap[r.employee_id][r.leave_type] = r.total;
+      }
+    } catch { /* table may not exist yet */ }
     const rows = result.rows.map(e => {
       const adj = adjMap[e.employee_id] || {};
       return {

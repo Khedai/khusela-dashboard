@@ -54,22 +54,24 @@ pool.query(`
   )
 `).catch(() => {});
 
-// Populate birth_date from SA ID number (YYMMDD in first 6 digits) where missing
-pool.query(`
-  UPDATE employees SET birth_date = (
-    CASE
-      WHEN CAST(substring(id_number, 1, 2) AS int) > (EXTRACT(YEAR FROM NOW())::int % 100)
-      THEN ('19' || substring(id_number, 1, 2) || '-' || substring(id_number, 3, 2) || '-' || substring(id_number, 5, 2))::date
-      ELSE ('20' || substring(id_number, 1, 2) || '-' || substring(id_number, 3, 2) || '-' || substring(id_number, 5, 2))::date
-    END
-  )
-  WHERE birth_date IS NULL
-    AND id_number IS NOT NULL
-    AND length(id_number) >= 6
-    AND substring(id_number, 1, 6) ~ '^[0-9]+$'
-    AND CAST(substring(id_number, 3, 2) AS int) BETWEEN 1 AND 12
-    AND CAST(substring(id_number, 5, 2) AS int) BETWEEN 1 AND 31
-`).catch(() => {});
+// Ensure birth_date column exists, then populate from SA ID numbers
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS birth_date DATE')
+  .then(() => pool.query(`
+    UPDATE employees SET birth_date = (
+      CASE
+        WHEN CAST(substring(id_number, 1, 2) AS int) > (EXTRACT(YEAR FROM NOW())::int % 100)
+        THEN ('19' || substring(id_number, 1, 2) || '-' || substring(id_number, 3, 2) || '-' || substring(id_number, 5, 2))::date
+        ELSE ('20' || substring(id_number, 1, 2) || '-' || substring(id_number, 3, 2) || '-' || substring(id_number, 5, 2))::date
+      END
+    )
+    WHERE birth_date IS NULL
+      AND id_number IS NOT NULL
+      AND length(id_number) >= 6
+      AND substring(id_number, 1, 6) ~ '^[0-9]+$'
+      AND CAST(substring(id_number, 3, 2) AS int) BETWEEN 1 AND 12
+      AND CAST(substring(id_number, 5, 2) AS int) BETWEEN 1 AND 31
+  `))
+  .catch(err => console.error('birth_date migration error:', err.message));
 
 // Terminate orphaned employees (user account deleted before terminate-on-delete existed)
 pool.query(`
