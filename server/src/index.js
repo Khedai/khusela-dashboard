@@ -16,21 +16,46 @@ const pool = require('./config/db');
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMPTZ').catch(() => {});
 
 // Leave request comments thread
+// Drop and recreate if leave_request_id is INTEGER (employees/leave_requests use UUID PKs)
 pool.query(`
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'leave_request_notes'
+        AND column_name = 'leave_request_id'
+        AND data_type = 'integer'
+    ) THEN
+      DROP TABLE leave_request_notes;
+    END IF;
+  END $$
+`).then(() => pool.query(`
   CREATE TABLE IF NOT EXISTS leave_request_notes (
     id SERIAL PRIMARY KEY,
-    leave_request_id INTEGER NOT NULL REFERENCES leave_requests(id) ON DELETE CASCADE,
+    leave_request_id UUID NOT NULL REFERENCES leave_requests(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     note TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
   )
-`).catch(() => {});
+`)).catch(err => console.error('leave_request_notes migration error:', err.message));
 
 // Formal disciplinary / written warning records
 pool.query(`
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'written_warnings'
+        AND column_name = 'employee_id'
+        AND data_type = 'integer'
+    ) THEN
+      DROP TABLE written_warnings;
+    END IF;
+  END $$
+`).then(() => pool.query(`
   CREATE TABLE IF NOT EXISTS written_warnings (
     id SERIAL PRIMARY KEY,
-    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     warning_type VARCHAR(60) NOT NULL DEFAULT 'Written Warning',
     reason TEXT NOT NULL,
     issued_date DATE,
@@ -38,13 +63,25 @@ pool.query(`
     issued_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW()
   )
-`).catch(() => {});
+`)).catch(err => console.error('written_warnings migration error:', err.message));
 
-// Create manual leave adjustments table if it doesn't exist
+// Manual leave adjustments
 pool.query(`
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'leave_manual_adjustments'
+        AND column_name = 'employee_id'
+        AND data_type = 'integer'
+    ) THEN
+      DROP TABLE leave_manual_adjustments;
+    END IF;
+  END $$
+`).then(() => pool.query(`
   CREATE TABLE IF NOT EXISTS leave_manual_adjustments (
     id SERIAL PRIMARY KEY,
-    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     leave_type VARCHAR(50) NOT NULL,
     days DECIMAL(4,1) NOT NULL,
     description TEXT,
@@ -52,8 +89,36 @@ pool.query(`
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW()
   )
-`).catch(() => {});
+`)).catch(err => console.error('leave_manual_adjustments migration error:', err.message));
 
+
+// Ensure leave_balances uses UUID for employee_id (employees table uses UUID PKs)
+pool.query(`
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'leave_balances'
+        AND column_name = 'employee_id'
+        AND data_type = 'integer'
+    ) THEN
+      DROP TABLE leave_balances;
+    END IF;
+  END $$
+`).then(() => pool.query(`
+  CREATE TABLE IF NOT EXISTS leave_balances (
+    id SERIAL PRIMARY KEY,
+    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM NOW()),
+    annual_total INTEGER NOT NULL DEFAULT 15,
+    annual_used DECIMAL(5,1) NOT NULL DEFAULT 0,
+    sick_total INTEGER NOT NULL DEFAULT 30,
+    sick_used DECIMAL(5,1) NOT NULL DEFAULT 0,
+    family_total INTEGER NOT NULL DEFAULT 3,
+    family_used DECIMAL(5,1) NOT NULL DEFAULT 0,
+    UNIQUE (employee_id, year)
+  )
+`)).catch(err => console.error('leave_balances migration error:', err.message));
 
 // Terminate orphaned employees (user account deleted before terminate-on-delete existed)
 pool.query(`
