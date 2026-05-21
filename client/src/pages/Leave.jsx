@@ -205,10 +205,10 @@ export default function Leave() {
     setPostingReqNote(true);
     try {
       const res = await api.post(`/leave/request/${selectedRequest.id}/notes`, { note: newReqNote.trim() });
-      setReqNotes(prev => [...prev, res.data]);
+      setReqNotes(prev => [res.data, ...prev]);
       setNewReqNote('');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to post comment.');
+      setError(err.response?.data?.error || 'Failed to post note.');
     } finally { setPostingReqNote(false); }
   };
 
@@ -593,12 +593,12 @@ export default function Leave() {
           </div>
         )}
 
-        {/* ── Notes / Comments ── */}
+        {/* ── Notes ── */}
         <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px' }}>Comments</h3>
-              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Internal notes visible to HR and Admin</p>
+              <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px' }}>Notes</h3>
+              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Internal notes visible to HR and Admin only</p>
             </div>
             {reqNotes.length > 0 && (
               <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '20px', fontSize: '11px', fontWeight: '700', padding: '2px 9px' }}>
@@ -607,56 +607,81 @@ export default function Leave() {
             )}
           </div>
 
-          {/* Add comment */}
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f8fafc' }}>
+          {/* Compose new note */}
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f8fafc' }}>
             <textarea
               value={newReqNote}
               onChange={e => setNewReqNote(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) postReqNote(); }}
-              placeholder="Add a comment... (Ctrl+Enter to post)"
-              rows={2}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', resize: 'none', boxSizing: 'border-box', color: '#0f172a', outline: 'none' }}
+              placeholder="Add a note... (Ctrl+Enter to post)"
+              rows={3}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', resize: 'vertical', lineHeight: '1.6', boxSizing: 'border-box', outline: 'none' }}
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-              <button onClick={postReqNote} disabled={postingReqNote || !newReqNote.trim()}
-                style={{ padding: '6px 16px', borderRadius: '8px', border: 'none', background: newReqNote.trim() ? '#0f172a' : '#f1f5f9', color: newReqNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: newReqNote.trim() ? 'pointer' : 'default', opacity: postingReqNote ? 0.7 : 1 }}>
-                {postingReqNote ? 'Posting...' : 'Post'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+              <span style={{ color: '#94a3b8', fontSize: '11px' }}>Ctrl+Enter to post quickly</span>
+              <button
+                onClick={postReqNote}
+                disabled={postingReqNote || !newReqNote.trim()}
+                style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: newReqNote.trim() ? '#0f172a' : '#f1f5f9', color: newReqNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: newReqNote.trim() ? 'pointer' : 'default', opacity: postingReqNote ? 0.7 : 1 }}
+              >
+                {postingReqNote ? 'Posting...' : 'Post Note'}
               </button>
             </div>
           </div>
 
-          {/* Comments list */}
+          {/* Notes list */}
           {reqNotesLoading ? (
-            <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0, textAlign: 'center' }}>Loading...</p>
+            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Loading...</div>
           ) : reqNotes.length === 0 ? (
-            <p style={{ padding: '20px', color: '#94a3b8', fontSize: '12.5px', margin: 0, textAlign: 'center', fontStyle: 'italic' }}>No comments yet.</p>
-          ) : reqNotes.map((note) => {
-            const rc = ({ Admin: { bg: '#f5f3ff', color: '#7c3aed' }, HR: { bg: '#eff6ff', color: '#2563eb' }, Consultant: { bg: '#f0fdf4', color: '#16a34a' } })[note.role] || { bg: '#f1f5f9', color: '#64748b' };
-            const isOwn = note.username === user?.username;
-            return (
-              <div key={note.id} style={{ padding: '12px 20px', borderTop: '1px solid #f8fafc', background: isOwn ? '#fafbff' : 'white' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
-                    {note.username?.charAt(0).toUpperCase()}
+            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+              No notes yet. Add one above.
+            </div>
+          ) : (
+            <div>
+              {reqNotes.map((note) => {
+                const isOwn = note.username === user?.username;
+                const roleColors = { Admin: { bg: '#f5f3ff', color: '#7c3aed' }, HR: { bg: '#eff6ff', color: '#2563eb' }, Consultant: { bg: '#f0fdf4', color: '#16a34a' } };
+                const rc = roleColors[note.role] || roleColors.Consultant;
+                return (
+                  <div key={note.id} style={{ padding: '14px 20px', borderTop: '1px solid #f8fafc', background: isOwn ? '#fafbff' : 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                          {note.username?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <span style={{ fontWeight: '600', fontSize: '13px', color: '#0f172a' }}>@{note.username}</span>
+                          <span style={{ background: rc.bg, color: rc.color, padding: '1px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: '600', marginLeft: '6px' }}>{note.role}</span>
+                          {note.franchise_name && (
+                            <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: '6px' }}>· {note.franchise_name}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                          {new Date(note.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {(isOwn || user?.role === 'Admin') && (
+                          <button
+                            onClick={() => deleteReqNote(note.id)}
+                            disabled={deletingReqNoteId === note.id}
+                            style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0, fontSize: '14px', lineHeight: 1 }}
+                            onMouseEnter={e => e.target.style.color = '#dc2626'}
+                            onMouseLeave={e => e.target.style.color = '#cbd5e1'}
+                          >
+                            {deletingReqNoteId === note.id ? '...' : '×'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap', paddingLeft: '36px' }}>
+                      {note.note}
+                    </p>
                   </div>
-                  <span style={{ fontWeight: '600', fontSize: '12.5px', color: '#0f172a' }}>@{note.username}</span>
-                  <span style={{ background: rc.bg, color: rc.color, padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>{note.role}</span>
-                  <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: 'auto' }}>
-                    {new Date(note.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  {(isOwn || user?.role === 'Admin') && (
-                    <button onClick={() => deleteReqNote(note.id)} disabled={deletingReqNoteId === note.id}
-                      style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0, fontSize: '14px', lineHeight: 1 }}
-                      onMouseEnter={e => e.target.style.color = '#dc2626'}
-                      onMouseLeave={e => e.target.style.color = '#cbd5e1'}>
-                      {deletingReqNoteId === note.id ? '...' : '×'}
-                    </button>
-                  )}
-                </div>
-                <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6', paddingLeft: '34px', whiteSpace: 'pre-wrap' }}>{note.note}</p>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
