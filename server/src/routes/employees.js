@@ -44,8 +44,16 @@ router.get('/', verifyToken, async (req, res) => {
     const { franchise_id, page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
+    // Non-Admin roles get only non-confidential columns (name, phone, job title, franchise)
+    // Plus their own user_id so the UI can detect "this is me" for self-edit access
+    const isAdmin = req.user.role === 'Admin';
+    const selectColumns = isAdmin
+      ? 'e.*, f.franchise_name'
+      : `e.id, e.first_name, e.last_name, e.cell, e.whatsapp, e.home_phone,
+         e.job_title, e.franchise_id, e.user_id, e.terminated_at, f.franchise_name`;
+
     let query = `
-      SELECT e.*, f.franchise_name
+      SELECT ${selectColumns}
       FROM employees e
       LEFT JOIN franchises f ON e.franchise_id = f.id
     `;
@@ -144,9 +152,10 @@ router.get('/:id', requireRole('Admin', 'HR', 'Consultant'), async (req, res) =>
 
     const emp = result.rows[0];
 
-    // Consultants may only see employees within their own franchise
-    if (req.user.role === 'Consultant' && emp.franchise_id !== req.user.franchise_id) {
-      return res.status(403).json({ error: 'Access denied.' });
+    // HR and Consultants may only view their OWN employee record in full.
+    // Admins see everything.
+    if (req.user.role !== 'Admin' && emp.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied. You can only view your own employee record.' });
     }
 
     res.json(emp);

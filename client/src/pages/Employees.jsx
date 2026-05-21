@@ -162,6 +162,11 @@ export default function Employees() {
   };
 
   const openDetail = (emp) => {
+    // HR and Consultants may only view their OWN employee record in full.
+    if (user?.role !== 'Admin' && emp?.user_id !== user?.id) {
+      setError('Access denied. You can only view your own employee record.');
+      return;
+    }
     setSelected(emp);
     setView('detail');
     setError(''); setSuccess('');
@@ -1420,8 +1425,16 @@ export default function Employees() {
                 );
               }
               rows.push(
-                <div key={emp.id} onClick={() => openDetail(emp)}
-                  style={{ padding: '14px 18px', borderTop: '1px solid #f1f5f9', cursor: 'pointer' }}>
+                <div key={emp.id}
+                  onClick={() => {
+                    if (user?.role === 'Admin' || emp?.user_id === user?.id) openDetail(emp);
+                  }}
+                  style={{
+                    padding: '14px 18px',
+                    borderTop: '1px solid #f1f5f9',
+                    cursor: (user?.role === 'Admin' || emp?.user_id === user?.id) ? 'pointer' : 'default',
+                    opacity: (user?.role === 'Admin' || emp?.user_id === user?.id) ? 1 : 0.75,
+                  }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                     <span style={{ fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>
                       {emp.first_name} {emp.last_name}
@@ -1441,7 +1454,7 @@ export default function Employees() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
               <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['Name', ...(user?.role !== 'Consultant' ? ['ID Number'] : []), 'Position', 'Cell', 'Franchise', 'Actions'].map(h => (
+                {['Name', ...(user?.role === 'Admin' ? ['ID Number'] : []), 'Position', 'Cell', 'Franchise', 'Actions'].map(h => (
                   <th key={h} style={{
                     padding: '10px 22px', textAlign: 'left',
                     color: '#94a3b8', fontSize: '11px', fontWeight: '600',
@@ -1458,7 +1471,7 @@ export default function Employees() {
                 if (i === 0 || dept !== prevDept) {
                   rows.push(
                     <tr key={`dept-${dept}`}>
-                      <td colSpan={user?.role !== 'Consultant' ? 6 : 5} style={{
+                      <td colSpan={user?.role === 'Admin' ? 6 : 5} style={{
                         padding: '8px 22px 6px',
                         background: '#f8fafc',
                         borderTop: i === 0 ? 'none' : '2px solid #e4e8f0',
@@ -1475,7 +1488,7 @@ export default function Employees() {
                   <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>
                     {emp.first_name} {emp.last_name}
                   </td>
-                  {user?.role !== 'Consultant' && (
+                  {user?.role === 'Admin' && (
                     <td style={{ padding: '12px 22px', color: '#64748b' }}>
                       {emp.id_number || '—'}
                     </td>
@@ -1497,10 +1510,12 @@ export default function Employees() {
                   </td>
                   <td style={{ padding: '12px 22px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={() => openDetail(emp)}
-                        style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
-                        View
-                      </button>
+                      {(user?.role === 'Admin' || emp?.user_id === user?.id) && (
+                        <button onClick={() => openDetail(emp)}
+                          style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
+                          View
+                        </button>
+                      )}
                       {(user?.role === 'Admin' || emp?.user_id === user?.id) && (
                         <button onClick={() => openEdit(emp)}
                           style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>

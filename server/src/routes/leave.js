@@ -117,8 +117,8 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
   }
 });
 
-// ─── GET EMPLOYEE LEAVE (HR/Admin view of specific employee) ─
-router.get('/employee/:employee_id', verifyToken, requireRole('Admin', 'HR'), async (req, res) => {
+// ─── GET EMPLOYEE LEAVE (Admin only view of specific employee) ─
+router.get('/employee/:employee_id', verifyToken, requireRole('Admin'), async (req, res) => {
   const year = new Date().getFullYear();
   try {
     let balResult = await pool.query(
