@@ -111,8 +111,9 @@ export default function Employees() {
     try {
       const res = await api.get('/employees/birthdays');
       setBdayEmployees(res.data);
-    } catch { /* ignore */ }
-    finally { setBdayLoading(false); }
+    } catch (err) {
+      console.error('Birthday fetch error:', err.response?.data || err.message);
+    } finally { setBdayLoading(false); }
   };
 
   useEffect(() => {
@@ -1303,7 +1304,17 @@ export default function Employees() {
         ) : (
         <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
           <div style={{ padding: '14px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Employee Birthdays</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Employee Birthdays</h3>
+              <button
+                onClick={fetchBirthdayEmployees}
+                disabled={bdayLoading}
+                title="Refresh birthday data"
+                style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '7px', padding: '3px 10px', cursor: bdayLoading ? 'default' : 'pointer', color: '#64748b', fontSize: '12px', fontFamily: 'DM Sans', opacity: bdayLoading ? 0.5 : 1 }}
+              >
+                {bdayLoading ? '...' : '↻ Refresh'}
+              </button>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <button onClick={() => { if (bdayMonth === 0) { setBdayMonth(11); setBdayYear(y => y - 1); } else setBdayMonth(m => m - 1); }}
                 style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '7px', padding: '4px 11px', cursor: 'pointer', color: '#64748b', fontSize: '14px', fontFamily: 'DM Sans' }}>‹</button>

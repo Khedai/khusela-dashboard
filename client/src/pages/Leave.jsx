@@ -815,13 +815,21 @@ export default function Leave() {
             <Spinner size="lg" dark label="Loading balances..." />
           ) : (
             <div>
-              <div style={{ padding: '12px 22px', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ padding: '12px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <input
                   placeholder="Search employees..."
                   value={balanceSearch}
                   onChange={e => setBalanceSearch(e.target.value)}
                   style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', width: '100%', maxWidth: '280px', boxSizing: 'border-box', outline: 'none', color: '#0f172a' }}
                 />
+                <button
+                  onClick={fetchBalances}
+                  disabled={balancesLoading}
+                  title="Refresh balances"
+                  style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 13px', cursor: balancesLoading ? 'default' : 'pointer', color: '#64748b', fontSize: '12px', fontFamily: 'DM Sans', whiteSpace: 'nowrap', opacity: balancesLoading ? 0.5 : 1 }}
+                >
+                  {balancesLoading ? '...' : '↻ Refresh'}
+                </button>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
