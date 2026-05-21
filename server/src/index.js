@@ -15,6 +15,9 @@ if (JWT_SECRET.length < 32) {
 const pool = require('./config/db');
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMPTZ').catch(() => {});
 
+// Drop legacy CHECK constraint on documents.doc_type — UI allows arbitrary names (SARS, etc.)
+pool.query('ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_doc_type_check').catch(() => {});
+
 // Leave request comments thread — introspect users.id type so we match it exactly
 pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
   .then(res => {
