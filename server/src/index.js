@@ -15,81 +15,96 @@ if (JWT_SECRET.length < 32) {
 const pool = require('./config/db');
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMPTZ').catch(() => {});
 
-// Leave request comments thread
-// Drop and recreate if leave_request_id is INTEGER (employees/leave_requests use UUID PKs)
-pool.query(`
-  DO $$
-  BEGIN
-    IF EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_name = 'leave_request_notes'
-        AND column_name = 'leave_request_id'
-        AND data_type = 'integer'
-    ) THEN
-      DROP TABLE leave_request_notes;
-    END IF;
-  END $$
-`).then(() => pool.query(`
-  CREATE TABLE IF NOT EXISTS leave_request_notes (
-    id SERIAL PRIMARY KEY,
-    leave_request_id UUID NOT NULL REFERENCES leave_requests(id) ON DELETE CASCADE,
-    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    note TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-  )
-`)).catch(err => console.error('leave_request_notes migration error:', err.message));
+// Leave request comments thread — introspect users.id type so we match it exactly
+pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
+  .then(res => {
+    const userIdType = res.rows[0]?.data_type === 'uuid' ? 'UUID' : 'INTEGER';
+    // Drop existing table if either FK column has wrong type
+    return pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'leave_request_notes'
+            AND ((column_name = 'leave_request_id' AND data_type != 'uuid')
+              OR (column_name = 'user_id' AND data_type != '${userIdType.toLowerCase()}'))
+        ) THEN
+          DROP TABLE leave_request_notes;
+        END IF;
+      END $$
+    `).then(() => pool.query(`
+      CREATE TABLE IF NOT EXISTS leave_request_notes (
+        id SERIAL PRIMARY KEY,
+        leave_request_id UUID NOT NULL REFERENCES leave_requests(id) ON DELETE CASCADE,
+        user_id ${userIdType} REFERENCES users(id) ON DELETE SET NULL,
+        note TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `));
+  })
+  .catch(err => console.error('leave_request_notes migration error:', err.message));
 
 // Formal disciplinary / written warning records
-pool.query(`
-  DO $$
-  BEGIN
-    IF EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_name = 'written_warnings'
-        AND column_name = 'employee_id'
-        AND data_type = 'integer'
-    ) THEN
-      DROP TABLE written_warnings;
-    END IF;
-  END $$
-`).then(() => pool.query(`
-  CREATE TABLE IF NOT EXISTS written_warnings (
-    id SERIAL PRIMARY KEY,
-    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-    warning_type VARCHAR(60) NOT NULL DEFAULT 'Written Warning',
-    reason TEXT NOT NULL,
-    issued_date DATE,
-    notes TEXT,
-    issued_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-  )
-`)).catch(err => console.error('written_warnings migration error:', err.message));
+pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
+  .then(res => {
+    const userIdType = res.rows[0]?.data_type === 'uuid' ? 'UUID' : 'INTEGER';
+    return pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'written_warnings'
+            AND ((column_name = 'employee_id' AND data_type != 'uuid')
+              OR (column_name = 'issued_by' AND data_type != '${userIdType.toLowerCase()}'))
+        ) THEN
+          DROP TABLE written_warnings;
+        END IF;
+      END $$
+    `).then(() => pool.query(`
+      CREATE TABLE IF NOT EXISTS written_warnings (
+        id SERIAL PRIMARY KEY,
+        employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        warning_type VARCHAR(60) NOT NULL DEFAULT 'Written Warning',
+        reason TEXT NOT NULL,
+        issued_date DATE,
+        notes TEXT,
+        issued_by ${userIdType} REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `));
+  })
+  .catch(err => console.error('written_warnings migration error:', err.message));
 
 // Manual leave adjustments
-pool.query(`
-  DO $$
-  BEGIN
-    IF EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_name = 'leave_manual_adjustments'
-        AND column_name = 'employee_id'
-        AND data_type = 'integer'
-    ) THEN
-      DROP TABLE leave_manual_adjustments;
-    END IF;
-  END $$
-`).then(() => pool.query(`
-  CREATE TABLE IF NOT EXISTS leave_manual_adjustments (
-    id SERIAL PRIMARY KEY,
-    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-    leave_type VARCHAR(50) NOT NULL,
-    days DECIMAL(4,1) NOT NULL,
-    description TEXT,
-    year INTEGER NOT NULL,
-    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-  )
-`)).catch(err => console.error('leave_manual_adjustments migration error:', err.message));
+pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
+  .then(res => {
+    const userIdType = res.rows[0]?.data_type === 'uuid' ? 'UUID' : 'INTEGER';
+    return pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'leave_manual_adjustments'
+            AND ((column_name = 'employee_id' AND data_type != 'uuid')
+              OR (column_name = 'created_by' AND data_type != '${userIdType.toLowerCase()}'))
+        ) THEN
+          DROP TABLE leave_manual_adjustments;
+        END IF;
+      END $$
+    `).then(() => pool.query(`
+      CREATE TABLE IF NOT EXISTS leave_manual_adjustments (
+        id SERIAL PRIMARY KEY,
+        employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        leave_type VARCHAR(50) NOT NULL,
+        days DECIMAL(4,1) NOT NULL,
+        description TEXT,
+        year INTEGER NOT NULL,
+        created_by ${userIdType} REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `));
+  })
+  .catch(err => console.error('leave_manual_adjustments migration error:', err.message));
 
 
 // Ensure leave_balances uses UUID for employee_id (employees table uses UUID PKs)

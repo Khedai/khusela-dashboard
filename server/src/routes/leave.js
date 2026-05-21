@@ -418,7 +418,8 @@ router.get('/request/:id/notes', async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch notes.' });
+    console.error('GET /leave/request/:id/notes error:', err.message, err.code);
+    res.status(500).json({ error: 'Failed to fetch notes.', detail: err.message });
   }
 });
 
@@ -433,7 +434,8 @@ router.post('/request/:id/notes', async (req, res) => {
     );
     res.status(201).json({ ...result.rows[0], username: req.user.username, role: req.user.role });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to add note.' });
+    console.error('POST /leave/request/:id/notes error:', err.message, err.code);
+    res.status(500).json({ error: 'Failed to add note.', detail: err.message });
   }
 });
 
@@ -449,7 +451,8 @@ router.delete('/request/:id/notes/:noteId', async (req, res) => {
     await pool.query('DELETE FROM leave_request_notes WHERE id = $1', [req.params.noteId]);
     res.json({ message: 'Deleted.' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete note.' });
+    console.error('DELETE /leave/request/:id/notes/:noteId error:', err.message, err.code);
+    res.status(500).json({ error: 'Failed to delete note.', detail: err.message });
   }
 });
 
