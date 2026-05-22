@@ -47,6 +47,22 @@ pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 
   })
   .catch(err => console.error('leave_request_notes migration error:', err.message));
 
+// Employee internal HR/Admin comments thread
+pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
+  .then(res => {
+    const userIdType = res.rows[0]?.data_type === 'uuid' ? 'UUID' : 'INTEGER';
+    return pool.query(`
+      CREATE TABLE IF NOT EXISTS employee_notes (
+        id SERIAL PRIMARY KEY,
+        employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        user_id ${userIdType} REFERENCES users(id) ON DELETE SET NULL,
+        note TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  })
+  .catch(err => console.error('employee_notes migration error:', err.message));
+
 // Formal disciplinary / written warning records
 pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
   .then(res => {

@@ -239,7 +239,7 @@ router.get('/leave/:leaveId', verifyToken, async (req, res) => {
 
 // ─── EMPLOYEE FOLDER DOCUMENTS ───────────────────────────
 
-const FOLDER_CATEGORIES = ['Identity', 'Employment Contract', 'Banking', 'Medical', 'Leave', 'Disciplinary', 'Next of Kin', 'Other'];
+const FOLDER_CATEGORIES = ['Identity', 'Employment Contract', 'Banking', 'Medical', 'Leave', 'Disciplinary', 'Other'];
 
 // Upload to employee folder
 router.post(

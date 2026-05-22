@@ -27,7 +27,6 @@ const FOLDER_CATEGORIES = [
   { key: 'Medical',              icon: '', color: '#16a34a', bg: '#f0fdf4' },
   { key: 'Leave',                icon: '', color: '#0d9488', bg: '#f0fdfa' },
   { key: 'Disciplinary',         icon: '', color: '#d97706', bg: '#fffbeb' },
-  { key: 'Next of Kin',          icon: '', color: '#db2777', bg: '#fdf2f8' },
   { key: 'Other',                icon: '', color: '#64748b', bg: '#f8fafc' },
 ];
 
@@ -80,6 +79,13 @@ export default function Employees() {
   const [warnForm, setWarnForm] = useState({ warning_type: 'Written Warning', reason: '', issued_date: '', notes: '' });
   const [savingWarn, setSavingWarn] = useState(false);
   const [deletingWarnId, setDeletingWarnId] = useState(null);
+
+  // Employee comments (internal HR/Admin notes)
+  const [empNotes, setEmpNotes] = useState([]);
+  const [empNotesLoading, setEmpNotesLoading] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [postingNote, setPostingNote] = useState(false);
+  const [noteError, setNoteError] = useState('');
 
   // Add employee form
   const EMPTY_ADD = { first_name: '', last_name: '', job_title: '', email: '', home_phone: '', birth_date: '', franchise_id: '' };
@@ -179,12 +185,16 @@ export default function Employees() {
     setAddingManualLeave(false);
     setWarnings([]); setShowWarnForm(false);
     setWarnForm({ warning_type: 'Written Warning', reason: '', issued_date: '', notes: '' });
+    setEmpNotes([]); setNewNote(''); setNoteError('');
     if (user?.role !== 'Consultant') {
       setFolderLoading(true);
       fetchFolderDocs(emp.id);
       fetchEmpLeave(emp.id);
       if (user?.role === 'Admin') fetchManualLeaves(emp.id);
-      if (user?.role === 'Admin' || user?.role === 'HR') fetchWarnings(emp.id);
+      if (user?.role === 'Admin' || user?.role === 'HR') {
+        fetchWarnings(emp.id);
+        fetchEmpNotes(emp.id);
+      }
     }
   };
 
@@ -195,6 +205,34 @@ export default function Employees() {
       setWarnings(Array.isArray(res.data) ? res.data : []);
     } catch { /* ignore */ }
     finally { setWarningsLoading(false); }
+  };
+
+  const fetchEmpNotes = async (empId) => {
+    setEmpNotesLoading(true);
+    try {
+      const res = await api.get(`/employees/${empId}/notes`);
+      setEmpNotes(Array.isArray(res.data) ? res.data : []);
+    } catch { /* ignore */ }
+    finally { setEmpNotesLoading(false); }
+  };
+
+  const handlePostEmpNote = async () => {
+    if (!newNote.trim() || postingNote) return;
+    setPostingNote(true); setNoteError('');
+    try {
+      const res = await api.post(`/employees/${selected.id}/notes`, { note: newNote.trim() });
+      setEmpNotes(prev => [res.data, ...prev]);
+      setNewNote('');
+    } catch (err) {
+      setNoteError(err.response?.data?.error || 'Failed to post note.');
+    } finally { setPostingNote(false); }
+  };
+
+  const handleDeleteEmpNote = async (noteId) => {
+    try {
+      await api.delete(`/employees/${selected.id}/notes/${noteId}`);
+      setEmpNotes(prev => prev.filter(n => n.id !== noteId));
+    } catch { /* ignore */ }
   };
 
   const handleSaveWarning = async () => {
@@ -1040,7 +1078,6 @@ export default function Employees() {
                     cat.key === 'Medical' ? 'Medical Certificate' :
                     cat.key === 'Leave' ? 'Sick Note / Leave Certificate' :
                     cat.key === 'Disciplinary' ? 'Written Warning' :
-                    cat.key === 'Next of Kin' ? 'ID Copy of Next of Kin' :
                     'Document'
                   })`}
                                   style={{
@@ -1225,6 +1262,84 @@ export default function Employees() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* ── Employee Comments (HR / Admin internal notes) ── */}
+          {(user?.role === 'Admin' || user?.role === 'HR') && (
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
+              <div style={{ padding: '13px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Comments</p>
+                <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8' }}>Internal notes visible to HR and Admin only</p>
+              </div>
+
+              {/* Compose */}
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                <textarea
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handlePostEmpNote(); }}
+                  placeholder="Add an internal note..."
+                  rows={3}
+                  style={{ ...S.input, width: '100%', resize: 'vertical', boxSizing: 'border-box', padding: '10px 12px', lineHeight: '1.5' }}
+                />
+                {noteError && <p style={{ color: '#dc2626', fontSize: '12px', margin: '4px 0 0' }}>{noteError}</p>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>Ctrl+Enter to post quickly</span>
+                  <button
+                    onClick={handlePostEmpNote}
+                    disabled={postingNote || !newNote.trim()}
+                    style={{ ...S.primaryBtn, padding: '7px 18px', opacity: (postingNote || !newNote.trim()) ? 0.5 : 1, cursor: (postingNote || !newNote.trim()) ? 'not-allowed' : 'pointer' }}
+                  >
+                    {postingNote ? 'Posting...' : 'Post Note'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Notes list */}
+              {empNotesLoading ? (
+                <p style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading...</p>
+              ) : empNotes.length === 0 ? (
+                <p style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '13px', margin: 0, fontStyle: 'italic' }}>No notes yet. Add one above.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {empNotes.map((n, i) => (
+                    <div key={n.id} style={{ padding: '12px 20px', borderTop: i > 0 ? '1px solid #f8fafc' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#e0e7ff', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                            {(n.username || '?')[0].toUpperCase()}
+                          </div>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{n.username || 'Unknown'}</span>
+                          <span style={{
+                            padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700',
+                            background: n.role === 'Admin' ? '#e0e7ff' : '#f0fdf4',
+                            color: n.role === 'Admin' ? '#6366f1' : '#16a34a',
+                          }}>{n.role}</span>
+                          {n.franchise_name && (
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>{n.franchise_name}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                            {new Date(n.created_at).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}{' '}
+                            {new Date(n.created_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {(user?.role === 'Admin' || n.username === user?.username) && (
+                            <button
+                              onClick={() => handleDeleteEmpNote(n.id)}
+                              style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }}
+                              onMouseEnter={e => e.target.style.color = '#dc2626'}
+                              onMouseLeave={e => e.target.style.color = '#cbd5e1'}
+                            >×</button>
+                          )}
+                        </div>
+                      </div>
+                      <p style={{ margin: 0, paddingLeft: '36px', fontSize: '13.5px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{n.note}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

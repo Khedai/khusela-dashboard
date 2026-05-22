@@ -402,6 +402,63 @@ router.patch('/:id/link-user', requireRole('Admin', 'HR'), async (req, res) => {
   }
 });
 
+// ─── EMPLOYEE NOTES (internal HR/Admin comments) ─────────
+
+router.get('/:id/notes', requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT n.id, n.note, n.created_at,
+              u.username, u.role,
+              f.franchise_name
+       FROM employee_notes n
+       LEFT JOIN users u ON n.user_id = u.id
+       LEFT JOIN franchises f ON u.franchise_id = f.id
+       WHERE n.employee_id = $1
+       ORDER BY n.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET employee notes error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch notes.', detail: err.message });
+  }
+});
+
+router.post('/:id/notes', requireRole('Admin', 'HR'), async (req, res) => {
+  const { note } = req.body;
+  if (!note?.trim()) return res.status(400).json({ error: 'Note cannot be empty.' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO employee_notes (employee_id, user_id, note)
+       VALUES ($1, $2, $3) RETURNING id, note, created_at`,
+      [req.params.id, req.user.id, note.trim()]
+    );
+    res.status(201).json({ ...result.rows[0], username: req.user.username, role: req.user.role });
+  } catch (err) {
+    console.error('POST employee notes error:', err.message);
+    res.status(500).json({ error: 'Failed to add note.', detail: err.message });
+  }
+});
+
+router.delete('/:id/notes/:noteId', requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const check = await pool.query(
+      'SELECT user_id FROM employee_notes WHERE id = $1',
+      [req.params.noteId]
+    );
+    if (!check.rows.length) return res.status(404).json({ error: 'Note not found.' });
+    // HR can only delete their own notes; Admin can delete any
+    if (req.user.role !== 'Admin' && check.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Cannot delete this note.' });
+    }
+    await pool.query('DELETE FROM employee_notes WHERE id = $1', [req.params.noteId]);
+    res.json({ message: 'Deleted.' });
+  } catch (err) {
+    console.error('DELETE employee notes error:', err.message);
+    res.status(500).json({ error: 'Failed to delete note.', detail: err.message });
+  }
+});
+
 // ─── WRITTEN WARNINGS ────────────────────────────────────
 
 router.get('/:id/warnings', requireRole('Admin', 'HR'), async (req, res) => {
