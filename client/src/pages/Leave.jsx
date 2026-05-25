@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
@@ -39,6 +40,7 @@ function workingDays(start, end) {
 
 export default function Leave() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const isManager = user?.role === 'Admin'; // Only Admin manages leave; HR + Consultant see & apply for their own
 
@@ -200,6 +202,15 @@ export default function Leave() {
     }
   };
 
+  // Open request from inbox notification link (?request=<id>)
+  useEffect(() => {
+    const requestId = searchParams.get('request');
+    if (!requestId || loading) return;
+    if (selectedRequest && String(selectedRequest.id) === requestId) return;
+    const req = requests.find(r => String(r.id) === requestId);
+    if (req) openLeaveDetail(req);
+  }, [searchParams, requests, loading, selectedRequest]);
+
   const postReqNote = async () => {
     if (!newReqNote.trim() || postingReqNote || !selectedRequest) return;
     setPostingReqNote(true);
@@ -252,7 +263,7 @@ export default function Leave() {
     return (
       <div style={{ maxWidth: '700px' }}>
         <button
-          onClick={() => { setSelectedRequest(null); setLeaveDocs([]); setError(''); }}
+          onClick={() => { setSelectedRequest(null); setLeaveDocs([]); setError(''); setSearchParams({}); }}
           style={{
             background: 'none',
             border: 'none',

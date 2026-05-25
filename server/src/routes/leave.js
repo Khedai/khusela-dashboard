@@ -247,6 +247,9 @@ router.post('/request', async (req, res) => {
       `SELECT id FROM users WHERE role = 'Admin' AND is_active = TRUE`
     );
 
+    const leaveId = result.rows[0].id;
+    const leaveLink = `/leave?request=${leaveId}`;
+
     const emp = await pool.query('SELECT first_name, last_name FROM employees WHERE id = $1', [employee_id]);
     const empName = emp.rows.length > 0 ? `${emp.rows[0].first_name} ${emp.rows[0].last_name}` : 'An employee';
 
@@ -258,7 +261,7 @@ router.post('/request', async (req, res) => {
           manager.id,
           'New Leave Request — Pending',
           `${empName} has submitted a ${leave_type} leave request for ${days_requested} day(s) starting ${start_date}. Action required.`,
-          '/leave'
+          leaveLink,
         ]
       );
     }
@@ -331,6 +334,35 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
       }
     }
 
+    const leaveLink = `/leave?request=${req.params.id}`;
+    const empRow = await pool.query(
+      'SELECT first_name, last_name FROM employees WHERE id = $1',
+      [req_data.employee_id]
+    );
+    const empName = empRow.rows.length > 0
+      ? `${empRow.rows[0].first_name} ${empRow.rows[0].last_name}`.trim()
+      : 'An employee';
+    const startLabel = req_data.start_date?.split('T')[0] || req_data.start_date;
+    const reasonSuffix = rejection_reason ? ` Reason: ${rejection_reason}` : '';
+
+    // Update Admin inbox notifications for this request (Pending → Approved/Rejected)
+    await pool.query(
+      `UPDATE notifications
+       SET title = $1, message = $2, link = $3, is_read = FALSE
+       WHERE title LIKE 'New Leave Request%'
+         AND (
+           link = $3
+           OR (link = '/leave' AND title = 'New Leave Request — Pending' AND message LIKE $4 AND message LIKE $5)
+         )`,
+      [
+        `New Leave Request — ${status}`,
+        `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been ${status.toLowerCase()}.${reasonSuffix}`,
+        leaveLink,
+        `%${empName}%`,
+        `%${startLabel}%`,
+      ]
+    );
+
     // Notify the employee
     const empUser = await pool.query(
       `SELECT u.id FROM users u
@@ -346,8 +378,8 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
         [
           empUser.rows[0].id,
           `Leave Request ${status}`,
-          `Your ${req_data.leave_type} leave (${req_data.days_requested} days) has been ${status.toLowerCase()}.${rejection_reason ? ' Reason: ' + rejection_reason : ''}`,
-          '/inbox'
+          `Your ${req_data.leave_type} leave (${req_data.days_requested} days) has been ${status.toLowerCase()}.${reasonSuffix}`,
+          '/inbox',
         ]
       );
     }
