@@ -175,6 +175,8 @@ router.post('/', requireRole('Admin'), async (req, res) => {
     allergies_health_concerns,
     ec_title, ec_first_name, ec_last_name, ec_address,
     ec_primary_phone, ec_alternate_phone, ec_relationship,
+    sec_title, sec_first_name, sec_last_name, sec_address,
+    sec_primary_phone, sec_alternate_phone, sec_relationship,
     bank_name, branch_name, branch_code, account_name, account_number
   } = req.body;
 
@@ -195,11 +197,14 @@ router.post('/', requireRole('Admin'), async (req, res) => {
         allergies_health_concerns,
         ec_title, ec_first_name, ec_last_name, ec_address,
         ec_primary_phone, ec_alternate_phone, ec_relationship,
+        sec_title, sec_first_name, sec_last_name, sec_address,
+        sec_primary_phone, sec_alternate_phone, sec_relationship,
         bank_name, branch_name, branch_code, account_name, account_number
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
         $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
-        $24, $25, $26, $27, $28
+        $24, $25, $26, $27, $28, $29, $30,
+        $31, $32, $33, $34, $35
       ) RETURNING *`,
       [
         user_id || null, franchiseId,
@@ -209,6 +214,8 @@ router.post('/', requireRole('Admin'), async (req, res) => {
         sanitize(allergies_health_concerns),
         sanitize(ec_title), sanitize(ec_first_name), sanitize(ec_last_name), sanitize(ec_address),
         sanitize(ec_primary_phone), sanitize(ec_alternate_phone), sanitize(ec_relationship),
+        sanitize(sec_title), sanitize(sec_first_name), sanitize(sec_last_name), sanitize(sec_address),
+        sanitize(sec_primary_phone), sanitize(sec_alternate_phone), sanitize(sec_relationship),
         sanitize(bank_name), sanitize(branch_name), sanitize(branch_code), sanitize(account_name), sanitize(account_number)
       ]
     );
@@ -236,6 +243,8 @@ router.put('/:id', requireRole('Admin', 'HR'), async (req, res) => {
     allergies_health_concerns,
     ec_title, ec_first_name, ec_last_name, ec_address,
     ec_primary_phone, ec_alternate_phone, ec_relationship,
+    sec_title, sec_first_name, sec_last_name, sec_address,
+    sec_primary_phone, sec_alternate_phone, sec_relationship,
     bank_name, branch_name, branch_code, account_name, account_number
   } = req.body;
 
@@ -251,9 +260,12 @@ router.put('/:id', requireRole('Admin', 'HR'), async (req, res) => {
         ec_title = $15, ec_first_name = $16, ec_last_name = $17,
         ec_address = $18, ec_primary_phone = $19,
         ec_alternate_phone = $20, ec_relationship = $21,
-        bank_name = $22, branch_name = $23, branch_code = $24,
-        account_name = $25, account_number = $26
-       WHERE id = $27
+        sec_title = $22, sec_first_name = $23, sec_last_name = $24,
+        sec_address = $25, sec_primary_phone = $26,
+        sec_alternate_phone = $27, sec_relationship = $28,
+        bank_name = $29, branch_name = $30, branch_code = $31,
+        account_name = $32, account_number = $33
+       WHERE id = $34
        RETURNING *`,
       [
         sanitize(title), sanitize(first_name), sanitize(last_name), sanitize(id_number), sanitize(tax_number),
@@ -262,6 +274,8 @@ router.put('/:id', requireRole('Admin', 'HR'), async (req, res) => {
         sanitize(allergies_health_concerns),
         sanitize(ec_title), sanitize(ec_first_name), sanitize(ec_last_name), sanitize(ec_address),
         sanitize(ec_primary_phone), sanitize(ec_alternate_phone), sanitize(ec_relationship),
+        sanitize(sec_title), sanitize(sec_first_name), sanitize(sec_last_name), sanitize(sec_address),
+        sanitize(sec_primary_phone), sanitize(sec_alternate_phone), sanitize(sec_relationship),
         sanitize(bank_name), sanitize(branch_name), sanitize(branch_code), sanitize(account_name), sanitize(account_number),
         req.params.id
       ]
@@ -307,6 +321,8 @@ router.patch('/:id', verifyToken, requireRole('Admin', 'HR'), async (req, res) =
     allergies_health_concerns,
     ec_title, ec_first_name, ec_last_name, ec_address,
     ec_primary_phone, ec_alternate_phone, ec_relationship,
+    sec_title, sec_first_name, sec_last_name, sec_address,
+    sec_primary_phone, sec_alternate_phone, sec_relationship,
     bank_name, branch_name, branch_code,
     account_name, account_number, account_type,
     job_title, employment_date,
@@ -343,11 +359,14 @@ router.patch('/:id', verifyToken, requireRole('Admin', 'HR'), async (req, res) =
         ec_title = $17, ec_first_name = $18, ec_last_name = $19,
         ec_address = $20, ec_primary_phone = $21,
         ec_alternate_phone = $22, ec_relationship = $23,
-        bank_name = $24, branch_name = $25, branch_code = $26,
-        account_name = $27, account_number = $28, account_type = $29,
-        job_title = $30, employment_date = $31
-        ${req.user.role === 'Admin' ? ', franchise_id = $33' : ''}
-      WHERE id = $32
+        sec_title = $24, sec_first_name = $25, sec_last_name = $26,
+        sec_address = $27, sec_primary_phone = $28,
+        sec_alternate_phone = $29, sec_relationship = $30,
+        bank_name = $31, branch_name = $32, branch_code = $33,
+        account_name = $34, account_number = $35, account_type = $36,
+        job_title = $37, employment_date = $38
+        ${req.user.role === 'Admin' ? ', franchise_id = $40' : ''}
+      WHERE id = $39
       RETURNING *`,
       [
         sanitize(title) || null, sanitize(first_name), sanitize(last_name) || null,
@@ -360,6 +379,9 @@ router.patch('/:id', verifyToken, requireRole('Admin', 'HR'), async (req, res) =
         sanitize(ec_title) || null, sanitize(ec_first_name) || null, sanitize(ec_last_name) || null,
         sanitize(ec_address) || null, sanitize(ec_primary_phone) || null,
         sanitize(ec_alternate_phone) || null, sanitize(ec_relationship) || null,
+        sanitize(sec_title) || null, sanitize(sec_first_name) || null, sanitize(sec_last_name) || null,
+        sanitize(sec_address) || null, sanitize(sec_primary_phone) || null,
+        sanitize(sec_alternate_phone) || null, sanitize(sec_relationship) || null,
         sanitize(bank_name) || null, sanitize(branch_name) || null, sanitize(branch_code) || null,
         sanitize(account_name) || null, sanitize(account_number) || null, sanitize(account_type) || null,
         sanitize(job_title) || null, employment_date || null,

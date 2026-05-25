@@ -203,9 +203,30 @@ export async function generateEmployeeForm(employee) {
   leftY = F('Address', e.ec_address, 12, leftY, 185);
   y = Math.max(leftY, rightY) + 4;
 
+  const hasSecondaryEC = isTemplate || e.sec_first_name || e.sec_last_name || e.sec_primary_phone;
+  if (hasSecondaryEC) {
+    // If we're already low on the page (e.g. y > 210), start a new page for secondary contact
+    if (y > 210) {
+      addFooter(doc, doc.internal.pages.length - 1);
+      doc.addPage();
+      await addHeader(doc, 'Employee Record', isTemplate ? 'Template' : `${e.first_name || ''} ${e.last_name || ''}`);
+      y = 30;
+    }
+    y = addSectionTitle(doc, 'Secondary Emergency Contact', y);
+    leftY = y; rightY = y;
+    leftY = F('Title', e.sec_title, 12, leftY, 30);
+    rightY = F('Relationship', e.sec_relationship, 110, rightY, 85);
+    leftY = F('First Name', e.sec_first_name, 12, leftY, 85);
+    rightY = F('Last Name', e.sec_last_name, 110, rightY, 85);
+    leftY = F('Primary Phone', e.sec_primary_phone, 12, leftY, 85);
+    rightY = F('Alternate Phone', e.sec_alternate_phone, 110, rightY, 85);
+    leftY = F('Address', e.sec_address, 12, leftY, 185);
+    y = Math.max(leftY, rightY) + 4;
+  }
+
   // Check if we need a new page
   if (y > 240) {
-    addFooter(doc, 1);
+    addFooter(doc, doc.internal.pages.length - 1);
     doc.addPage();
     await addHeader(doc, 'Employee Record', isTemplate ? 'Template' : `${e.first_name || ''} ${e.last_name || ''}`);
     y = 30;

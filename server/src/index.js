@@ -14,6 +14,13 @@ if (JWT_SECRET.length < 32) {
 // Run once on startup — safe to repeat
 const pool = require('./config/db');
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMPTZ').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_title VARCHAR(10)').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_first_name VARCHAR(50)').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_last_name VARCHAR(50)').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_relationship VARCHAR(50)').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_primary_phone VARCHAR(20)').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_alternate_phone VARCHAR(20)').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_address TEXT').catch(() => {});
 
 // Drop legacy CHECK constraint on documents.doc_type — UI allows arbitrary names (SARS, etc.)
 pool.query('ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_doc_type_check').catch(() => {});

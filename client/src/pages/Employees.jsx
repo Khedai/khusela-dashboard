@@ -589,6 +589,39 @@ export default function Employees() {
             </FormGrid>
           </FormSection>
 
+          {/* Secondary Emergency Contact */}
+          <FormSection title="Secondary Emergency Contact">
+            <FormGrid>
+              <FormField label="Title">
+                <select value={f('sec_title')} onChange={set('sec_title')} style={S.input}>
+                  <option value="">—</option>
+                  {TITLES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </FormField>
+              <FormField label="First Name">
+                <input value={f('sec_first_name')} onChange={set('sec_first_name')} style={S.input} />
+              </FormField>
+              <FormField label="Last Name">
+                <input value={f('sec_last_name')} onChange={set('sec_last_name')} style={S.input} />
+              </FormField>
+              <FormField label="Relationship">
+                <select value={f('sec_relationship')} onChange={set('sec_relationship')} style={S.input}>
+                  <option value="">— Select —</option>
+                  {RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Primary Phone">
+                <input value={f('sec_primary_phone')} onChange={set('sec_primary_phone')} style={S.input} />
+              </FormField>
+              <FormField label="Alternate Phone">
+                <input value={f('sec_alternate_phone')} onChange={set('sec_alternate_phone')} style={S.input} />
+              </FormField>
+              <FormField label="Address" span={2}>
+                <input value={f('sec_address')} onChange={set('sec_address')} style={S.input} />
+              </FormField>
+            </FormGrid>
+          </FormSection>
+
           {/* Banking */}
           <FormSection title="Banking Details">
             <FormGrid>
@@ -853,6 +886,13 @@ export default function Employees() {
             { label: 'Primary Phone', value: selected.ec_primary_phone },
             { label: 'Alternate Phone', value: selected.ec_alternate_phone },
             { label: 'Address', value: selected.ec_address },
+          ]} />
+          <DetailSection title="Secondary Emergency Contact" data={[
+            { label: 'Name', value: `${selected.sec_title || ''} ${selected.sec_first_name || ''} ${selected.sec_last_name || ''}`.trim() },
+            { label: 'Relationship', value: selected.sec_relationship },
+            { label: 'Primary Phone', value: selected.sec_primary_phone },
+            { label: 'Alternate Phone', value: selected.sec_alternate_phone },
+            { label: 'Address', value: selected.sec_address },
           ]} />
           <DetailSection title="Health" data={[
             { label: 'Allergies / Health Concerns', value: selected.allergies_health_concerns || 'None' },

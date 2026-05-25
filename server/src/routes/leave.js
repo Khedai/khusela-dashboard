@@ -70,29 +70,30 @@ router.get('/requests', verifyToken, requireRole('Admin'), async (req, res) => {
 router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
   const year = new Date().getFullYear();
   try {
-    const result = await pool.query(
-      `SELECT
-        e.id AS employee_id, e.first_name, e.last_name,
-        f.franchise_name,
-        COALESCE(lb.annual_total, 15) AS annual_total,
-        COALESCE(lb.annual_used, 0)  AS annual_used,
-        COALESCE(lb.sick_total, 30)  AS sick_total,
-        COALESCE(lb.sick_used, 0)    AS sick_used,
-        COALESCE(lb.family_total, 3) AS family_total,
-        COALESCE(lb.family_used, 0)  AS family_used
+    // Get all active employees
+    const empResult = await pool.query(
+      `SELECT e.id, e.first_name, e.last_name, f.franchise_name
        FROM employees e
-       LEFT JOIN leave_balances lb ON lb.employee_id = e.id AND lb.year = $1
        LEFT JOIN franchises f ON e.franchise_id = f.id
        WHERE e.terminated_at IS NULL
-       ORDER BY e.first_name, e.last_name`,
+       ORDER BY e.first_name, e.last_name`
+    );
+
+    // Get all leave balances for the current year
+    const balResult = await pool.query(
+      'SELECT * FROM leave_balances WHERE year = $1',
       [year]
     );
+
+    const balMap = {};
+    for (const b of balResult.rows) balMap[b.employee_id] = b;
+
+    // Get manual adjustments
     let adjMap = {};
     try {
       const manual = await pool.query(
         `SELECT employee_id, leave_type, SUM(days)::float AS total
-         FROM leave_manual_adjustments
-         WHERE year = $1
+         FROM leave_manual_adjustments WHERE year = $1
          GROUP BY employee_id, leave_type`,
         [year]
       );
@@ -100,20 +101,28 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
         if (!adjMap[r.employee_id]) adjMap[r.employee_id] = {};
         adjMap[r.employee_id][r.leave_type] = r.total;
       }
-    } catch { /* table may not exist yet */ }
-    const rows = result.rows.map(e => {
-      const adj = adjMap[e.employee_id] || {};
+    } catch { /* table might not exist yet */ }
+
+    const rows = empResult.rows.map(e => {
+      const bal = balMap[e.id] || {};
+      const adj = adjMap[e.id] || {};
       return {
-        ...e,
-        annual_used:  parseFloat(e.annual_used)  + (adj['Annual'] || 0),
-        sick_used:    parseFloat(e.sick_used)     + (adj['Sick'] || 0),
-        family_used:  parseFloat(e.family_used)   + (adj['Family Responsibility'] || 0),
+        employee_id: e.id,
+        first_name: e.first_name,
+        last_name: e.last_name,
+        franchise_name: e.franchise_name,
+        annual_total: bal.annual_total ?? 15,
+        annual_used:  (bal.annual_used ?? 0) + (adj['Annual'] || 0),
+        sick_total:   bal.sick_total ?? 30,
+        sick_used:    (bal.sick_used ?? 0) + (adj['Sick'] || 0),
+        family_total: bal.family_total ?? 3,
+        family_used:  (bal.family_used ?? 0) + (adj['Family Responsibility'] || 0),
       };
     });
     res.json(rows);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Failed to fetch leave balances.' });
+    console.error('Balances error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch leave balances.', detail: err.message });
   }
 });
 
