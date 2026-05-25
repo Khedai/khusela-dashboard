@@ -242,9 +242,9 @@ router.post('/request', async (req, res) => {
       [employee_id, leave_type, start_date, end_date, days_requested, sanitize(reason) || null]
     );
 
-    // Notify all HR and Admin users
+    // Notify Admin only — leave approval is Admin-only
     const managers = await pool.query(
-      `SELECT id FROM users WHERE role IN ('Admin', 'HR') AND is_active = TRUE`
+      `SELECT id FROM users WHERE role = 'Admin' AND is_active = TRUE`
     );
 
     const emp = await pool.query('SELECT first_name, last_name FROM employees WHERE id = $1', [employee_id]);

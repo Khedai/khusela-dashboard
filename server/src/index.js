@@ -25,6 +25,15 @@ pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_address TEXT').ca
 // Drop legacy CHECK constraint on documents.doc_type — UI allows arbitrary names (SARS, etc.)
 pool.query('ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_doc_type_check').catch(() => {});
 
+// Remove leave-request inbox notifications wrongly sent to HR/Consultant (Admin-only going forward)
+pool.query(`
+  DELETE FROM notifications n
+  USING users u
+  WHERE n.user_id = u.id
+    AND u.role IN ('HR', 'Consultant')
+    AND (n.link = '/leave' OR n.title = 'New Leave Request — Pending')
+`).catch(err => console.error('leave notification cleanup:', err.message));
+
 // Leave request comments thread — introspect users.id type so we match it exactly
 pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
   .then(res => {
