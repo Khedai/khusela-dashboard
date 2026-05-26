@@ -144,6 +144,17 @@ export default function Users() {
     } finally { setResettingId(null); }
   };
 
+  const handleLinkToEmployee = async (u) => {
+    const empId = window.prompt(`Enter employee ID to link to @${u.username} (leave empty to cancel):`);
+    if (empId === null || empId === '') return;
+    try {
+      await api.patch(`/employees/${empId}/link-user`, { user_id: u.id });
+      setSuccess(`@${u.username} linked to employee ${empId}.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to link account to employee.');
+    }
+  };
+
   const roleColor = (role) => {
     if (role === 'Admin') return { background: '#f5f3ff', color: '#7c3aed' };
     if (role === 'HR') return { background: '#eff6ff', color: '#2563eb' };
@@ -364,6 +375,9 @@ export default function Users() {
                     style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
                     {resettingId === u.id ? 'Saving...' : 'Reset Password'}
                   </button>
+                  <button onClick={() => handleLinkToEmployee(u)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                    Link to Employee
+                  </button>
                   {u.id !== user?.id && (
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                       {isSuperuser && u.role !== 'Admin' && (
@@ -451,6 +465,10 @@ export default function Users() {
                       <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id}
                         style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
                         {resettingId === u.id ? 'Saving...' : 'Reset Password'}
+                      </button>
+                      <button onClick={() => handleLinkToEmployee(u)}
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                        Link to Employee
                       </button>
                       {u.id !== user?.id && (
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>

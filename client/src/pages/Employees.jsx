@@ -71,6 +71,12 @@ export default function Employees() {
   const [manualLeaveSubmitting, setManualLeaveSubmitting] = useState(false);
   const [deletingEmployeeId, setDeletingEmployeeId] = useState(null);
   const [confirmDeleteEmpId, setConfirmDeleteEmpId] = useState(null);
+  // Link user account UI
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkUsers, setLinkUsers] = useState([]);
+  const [selectedLinkUserId, setSelectedLinkUserId] = useState('');
+  const [linkingUser, setLinkingUser] = useState(false);
+  const [linkError, setLinkError] = useState('');
 
   // Written warnings
   const [warnings, setWarnings] = useState([]);
@@ -156,6 +162,50 @@ export default function Employees() {
       const res = await api.get('/franchises');
       setFranchises(res.data);
     } catch { /* ignore */ }
+  };
+
+  const fetchLinkUsers = async () => {
+    try {
+      const res = await api.get('/users');
+      setLinkUsers(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const handleOpenLink = async () => {
+    setLinkError('');
+    setLinkModalOpen(true);
+    if (linkUsers.length === 0) await fetchLinkUsers();
+  };
+
+  const handleLinkUser = async () => {
+    if (!selected) return;
+    setLinkingUser(true); setLinkError(''); setSuccess('');
+    try {
+      const res = await api.patch(`/employees/${selected.id}/link-user`, { user_id: selectedLinkUserId || null });
+      setSelected(res.data);
+      setEmployees(prev => prev.map(e => e.id === res.data.id ? res.data : e));
+      setSuccess(selectedLinkUserId ? 'Account linked.' : 'Account unlinked.');
+      setLinkModalOpen(false);
+      setSelectedLinkUserId('');
+    } catch (err) {
+      setLinkError(err.response?.data?.error || 'Failed to link account.');
+    } finally { setLinkingUser(false); }
+  };
+
+  const handleUnlink = async () => {
+    if (!selected) return;
+    if (!window.confirm('Unlink user account from this employee?')) return;
+    setLinkingUser(true); setLinkError(''); setSuccess('');
+    try {
+      const res = await api.patch(`/employees/${selected.id}/link-user`, { user_id: null });
+      setSelected(res.data);
+      setEmployees(prev => prev.map(e => e.id === res.data.id ? res.data : e));
+      setSuccess('Account unlinked.');
+    } catch (err) {
+      setLinkError(err.response?.data?.error || 'Failed to unlink account.');
+    } finally { setLinkingUser(false); }
   };
 
   const fetchPastEmployees = async () => {
@@ -832,6 +882,24 @@ export default function Employees() {
               </button>
             )}
             {user?.role === 'Admin' && (
+              <>
+                {selected?.user_id ? (
+                  <>
+                    <button onClick={handleUnlink} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                      Unlink Account
+                    </button>
+                    <button onClick={handleOpenLink} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 14px', color: '#94a3b8', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
+                      Change Link
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={handleOpenLink} style={S.primaryBtn}>
+                    Link Account
+                  </button>
+                )}
+              </>
+            )}
+            {user?.role === 'Admin' && (
               confirmDeleteEmpId === selected.id ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '7px 12px' }}>
                   <span style={{ fontSize: '12px', color: '#991b1b', fontWeight: '600' }}>Delete this record?</span>
@@ -855,6 +923,23 @@ export default function Employees() {
         </div>
 
         {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
+
+        {linkModalOpen && (
+          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', marginBottom: '12px' }}>
+            <p style={{ margin: '0 0 8px', fontWeight: '700' }}>Link user account</p>
+            {linkError && <p style={{ color: '#dc2626', margin: '6px 0' }}>{linkError}</p>}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select value={selectedLinkUserId} onChange={e => setSelectedLinkUserId(e.target.value)} style={{ ...S.input, flex: 1 }}>
+                <option value="">— Select user —</option>
+                {linkUsers.map(u => (
+                  <option key={u.id} value={u.id}>@{u.username} {u.role ? `(${u.role})` : ''}</option>
+                ))}
+              </select>
+              <button onClick={handleLinkUser} disabled={linkingUser} style={{ ...S.primaryBtn, opacity: linkingUser ? 0.7 : 1 }}>{linkingUser ? 'Linking...' : 'Link'}</button>
+              <button onClick={() => { setLinkModalOpen(false); setSelectedLinkUserId(''); }} style={S.ghostBtn}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <DetailSection title="Personal Details" data={[
