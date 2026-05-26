@@ -186,6 +186,19 @@ function SidebarContent({ user, onNavigate }) {
             </span>
           </div>
         </div>
+        <div style={{ marginTop: '10px' }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              width: '100%', padding: '9px 12px', borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.06)', background: 'transparent',
+              color: '#94a3b8', fontSize: '13px', cursor: 'pointer',
+              fontFamily: 'DM Sans', fontWeight: '600', textAlign: 'left'
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '0 16px' }} />
@@ -227,32 +240,7 @@ function SidebarContent({ user, onNavigate }) {
         )}
       </nav>
 
-      {/* Sign out */}
-      <div style={{ padding: '8px 10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <button
-          onClick={handleLogout}
-          style={{
-            width: '100%', padding: '9px 12px', borderRadius: '10px',
-            border: '1px solid transparent', background: 'transparent',
-            color: '#64748b', fontSize: '13px', cursor: 'pointer',
-            textAlign: 'left', fontFamily: 'DM Sans', fontWeight: '500',
-            display: 'flex', alignItems: 'center', gap: '8px',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(239,68,68,0.08)';
-            e.currentTarget.style.color = '#f87171';
-            e.currentTarget.style.borderColor = 'rgba(239,68,68,0.2)';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = '#64748b';
-            e.currentTarget.style.borderColor = 'transparent';
-          }}
-        >
-          <Icon path="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9" size={14} />
-          Sign out
-        </button>
-      </div>
+      {/* bottom spacer removed — sign out moved to top for mobile visibility */}
     </div>
   );
 }
