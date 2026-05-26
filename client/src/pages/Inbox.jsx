@@ -35,6 +35,8 @@ export default function Inbox() {
   useEffect(() => {
     fetchAll();
     if (isManager) fetchApplications();
+    window.addEventListener('refreshNotifications', fetchAll);
+    return () => window.removeEventListener('refreshNotifications', fetchAll);
   }, []);
 
   const fetchAll = async () => {

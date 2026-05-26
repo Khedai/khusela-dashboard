@@ -175,6 +175,9 @@ export default function Leave() {
       setRejecting(null); setRejectionReason('');
       setSuccess(`Request ${status.toLowerCase()} successfully.`);
       fetchData(page);
+      // Notify other UI (sidebar/inbox) to refresh notifications and counts
+      try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
+      try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
     } catch { setError('Failed to update request.'); }
     finally { setActioning(a => { const n = { ...a }; delete n[id]; return n; }); }
   };

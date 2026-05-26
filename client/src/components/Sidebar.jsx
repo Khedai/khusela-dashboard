@@ -111,7 +111,14 @@ function SidebarContent({ user, onNavigate }) {
       fetchNotifications();
       fetchPendingCount();
     }, 60000);
-    return () => clearInterval(interval);
+    // Listen for external requests to refresh (e.g. after leave approval)
+    window.addEventListener('refreshNotifications', fetchNotifications);
+    window.addEventListener('refreshPendingCount', fetchPendingCount);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('refreshNotifications', fetchNotifications);
+      window.removeEventListener('refreshPendingCount', fetchPendingCount);
+    };
   }, []);
 
   const fetchNotifications = async () => {
