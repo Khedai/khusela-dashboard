@@ -8,7 +8,7 @@ router.use(verifyToken);
 // ─── HELPER: merge manual adjustments into balance ───────
 async function withManualAdjustments(balance, employeeId, year) {
   const manual = await pool.query(
-    `SELECT leave_type, SUM(days)::float AS total
+    `SELECT leave_type, ROUND(SUM(days)::numeric, 2) AS total
      FROM leave_manual_adjustments
      WHERE employee_id = $1 AND year = $2
      GROUP BY leave_type`,
@@ -92,7 +92,7 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
     let adjMap = {};
     try {
       const manual = await pool.query(
-        `SELECT employee_id, leave_type, SUM(days)::float AS total
+        `SELECT employee_id, leave_type, ROUND(SUM(days)::numeric, 2) AS total
          FROM leave_manual_adjustments WHERE year = $1
          GROUP BY employee_id, leave_type`,
         [year]
