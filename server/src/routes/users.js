@@ -13,9 +13,13 @@ router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT u.id, u.username, u.role, u.is_active, u.created_at,
-              f.franchise_name
+              f.franchise_name,
+              e.id AS linked_employee_id,
+              e.first_name AS linked_employee_first,
+              e.last_name AS linked_employee_last
        FROM users u
        LEFT JOIN franchises f ON u.franchise_id = f.id
+       LEFT JOIN employees e ON e.user_id = u.id AND e.terminated_at IS NULL
        ORDER BY u.created_at DESC`
     );
     res.json(result.rows);
@@ -86,6 +90,11 @@ router.post('/', async (req, res) => {
 // ─── TOGGLE ACTIVE STATUS ─────────────────────────────────
 router.patch('/:id/toggle', async (req, res) => {
   try {
+    // Prevent deactivation of protected accounts
+    const target = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id]);
+    if (target.rows.length > 0 && PROTECTED_USERNAMES.includes(target.rows[0].username)) {
+      return res.status(403).json({ error: 'This account is protected and cannot be deactivated.' });
+    }
     const result = await pool.query(
       `UPDATE users SET is_active = NOT is_active
        WHERE id = $1
@@ -103,7 +112,7 @@ router.patch('/:id/toggle', async (req, res) => {
 });
 
 // ─── RESET PASSWORD ───────────────────────────────────────
-router.patch('/:id/password', async (req, res) => {
+router.patch('/:id/reset-password', async (req, res) => {
   const { password } = req.body;
 
   if (!password || password.length < 10 || !/[0-9!@#$%^&*]/.test(password)) {
@@ -111,6 +120,11 @@ router.patch('/:id/password', async (req, res) => {
   }
 
   try {
+    // Prevent password reset of protected accounts
+    const target = await pool.query('SELECT username FROM users WHERE id = $1', [req.params.id]);
+    if (target.rows.length > 0 && PROTECTED_USERNAMES.includes(target.rows[0].username)) {
+      return res.status(403).json({ error: 'This account is protected and its password cannot be reset by other admins.' });
+    }
     const passwordHash = await bcrypt.hash(password, 12);
     await pool.query(
       'UPDATE users SET password_hash = $1 WHERE id = $2',

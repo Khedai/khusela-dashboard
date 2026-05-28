@@ -4,7 +4,7 @@
 
 const axios = require('axios');
 
-const API_BASE = process.env.API_URL || 'http://localhost:3000/api';
+const API_BASE = process.env.API_URL || 'http://localhost:5000/api';
 const COUNT = parseInt(process.argv[2], 10) || 3;
 
 async function run() {

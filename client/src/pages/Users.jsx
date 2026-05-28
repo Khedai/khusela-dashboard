@@ -25,6 +25,12 @@ export default function Users() {
   const [promotingId, setPromotingId] = useState(null);
   const [demotingId, setDemotingId] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [linkingId, setLinkingId] = useState(null);
+  const [unlinkingId, setUnlinkingId] = useState(null);
+  const [unlinkedEmployees, setUnlinkedEmployees] = useState([]);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkTargetUser, setLinkTargetUser] = useState(null);
+  const [selectedEmpId, setSelectedEmpId] = useState('');
   const isSuperuser = user?.username === 'Ayabonga';
   const [showPassword, setShowPassword] = useState(false);
 
@@ -144,15 +150,45 @@ export default function Users() {
     } finally { setResettingId(null); }
   };
 
-  const handleLinkToEmployee = async (u) => {
-    const empId = window.prompt(`Enter employee ID to link to @${u.username} (leave empty to cancel):`);
-    if (empId === null || empId === '') return;
+  const fetchUnlinkedEmployees = async () => {
     try {
-      await api.patch(`/employees/${empId}/link-user`, { user_id: u.id });
-      setSuccess(`@${u.username} linked to employee ${empId}.`);
+      const res = await api.get('/employees?limit=200');
+      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      setUnlinkedEmployees(data.filter(e => !e.user_id));
+    } catch { }
+  };
+
+  const openLinkModal = async (u) => {
+    setLinkTargetUser(u);
+    setSelectedEmpId('');
+    await fetchUnlinkedEmployees();
+    setLinkModalOpen(true);
+  };
+
+  const handleLinkEmployee = async () => {
+    if (!selectedEmpId || !linkTargetUser) return;
+    setLinkingId(linkTargetUser.id); setError(''); setSuccess('');
+    try {
+      await api.patch(`/employees/${selectedEmpId}/link-user`, { user_id: linkTargetUser.id });
+      setSuccess(`@${linkTargetUser.username} linked to employee successfully.`);
+      setLinkModalOpen(false);
+      setLinkTargetUser(null);
+      fetchUsers();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to link account to employee.');
-    }
+    } finally { setLinkingId(null); }
+  };
+
+  const handleUnlinkEmployee = async (u) => {
+    if (!window.confirm(`Unlink @${u.username} from employee ${u.linked_employee_first} ${u.linked_employee_last}?`)) return;
+    setUnlinkingId(u.id); setError(''); setSuccess('');
+    try {
+      await api.patch(`/employees/${u.linked_employee_id}/link-user`, { user_id: null });
+      setSuccess(`@${u.username} has been unlinked.`);
+      fetchUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to unlink.');
+    } finally { setUnlinkingId(null); }
   };
 
   const roleColor = (role) => {
@@ -371,13 +407,30 @@ export default function Users() {
                   {u.franchise_name || 'No franchise'}
                 </p>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id}
-                    style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                    {resettingId === u.id ? 'Saving...' : 'Reset Password'}
-                  </button>
-                  <button onClick={() => handleLinkToEmployee(u)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                    Link to Employee
-                  </button>
+                  {!PROTECTED.includes(u.username) && (
+                    <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id}
+                      style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                      {resettingId === u.id ? 'Saving...' : 'Reset Password'}
+                    </button>
+                  )}
+                  {!PROTECTED.includes(u.username) && (
+                    u.linked_employee_id ? (
+                      <>
+                        <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
+                          Linked: {u.linked_employee_first} {u.linked_employee_last}
+                        </span>
+                        <button onClick={() => handleUnlinkEmployee(u)} disabled={unlinkingId === u.id}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                          {unlinkingId === u.id ? '...' : 'Unlink'}
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => openLinkModal(u)}
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                        Link to Employee
+                      </button>
+                    )
+                  )}
                   {u.id !== user?.id && (
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                       {isSuperuser && u.role !== 'Admin' && (
@@ -392,10 +445,12 @@ export default function Users() {
                           {demotingId === u.id ? '...' : '↓ Demote to HR'}
                         </button>
                       )}
-                      <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
-                        style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                        {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
-                      </button>
+                      {!PROTECTED.includes(u.username) && (
+                        <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
+                          style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                          {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      )}
                       {!PROTECTED.includes(u.username) && (
                         confirmDeleteId === u.id ? (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -462,14 +517,30 @@ export default function Users() {
                   </td>
                   <td style={{ padding: '12px 22px' }}>
                     <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                      <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id}
-                        style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                        {resettingId === u.id ? 'Saving...' : 'Reset Password'}
-                      </button>
-                      <button onClick={() => handleLinkToEmployee(u)}
-                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                        Link to Employee
-                      </button>
+                      {!PROTECTED.includes(u.username) && (
+                        <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id}
+                          style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                          {resettingId === u.id ? 'Saving...' : 'Reset Password'}
+                        </button>
+                      )}
+                      {!PROTECTED.includes(u.username) && (
+                        u.linked_employee_id ? (
+                          <>
+                            <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600' }}>
+                              Linked: {u.linked_employee_first} {u.linked_employee_last}
+                            </span>
+                            <button onClick={() => handleUnlinkEmployee(u)} disabled={unlinkingId === u.id}
+                              style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                              {unlinkingId === u.id ? '...' : 'Unlink'}
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => openLinkModal(u)}
+                            style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                            Link to Employee
+                          </button>
+                        )
+                      )}
                       {u.id !== user?.id && (
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                           {isSuperuser && u.role !== 'Admin' && (
@@ -484,10 +555,12 @@ export default function Users() {
                               {demotingId === u.id ? '...' : '↓ Demote to HR'}
                             </button>
                           )}
-                          <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
-                            style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                            {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
+                          {!PROTECTED.includes(u.username) && (
+                            <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
+                              style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
+                              {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                          )}
                           {!PROTECTED.includes(u.username) && (
                             confirmDeleteId === u.id ? (
                               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -517,6 +590,49 @@ export default function Users() {
           </table>
         )}
       </div>
+
+      {/* ── LINK EMPLOYEE MODAL ── */}
+      {linkModalOpen && linkTargetUser && (
+        <>
+          <div onClick={() => { setLinkModalOpen(false); setLinkTargetUser(null); }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400, backdropFilter: 'blur(2px)' }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 401, background: 'white', borderRadius: '14px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', padding: '24px', width: '400px', maxWidth: '90vw' }}>
+            <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>
+              Link @{linkTargetUser.username} to Employee
+            </h3>
+            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 16px' }}>
+              Select an unlinked employee record to associate with this user account.
+            </p>
+            {unlinkedEmployees.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
+                No unlinked employee records available. Create one first.
+              </p>
+            ) : (
+              <select
+                value={selectedEmpId}
+                onChange={e => setSelectedEmpId(e.target.value)}
+                style={{ ...S.input, marginBottom: '16px' }}
+              >
+                <option value="">— Select employee —</option>
+                {unlinkedEmployees.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.first_name} {emp.last_name} {emp.franchise_name ? `(${emp.franchise_name})` : ''} — {emp.job_title || 'No title'}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setLinkModalOpen(false); setLinkTargetUser(null); }} style={S.ghostBtn}>
+                Cancel
+              </button>
+              <button onClick={handleLinkEmployee} disabled={!selectedEmpId || linkingId}
+                style={{ ...S.primaryBtn, opacity: (!selectedEmpId || linkingId) ? 0.6 : 1, cursor: (!selectedEmpId || linkingId) ? 'not-allowed' : 'pointer' }}>
+                {linkingId ? 'Linking...' : 'Link Employee'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

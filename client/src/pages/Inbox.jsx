@@ -36,7 +36,12 @@ export default function Inbox() {
     fetchAll();
     if (isManager) fetchApplications();
     window.addEventListener('refreshNotifications', fetchAll);
-    return () => window.removeEventListener('refreshNotifications', fetchAll);
+    // Poll for near real-time notification updates (15s)
+    const interval = setInterval(fetchAll, 15000);
+    return () => {
+      window.removeEventListener('refreshNotifications', fetchAll);
+      clearInterval(interval);
+    };
   }, []);
 
   const fetchAll = async () => {

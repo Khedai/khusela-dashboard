@@ -110,7 +110,7 @@ function SidebarContent({ user, onNavigate }) {
     const interval = setInterval(() => {
       fetchNotifications();
       fetchPendingCount();
-    }, 60000);
+    }, 15000);
     // Listen for external requests to refresh (e.g. after leave approval)
     window.addEventListener('refreshNotifications', fetchNotifications);
     window.addEventListener('refreshPendingCount', fetchPendingCount);
