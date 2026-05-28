@@ -563,6 +563,8 @@ export default function Leave() {
                   await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Approved' });
                   setSelectedRequest(prev => ({ ...prev, status: 'Approved' }));
                   fetchData(page);
+                  try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
+                  try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
                 }}
                 style={{
                   padding: '9px 20px',
@@ -588,6 +590,8 @@ export default function Leave() {
                   });
                   setSelectedRequest(prev => ({ ...prev, status: 'Rejected', rejection_reason: reason }));
                   fetchData(page);
+                  try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
+                  try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
                 }}
                 style={{
                   padding: '9px 20px',
@@ -604,6 +608,60 @@ export default function Leave() {
                 Reject
               </button>
             </div>
+          </div>
+        )}
+
+        {/* HR Reverse Decision (only on already finalized requests) */}
+        {isHR && !isPending && (
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              padding: '20px',
+              marginTop: '16px',
+            }}
+          >
+            <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px' }}>
+              Reverse Decision
+            </p>
+            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 12px' }}>
+              This request is currently <strong>{selectedRequest.status}</strong>. Reversing will change it to{' '}
+              <strong>{selectedRequest.status === 'Approved' ? 'Rejected' : 'Approved'}</strong>
+              {selectedRequest.status === 'Approved' && ' and restore the leave balance.'}
+              {selectedRequest.status === 'Rejected' && ' and deduct from the leave balance.'}
+            </p>
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                const newStatus = selectedRequest.status === 'Approved' ? 'Rejected' : 'Approved';
+                const msg = `Are you sure you want to reverse this leave request from "${selectedRequest.status}" to "${newStatus}"?`;
+                if (!window.confirm(msg)) return;
+                try {
+                  await api.patch(`/leave/request/${selectedRequest.id}/reverse`);
+                  setSelectedRequest(prev => ({ ...prev, status: newStatus }));
+                  setSuccess(`Decision reversed to "${newStatus}" successfully.`);
+                  fetchData(page);
+                  try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
+                  try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
+                } catch (err) {
+                  setError(err.response?.data?.error || 'Failed to reverse decision.');
+                }
+              }}
+              style={{
+                padding: '9px 20px',
+                borderRadius: '8px',
+                border: '1px solid #f59e0b',
+                background: '#fffbeb',
+                color: '#d97706',
+                fontSize: '13px',
+                fontWeight: '600',
+                fontFamily: 'DM Sans',
+                cursor: 'pointer',
+              }}
+            >
+              {selectedRequest.status === 'Approved' ? '↩ Reverse to Rejected' : '↩ Reverse to Approved'}
+            </button>
           </div>
         )}
 

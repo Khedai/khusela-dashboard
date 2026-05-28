@@ -391,6 +391,137 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
   }
 });
 
+// ─── REVERSE LEAVE DECISION (Admin only) ───────────────────
+// Flips an Approved <-> Rejected decision, adjusts balance, and sends notifications.
+router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (req, res) => {
+  try {
+    // Fetch the request with employee info
+    const reqResult = await pool.query(
+      `SELECT lr.*, e.franchise_id AS employee_franchise_id
+       FROM leave_requests lr
+       JOIN employees e ON lr.employee_id = e.id
+       WHERE lr.id = $1`,
+      [req.params.id]
+    );
+
+    if (reqResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+
+    const req_data = reqResult.rows[0];
+
+    // Only allow reversing a finalized decision, not a pending request
+    if (req_data.status === 'Pending') {
+      return res.status(400).json({ error: 'Cannot reverse a pending request. Use Approve or Reject instead.' });
+    }
+
+    // Determine new status (flip)
+    const newStatus = req_data.status === 'Approved' ? 'Rejected' : 'Approved';
+    const reasonForRejection = newStatus === 'Rejected'
+      ? (req.body.rejection_reason || req_data.rejection_reason || 'Decision reversed by admin')
+      : null;
+
+    // Update the request — clear rejection_reason if switching to Approved
+    const updateResult = await pool.query(
+      `UPDATE leave_requests
+       SET status = $1,
+           approved_by = $2,
+           approved_at = NOW(),
+           rejection_reason = $3
+       WHERE id = $4 RETURNING *`,
+      [
+        newStatus,
+        req.user.id,
+        reasonForRejection,
+        req.params.id
+      ]
+    );
+
+    const updated = updateResult.rows[0];
+
+    // ── Reverse balance ──
+    const typeMap = {
+      Annual: 'annual_used',
+      Sick: 'sick_used',
+      'Family Responsibility': 'family_used'
+    };
+    const field = typeMap[req_data.leave_type];
+
+    if (field) {
+      const year = new Date(req_data.start_date).getFullYear();
+
+      if (req_data.status === 'Approved' && newStatus === 'Rejected') {
+        // Was Approved -> now Rejected: REMOVE the previously deducted days from balance
+        await pool.query(
+          `INSERT INTO leave_balances (employee_id, year, ${field})
+           VALUES ($1, $2, $3)
+           ON CONFLICT (employee_id, year)
+           DO UPDATE SET ${field} = GREATEST(leave_balances.${field} - $3, 0)`,
+          [req_data.employee_id, year, req_data.days_requested]
+        );
+      } else if (req_data.status === 'Rejected' && newStatus === 'Approved') {
+        // Was Rejected -> now Approved: ADD the days to balance (same as original approval)
+        await pool.query(
+          `INSERT INTO leave_balances (employee_id, year, ${field})
+           VALUES ($1, $2, $3)
+           ON CONFLICT (employee_id, year)
+           DO UPDATE SET ${field} = leave_balances.${field} + $3`,
+          [req_data.employee_id, year, req_data.days_requested]
+        );
+      }
+    }
+
+    const leaveLink = `/leave?request=${req.params.id}`;
+    const empRow = await pool.query(
+      'SELECT first_name, last_name FROM employees WHERE id = $1',
+      [req_data.employee_id]
+    );
+    const empName = empRow.rows.length > 0
+      ? `${empRow.rows[0].first_name} ${empRow.rows[0].last_name}`.trim()
+      : 'An employee';
+    const startLabel = req_data.start_date?.split('T')[0] || req_data.start_date;
+
+    // ── Update the admin notification for this request ──
+    await pool.query(
+      `UPDATE notifications
+       SET title = $1, message = $2, link = $3, is_read = FALSE
+       WHERE (title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%')
+         AND link = $3`,
+      [
+        `New Leave Request — ${newStatus} (Reversed)`,
+        `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been reversed to ${newStatus.toLowerCase()} by an admin.`,
+        leaveLink,
+      ]
+    );
+
+    // ── Notify the employee about the reversal ──
+    const empUser = await pool.query(
+      `SELECT u.id FROM users u
+       JOIN employees e ON e.user_id = u.id
+       WHERE e.id = $1`,
+      [req_data.employee_id]
+    );
+
+    if (empUser.rows.length > 0) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, title, message, link)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          empUser.rows[0].id,
+          `Leave Request ${newStatus} (Decision Reversed)`,
+          `Your ${req_data.leave_type} leave (${req_data.days_requested} days) decision has been reversed to ${newStatus.toLowerCase()}. Please check the details.`,
+          '/inbox',
+        ]
+      );
+    }
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to reverse decision.' });
+  }
+});
+
 // ─── GET MANUAL ADJUSTMENTS FOR EMPLOYEE ─────────────────
 router.get('/manual/:employee_id', verifyToken, requireRole('Admin'), async (req, res) => {
   try {
