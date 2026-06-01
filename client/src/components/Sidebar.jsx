@@ -87,7 +87,7 @@ function NavItem({ to, label, end, onNavigate, badge }) {
         </span>
       )}
     </NavLink>
-  );
+  );joi
 }
 
 function SidebarContent({ user, onNavigate }) {
