@@ -18,6 +18,9 @@ async function withManualAdjustments(balance, employeeId, year) {
   for (const r of manual.rows) adj[r.leave_type] = r.total;
   return {
     ...balance,
+    annual_total: balance.annual_total ?? 15,
+    sick_total:   balance.sick_total   ?? 30,
+    family_total: balance.family_total ?? 3,
     annual_used:  (balance.annual_used  || 0) + (adj['Annual']               || 0),
     sick_used:    (balance.sick_used    || 0) + (adj['Sick']                  || 0),
     family_used:  (balance.family_used  || 0) + (adj['Family Responsibility'] || 0),
