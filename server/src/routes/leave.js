@@ -15,15 +15,15 @@ async function withManualAdjustments(balance, employeeId, year) {
     [employeeId, year]
   );
   const adj = {};
-  for (const r of manual.rows) adj[r.leave_type] = r.total;
+  for (const r of manual.rows) adj[r.leave_type] = Number(r.total);
   return {
     ...balance,
-    annual_total: balance.annual_total ?? 15,
-    sick_total:   balance.sick_total   ?? 30,
-    family_total: balance.family_total ?? 3,
-    annual_used:  (balance.annual_used  || 0) + (adj['Annual']               || 0),
-    sick_used:    (balance.sick_used    || 0) + (adj['Sick']                  || 0),
-    family_used:  (balance.family_used  || 0) + (adj['Family Responsibility'] || 0),
+    annual_total: Number(balance.annual_total ?? 15),
+    sick_total:   Number(balance.sick_total   ?? 30),
+    family_total: Number(balance.family_total ?? 3),
+    annual_used:  Number(balance.annual_used  || 0) + (adj['Annual']               || 0),
+    sick_used:    Number(balance.sick_used    || 0) + (adj['Sick']                  || 0),
+    family_used:  Number(balance.family_used  || 0) + (adj['Family Responsibility'] || 0),
   };
 }
 
@@ -114,12 +114,12 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
         first_name: e.first_name,
         last_name: e.last_name,
         franchise_name: e.franchise_name,
-        annual_total: bal.annual_total ?? 15,
-        annual_used:  (bal.annual_used ?? 0) + (adj['Annual'] || 0),
-        sick_total:   bal.sick_total ?? 30,
-        sick_used:    (bal.sick_used ?? 0) + (adj['Sick'] || 0),
-        family_total: bal.family_total ?? 3,
-        family_used:  (bal.family_used ?? 0) + (adj['Family Responsibility'] || 0),
+        annual_total: Number(bal.annual_total ?? 15),
+        annual_used:  Number(bal.annual_used ?? 0) + (Number(adj['Annual']) || 0),
+        sick_total:   Number(bal.sick_total ?? 30),
+        sick_used:    Number(bal.sick_used ?? 0) + (Number(adj['Sick']) || 0),
+        family_total: Number(bal.family_total ?? 3),
+        family_used:  Number(bal.family_used ?? 0) + (Number(adj['Family Responsibility']) || 0),
       };
     });
     res.json(rows);
