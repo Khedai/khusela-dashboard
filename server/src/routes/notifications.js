@@ -4,7 +4,7 @@ const { verifyToken } = require('../middleware/auth');
 
 router.use(verifyToken);
 
-// ─── GET MY NOTIFICATIONS ─────────────────────────────────
+// ─── GET MY NOTIFICATIONS (with self-healing leave status sync) ─────
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
@@ -14,8 +14,75 @@ router.get('/', async (req, res) => {
        LIMIT 30`,
       [req.user.id]
     );
-    res.json(result.rows);
+
+    const notifications = result.rows;
+
+    // ── Self-healing: sync leave-request-linked notifications with actual status ──
+    // Extract leave request IDs from notification links that mention "Leave Request"
+    const leaveIds = [];
+    const notifMap = new Map(); // leaveRequestId -> [notification objects]
+    for (const n of notifications) {
+      const isLeave = /leave/i.test(n.title || '') || /leave/i.test(n.message || '');
+      if (!isLeave) continue;
+      // Extract leave request ID from link like "/leave?request=123"
+      const match = (n.link || '').match(/request=(\d+)/);
+      if (!match) continue;
+      const leaveId = parseInt(match[1], 10);
+      if (isNaN(leaveId)) continue;
+      leaveIds.push(leaveId);
+      if (!notifMap.has(leaveId)) notifMap.set(leaveId, []);
+      notifMap.get(leaveId).push(n);
+    }
+
+    if (leaveIds.length > 0) {
+      try {
+        // Batch-fetch current leave request statuses
+        const leaveResult = await pool.query(
+          `SELECT id, status, leave_type, days_requested, start_date FROM leave_requests WHERE id = ANY($1)`,
+          [leaveIds]
+        );
+        const statusMap = {};
+        for (const lr of leaveResult.rows) {
+          statusMap[lr.id] = lr;
+        }
+
+        // For any notification whose title still says Pending but the leave is finalized, fix it
+        const updates = [];
+        for (const [leaveId, notifs] of notifMap.entries()) {
+          const lr = statusMap[leaveId];
+          if (!lr || lr.status === 'Pending') continue; // still pending, nothing to fix
+          for (const n of notifs) {
+            const titleLower = (n.title || '').toLowerCase();
+            if (!titleLower.includes('pending')) continue; // already updated
+
+            const startLabel = (lr.start_date || '').split('T')[0];
+            const newTitle = `New Leave Request — ${lr.status}`;
+            const newMsg = `${lr.leave_type} leave (${lr.days_requested} day(s) starting ${startLabel}) has been ${lr.status.toLowerCase()}.`;
+
+            // Exact-match UPDATE by notification PK — never fuzzy
+            updates.push(
+              pool.query(
+                `UPDATE notifications SET title = $1, message = $2 WHERE id = $3`,
+                [newTitle, newMsg, n.id]
+              )
+            );
+            // Also update the in-memory object so the response is already corrected
+            n.title = newTitle;
+            n.message = newMsg;
+          }
+        }
+        if (updates.length > 0) {
+          await Promise.all(updates);
+        }
+      } catch (syncErr) {
+        // Self-healing failure must never break the API — log and continue
+        console.error('Notification self-heal error:', syncErr.message);
+      }
+    }
+
+    res.json(notifications);
   } catch (err) {
+    console.error('GET /notifications error:', err.message);
     res.status(500).json({ error: 'Failed to fetch notifications.' });
   }
 });

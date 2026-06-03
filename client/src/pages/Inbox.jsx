@@ -277,18 +277,33 @@ export default function Inbox() {
                 </div>
                 {(() => {
                   const txt = (n.title + ' ' + (n.message || '')).toLowerCase();
-                  const isLeave = /leave/.test(txt);
-                  const isApp   = /application/.test(txt) || (n.link && n.link.startsWith('/applications'));
+                  const isLeave = /leave/i.test(n.title) || /leave/i.test(n.message || '');
+                  const isApp   = /application/i.test(txt) || (n.link && n.link.startsWith('/applications'));
                   if (!isLeave && !isApp) return null;
+                  // Extract leave status from title like "New Leave Request — Approved"
+                  let leaveStatus = '';
+                  if (isLeave) {
+                    const statusMatch = (n.title || '').match(/—\s*(\w+)/);
+                    if (statusMatch) leaveStatus = statusMatch[1];
+                  }
+                  const statusColors = {
+                    Pending:  { bg: '#fffbeb', color: '#d97706' },
+                    Approved: { bg: '#f0fdf4', color: '#16a34a' },
+                    Rejected: { bg: '#fef2f2', color: '#dc2626' },
+                  };
+                  const sc = statusColors[leaveStatus] || (isLeave ? statusColors.Approved : { bg: '#eff6ff', color: '#2563eb' });
+                  const label = isLeave
+                    ? (leaveStatus ? `LEAVE · ${leaveStatus}` : 'LEAVE')
+                    : 'APPLICATION';
                   return (
                     <span style={{
                       display: 'inline-block', marginTop: '5px',
                       fontSize: '10px', fontWeight: '700', letterSpacing: '0.04em',
                       padding: '2px 7px', borderRadius: '4px',
-                      background: isLeave ? '#f0fdf4' : '#eff6ff',
-                      color: isLeave ? '#16a34a' : '#2563eb',
+                      background: sc.bg,
+                      color: sc.color,
                     }}>
-                      {isLeave ? 'LEAVE' : 'APPLICATION'}
+                      {label}
                     </span>
                   );
                 })()}

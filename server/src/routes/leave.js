@@ -485,29 +485,33 @@ router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (r
     const startLabel = req_data.start_date?.split('T')[0] || req_data.start_date;
 
     // ── Update the admin notification for this request ──
-    // Use the same robust matching as approve/reject — match by link,
-    // and fall back to matching on message content for notifications that
-    // were created before the link was updated to the canonical form.
-    const oldTitlePattern = req_data.status === 'Approved'
-      ? 'New Leave Request — Approved'
-      : 'New Leave Request — Rejected';
-    await pool.query(
-      `UPDATE notifications
-       SET title = $1, message = $2, link = $3, is_read = FALSE
-       WHERE (title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%')
-         AND (
-           link = $3
-           OR (link = '/leave' AND title = $4 AND message LIKE $5 AND message LIKE $6)
-         )`,
-      [
-        `New Leave Request — ${newStatus} (Reversed)`,
-        `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been reversed to ${newStatus.toLowerCase()} by an admin.`,
-        leaveLink,
-        oldTitlePattern,
-        `%${empName}%`,
-        `%${startLabel}%`,
-      ]
-    );
+    // This is a best-effort fuzzy update — if it fails, the GET /notifications
+    // self-healing will pick it up. Wrap in try/catch to avoid 500s.
+    try {
+      const oldTitlePattern = req_data.status === 'Approved'
+        ? 'New Leave Request — Approved'
+        : 'New Leave Request — Rejected';
+      await pool.query(
+        `UPDATE notifications
+         SET title = $1, message = $2, link = $3, is_read = FALSE
+         WHERE (title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%')
+           AND (
+             link = $3
+             OR (link = '/leave' AND title = $4 AND message LIKE $5 AND message LIKE $6)
+           )`,
+        [
+          `New Leave Request — ${newStatus} (Reversed)`,
+          `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been reversed to ${newStatus.toLowerCase()} by an admin.`,
+          leaveLink,
+          oldTitlePattern,
+          `%${empName}%`,
+          `%${startLabel}%`,
+        ]
+      );
+    } catch (notifErr) {
+      // Notification update is non-critical — log and proceed
+      console.warn('Reverse: failed to update admin notification (will self-heal on next fetch):', notifErr.message);
+    }
 
     // ── Notify the employee about the reversal ──
     const empUser = await pool.query(
