@@ -5,7 +5,22 @@ const { sanitize } = require('../utils/sanitize');
 
 router.use(verifyToken);
 
-// ─── HELPER: merge manual adjustments into balance ───────
+// ─── HELPER: calculate used days from source of truth (leave_requests) ───────
+async function calculateUsedDays(employeeId, year) {
+  const result = await pool.query(
+    `SELECT
+       COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Annual'  AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS annual_used,
+       COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Sick'    AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS sick_used,
+       COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Family Responsibility' AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS family_used
+     FROM leave_requests
+     WHERE employee_id = $1
+       AND EXTRACT(YEAR FROM start_date) = $2`,
+    [employeeId, year]
+  );
+  return result.rows[0] || { annual_used: 0, sick_used: 0, family_used: 0 };
+}
+
+// ─── HELPER: merge manual adjustments + recalculated used days ───────
 async function withManualAdjustments(balance, employeeId, year) {
   const manual = await pool.query(
     `SELECT leave_type, ROUND(SUM(days)::numeric, 2) AS total
@@ -16,14 +31,19 @@ async function withManualAdjustments(balance, employeeId, year) {
   );
   const adj = {};
   for (const r of manual.rows) adj[r.leave_type] = Number(r.total);
+
+  // Recalculate used days from the leave_requests table (source of truth)
+  // fall back to stored balance if no approved requests exist (for edge cases)
+  const calculated = await calculateUsedDays(employeeId, year);
+
   return {
     ...balance,
     annual_total: Number(balance.annual_total ?? 15),
     sick_total:   Number(balance.sick_total   ?? 30),
     family_total: Number(balance.family_total ?? 3),
-    annual_used:  Number(balance.annual_used  || 0) + (adj['Annual']               || 0),
-    sick_used:    Number(balance.sick_used    || 0) + (adj['Sick']                  || 0),
-    family_used:  Number(balance.family_used  || 0) + (adj['Family Responsibility'] || 0),
+    annual_used:  Number(calculated.annual_used) + (adj['Annual']               || 0),
+    sick_used:    Number(calculated.sick_used)   + (adj['Sick']                  || 0),
+    family_used:  Number(calculated.family_used) + (adj['Family Responsibility'] || 0),
   };
 }
 
@@ -82,14 +102,27 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
        ORDER BY e.first_name, e.last_name`
     );
 
-    // Get all leave balances for the current year
+    // Get all leave balances for the current year (for totals only)
     const balResult = await pool.query(
       'SELECT * FROM leave_balances WHERE year = $1',
       [year]
     );
-
     const balMap = {};
     for (const b of balResult.rows) balMap[b.employee_id] = b;
+
+    // Batch-calculate used days from leave_requests (source of truth) for ALL employees
+    const usedResult = await pool.query(
+      `SELECT employee_id,
+         COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Annual'  AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS annual_used,
+         COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Sick'    AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS sick_used,
+         COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Family Responsibility' AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS family_used
+       FROM leave_requests
+       WHERE EXTRACT(YEAR FROM start_date) = $1
+       GROUP BY employee_id`,
+      [year]
+    );
+    const usedMap = {};
+    for (const r of usedResult.rows) usedMap[r.employee_id] = r;
 
     // Get manual adjustments
     let adjMap = {};
@@ -109,17 +142,18 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
     const rows = empResult.rows.map(e => {
       const bal = balMap[e.id] || {};
       const adj = adjMap[e.id] || {};
+      const used = usedMap[e.id] || { annual_used: 0, sick_used: 0, family_used: 0 };
       return {
         employee_id: e.id,
         first_name: e.first_name,
         last_name: e.last_name,
         franchise_name: e.franchise_name,
         annual_total: Number(bal.annual_total ?? 15),
-        annual_used:  Number(bal.annual_used ?? 0) + (Number(adj['Annual']) || 0),
+        annual_used:  Number(used.annual_used) + (Number(adj['Annual']) || 0),
         sick_total:   Number(bal.sick_total ?? 30),
-        sick_used:    Number(bal.sick_used ?? 0) + (Number(adj['Sick']) || 0),
+        sick_used:    Number(used.sick_used)   + (Number(adj['Sick']) || 0),
         family_total: Number(bal.family_total ?? 3),
-        family_used:  Number(bal.family_used ?? 0) + (Number(adj['Family Responsibility']) || 0),
+        family_used:  Number(used.family_used) + (Number(adj['Family Responsibility']) || 0),
       };
     });
     res.json(rows);
@@ -349,20 +383,16 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
     const reasonSuffix = rejection_reason ? ` Reason: ${rejection_reason}` : '';
 
     // Update Admin inbox notifications for this request (Pending → Approved/Rejected)
+    // Match by exact link — every leave notification shares the same link, so this
+    // is precise and never fails due to name/text mismatches.
     await pool.query(
       `UPDATE notifications
-       SET title = $1, message = $2, link = $3, is_read = FALSE
-       WHERE title LIKE 'New Leave Request%'
-         AND (
-           link = $3
-           OR (link = '/leave' AND title = 'New Leave Request — Pending' AND message LIKE $4 AND message LIKE $5)
-         )`,
+       SET title = $1, message = $2, is_read = FALSE
+       WHERE link = $3 AND title LIKE 'New Leave Request%'`,
       [
         `New Leave Request — ${status}`,
         `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been ${status.toLowerCase()}.${reasonSuffix}`,
         leaveLink,
-        `%${empName}%`,
-        `%${startLabel}%`,
       ]
     );
 
@@ -485,31 +515,19 @@ router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (r
     const startLabel = req_data.start_date?.split('T')[0] || req_data.start_date;
 
     // ── Update the admin notification for this request ──
-    // This is a best-effort fuzzy update — if it fails, the GET /notifications
-    // self-healing will pick it up. Wrap in try/catch to avoid 500s.
+    // Match by exact link — no fuzzy LIKE on names needed.
     try {
-      const oldTitlePattern = req_data.status === 'Approved'
-        ? 'New Leave Request — Approved'
-        : 'New Leave Request — Rejected';
       await pool.query(
         `UPDATE notifications
-         SET title = $1, message = $2, link = $3, is_read = FALSE
-         WHERE (title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%')
-           AND (
-             link = $3
-             OR (link = '/leave' AND title = $4 AND message LIKE $5 AND message LIKE $6)
-           )`,
+         SET title = $1, message = $2, is_read = FALSE
+         WHERE link = $3 AND (title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%')`,
         [
           `New Leave Request — ${newStatus} (Reversed)`,
           `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been reversed to ${newStatus.toLowerCase()} by an admin.`,
           leaveLink,
-          oldTitlePattern,
-          `%${empName}%`,
-          `%${startLabel}%`,
         ]
       );
     } catch (notifErr) {
-      // Notification update is non-critical — log and proceed
       console.warn('Reverse: failed to update admin notification (will self-heal on next fetch):', notifErr.message);
     }
 
