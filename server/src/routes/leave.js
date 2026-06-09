@@ -7,23 +7,23 @@ router.use(verifyToken);
 
 // ─── HELPER: calculate used days from source of truth (leave_requests) ───────
 async function calculateUsedDays(employeeId, year) {
-  const result = await pool.query(
-    `SELECT
-       COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Annual'  AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS annual_used,
-       COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Sick'    AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS sick_used,
-       COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Family Responsibility' AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS family_used
-     FROM leave_requests
-     WHERE employee_id = $1
-       AND EXTRACT(YEAR FROM start_date) = $2`,
-    [employeeId, year]
-  );
+   const result = await pool.query(
+     `SELECT
+        COALESCE(SUM(CASE WHEN leave_type = 'Annual'  AND status = 'Approved' THEN days_requested ELSE 0 END), 0) AS annual_used,
+        COALESCE(SUM(CASE WHEN leave_type = 'Sick'    AND status = 'Approved' THEN days_requested ELSE 0 END), 0) AS sick_used,
+        COALESCE(SUM(CASE WHEN leave_type = 'Family Responsibility' AND status = 'Approved' THEN days_requested ELSE 0 END), 0) AS family_used
+      FROM leave_requests
+      WHERE employee_id = $1
+        AND EXTRACT(YEAR FROM start_date) = $2`,
+     [employeeId, year]
+   );
   return result.rows[0] || { annual_used: 0, sick_used: 0, family_used: 0 };
 }
 
 // ─── HELPER: merge manual adjustments + recalculated used days ───────
 async function withManualAdjustments(balance, employeeId, year) {
-  const manual = await pool.query(
-    `SELECT leave_type, ROUND(SUM(days)::numeric, 2) AS total
+    const manual = await pool.query(
+    `SELECT leave_type, COALESCE(SUM(days), 0) AS total
      FROM leave_manual_adjustments
      WHERE employee_id = $1 AND year = $2
      GROUP BY leave_type`,
@@ -113,9 +113,9 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
     // Batch-calculate used days from leave_requests (source of truth) for ALL employees
     const usedResult = await pool.query(
       `SELECT employee_id,
-         COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Annual'  AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS annual_used,
-         COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Sick'    AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS sick_used,
-         COALESCE(ROUND(SUM(CASE WHEN leave_type = 'Family Responsibility' AND status = 'Approved' THEN days_requested ELSE 0 END)::numeric, 2), 0) AS family_used
+         COALESCE(SUM(CASE WHEN leave_type = 'Annual'  AND status = 'Approved' THEN days_requested ELSE 0 END), 0) AS annual_used,
+         COALESCE(SUM(CASE WHEN leave_type = 'Sick'    AND status = 'Approved' THEN days_requested ELSE 0 END), 0) AS sick_used,
+         COALESCE(SUM(CASE WHEN leave_type = 'Family Responsibility' AND status = 'Approved' THEN days_requested ELSE 0 END), 0) AS family_used
        FROM leave_requests
        WHERE EXTRACT(YEAR FROM start_date) = $1
        GROUP BY employee_id`,
@@ -128,7 +128,7 @@ router.get('/balances', verifyToken, requireRole('Admin'), async (req, res) => {
     let adjMap = {};
     try {
       const manual = await pool.query(
-        `SELECT employee_id, leave_type, ROUND(SUM(days)::numeric, 2) AS total
+        `SELECT employee_id, leave_type, COALESCE(SUM(days), 0) AS total
          FROM leave_manual_adjustments WHERE year = $1
          GROUP BY employee_id, leave_type`,
         [year]
@@ -260,12 +260,14 @@ router.post('/request', async (req, res) => {
     );
 
     let warning = null;
-    if (balanceResult.rows.length > 0) {
-      const bal = balanceResult.rows[0];
+    // Use the real calculated balance (from leave_requests + manual adjustments), not stale stored values
+    const balRow = balanceResult.rows[0];
+    if (balRow) {
+      const realBalance = await withManualAdjustments(balRow, employee_id, year);
       const typeMap = { Annual: ['annual_total', 'annual_used'], Sick: ['sick_total', 'sick_used'], 'Family Responsibility': ['family_total', 'family_used'] };
       const keys = typeMap[leave_type];
       if (keys) {
-        const remaining = bal[keys[0]] - bal[keys[1]];
+        const remaining = realBalance[keys[0]] - realBalance[keys[1]];
         if (remaining <= 0) {
           warning = `You have 0 ${leave_type} leave days remaining. Request will still be submitted.`;
         }
@@ -351,25 +353,8 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
 
     const req_data = result.rows[0];
 
-    // Deduct balance if approved
-    if (status === 'Approved') {
-      const year = new Date(req_data.start_date).getFullYear();
-      const typeMap = {
-        Annual: 'annual_used',
-        Sick: 'sick_used',
-        'Family Responsibility': 'family_used'
-      };
-      const field = typeMap[req_data.leave_type];
-      if (field) {
-        await pool.query(
-          `INSERT INTO leave_balances (employee_id, year, ${field})
-           VALUES ($1, $2, $3)
-           ON CONFLICT (employee_id, year)
-           DO UPDATE SET ${field} = leave_balances.${field} + $3`,
-          [req_data.employee_id, year, req_data.days_requested]
-        );
-      }
-    }
+    // NOTE: leave_balances.*_used is no longer maintained — calculateUsedDays()
+    // reads from leave_requests (source of truth) and manual adjustments instead.
 
     const leaveLink = `/leave?request=${req.params.id}`;
     const empRow = await pool.query(
@@ -379,7 +364,7 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
     const empName = empRow.rows.length > 0
       ? `${empRow.rows[0].first_name} ${empRow.rows[0].last_name}`.trim()
       : 'An employee';
-    const startLabel = req_data.start_date?.split('T')[0] || req_data.start_date;
+    const startLabel = req_data.start_date ? new Date(req_data.start_date).toISOString().split('T')[0] : '';
     const reasonSuffix = rejection_reason ? ` Reason: ${rejection_reason}` : '';
 
     // Update Admin inbox notifications for this request (Pending → Approved/Rejected)
@@ -472,37 +457,8 @@ router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (r
 
     const updated = updateResult.rows[0];
 
-    // ── Reverse balance ──
-    const typeMap = {
-      Annual: 'annual_used',
-      Sick: 'sick_used',
-      'Family Responsibility': 'family_used'
-    };
-    const field = typeMap[req_data.leave_type];
-
-    if (field) {
-      const year = new Date(req_data.start_date).getFullYear();
-
-      if (req_data.status === 'Approved' && newStatus === 'Rejected') {
-        // Was Approved -> now Rejected: REMOVE the previously deducted days from balance
-        await pool.query(
-          `INSERT INTO leave_balances (employee_id, year, ${field})
-           VALUES ($1, $2, $3)
-           ON CONFLICT (employee_id, year)
-           DO UPDATE SET ${field} = GREATEST(leave_balances.${field} - $3, 0)`,
-          [req_data.employee_id, year, req_data.days_requested]
-        );
-      } else if (req_data.status === 'Rejected' && newStatus === 'Approved') {
-        // Was Rejected -> now Approved: ADD the days to balance (same as original approval)
-        await pool.query(
-          `INSERT INTO leave_balances (employee_id, year, ${field})
-           VALUES ($1, $2, $3)
-           ON CONFLICT (employee_id, year)
-           DO UPDATE SET ${field} = leave_balances.${field} + $3`,
-          [req_data.employee_id, year, req_data.days_requested]
-        );
-      }
-    }
+    // NOTE: leave_balances.*_used is no longer maintained — calculateUsedDays()
+    // reads from leave_requests (source of truth) and manual adjustments instead.
 
     const leaveLink = `/leave?request=${req.params.id}`;
     const empRow = await pool.query(
@@ -512,7 +468,7 @@ router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (r
     const empName = empRow.rows.length > 0
       ? `${empRow.rows[0].first_name} ${empRow.rows[0].last_name}`.trim()
       : 'An employee';
-    const startLabel = req_data.start_date?.split('T')[0] || req_data.start_date;
+    const startLabel = req_data.start_date ? new Date(req_data.start_date).toISOString().split('T')[0] : '';
 
     // ── Update the admin notification for this request ──
     // Match by exact link — no fuzzy LIKE on names needed.
@@ -591,7 +547,7 @@ router.post('/manual', verifyToken, requireRole('Admin'), async (req, res) => {
     const result = await pool.query(
       `INSERT INTO leave_manual_adjustments (employee_id, leave_type, days, description, year, created_by)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [employee_id, leave_type, parseFloat(days), sanitize(description) || null, adjYear, req.user.id]
+      [employee_id, leave_type, parseInt(days, 10), sanitize(description) || null, adjYear, req.user.id]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {

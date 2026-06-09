@@ -384,11 +384,11 @@ export default function Leave() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
               {[
-                { label: 'Annual', total: reqBalance.annual_total, used: reqBalance.annual_used, color: '#2563eb' },
-                { label: 'Sick', total: reqBalance.sick_total, used: reqBalance.sick_used, color: '#0891b2' },
-                { label: 'Family Resp.', total: reqBalance.family_total, used: reqBalance.family_used, color: '#16a34a' },
+                { label: 'Annual', total: Math.round(reqBalance.annual_total), used: Math.round(reqBalance.annual_used), color: '#2563eb' },
+                { label: 'Sick', total: Math.round(reqBalance.sick_total), used: Math.round(reqBalance.sick_used), color: '#0891b2' },
+                { label: 'Family Resp.', total: Math.round(reqBalance.family_total), used: Math.round(reqBalance.family_used), color: '#16a34a' },
               ].map((b, i) => {
-                const remaining = (b.total || 0) - (b.used || 0);
+                const remaining = Math.round((b.total || 0) - (b.used || 0));
                 const pct = b.total ? Math.min(((b.used || 0) / b.total) * 100, 100) : 0;
                 return (
                   <div key={b.label} style={{ padding: '14px 16px', borderRight: i < 2 ? '1px solid #f1f5f9' : 'none' }}>
@@ -800,11 +800,11 @@ export default function Leave() {
       {!isManager && balance && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
           {[
-            { label: 'Annual Leave', total: balance.annual_total, used: balance.annual_used, color: '#2563eb' },
-            { label: 'Sick Leave', total: balance.sick_total, used: balance.sick_used, color: '#d97706' },
-            { label: 'Family Responsibility', total: balance.family_total, used: balance.family_used, color: '#16a34a' },
+            { label: 'Annual Leave', total: Math.round(balance.annual_total), used: Math.round(balance.annual_used), color: '#2563eb' },
+            { label: 'Sick Leave', total: Math.round(balance.sick_total), used: Math.round(balance.sick_used), color: '#d97706' },
+            { label: 'Family Responsibility', total: Math.round(balance.family_total), used: Math.round(balance.family_used), color: '#16a34a' },
           ].map(b => {
-            const remaining = b.total - b.used;
+            const remaining = Math.round(b.total - b.used);
             return (
               <div key={b.label} style={{ background: 'white', borderRadius: '10px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: `3px solid ${b.color}` }}>
                 <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>{b.label}</p>

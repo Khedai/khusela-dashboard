@@ -131,7 +131,7 @@ pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 
         id SERIAL PRIMARY KEY,
         employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
         leave_type VARCHAR(50) NOT NULL,
-        days DECIMAL(4,1) NOT NULL,
+        days INTEGER NOT NULL,
         description TEXT,
         year INTEGER NOT NULL,
         created_by ${userIdType} REFERENCES users(id) ON DELETE SET NULL,
@@ -161,14 +161,33 @@ pool.query(`
     employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM NOW()),
     annual_total INTEGER NOT NULL DEFAULT 15,
-    annual_used DECIMAL(5,1) NOT NULL DEFAULT 0,
+    annual_used INTEGER NOT NULL DEFAULT 0,
     sick_total INTEGER NOT NULL DEFAULT 30,
-    sick_used DECIMAL(5,1) NOT NULL DEFAULT 0,
+    sick_used INTEGER NOT NULL DEFAULT 0,
     family_total INTEGER NOT NULL DEFAULT 3,
-    family_used DECIMAL(5,1) NOT NULL DEFAULT 0,
+    family_used INTEGER NOT NULL DEFAULT 0,
     UNIQUE (employee_id, year)
   )
 `)).catch(err => console.error('leave_balances migration error:', err.message));
+
+// ─── Migrate existing DECIMAL day columns to INTEGER (rounds existing values) ───
+pool.query('ALTER TABLE leave_balances ALTER COLUMN annual_used TYPE INTEGER USING ROUND(annual_used)::INTEGER').catch(() => {});
+pool.query('ALTER TABLE leave_balances ALTER COLUMN sick_used   TYPE INTEGER USING ROUND(sick_used)::INTEGER').catch(() => {});
+pool.query('ALTER TABLE leave_balances ALTER COLUMN family_used TYPE INTEGER USING ROUND(family_used)::INTEGER').catch(() => {});
+pool.query('ALTER TABLE leave_manual_adjustments ALTER COLUMN days TYPE INTEGER USING ROUND(days)::INTEGER').catch(() => {});
+
+// One-time: fix ALL stale "Pending" notifications for already-finalized leave requests
+pool.query(`
+  UPDATE notifications n
+  SET
+    title = 'New Leave Request — ' || lr.status,
+    message = lr.leave_type || ' leave (' || lr.days_requested || ' day(s) starting ' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') || ') has been ' || LOWER(lr.status) || '.',
+    is_read = FALSE
+  FROM leave_requests lr
+  WHERE n.link = '/leave?request=' || lr.id
+    AND (n.title LIKE 'New Leave Request%' OR n.title LIKE 'Leave Request%')
+    AND lr.status != 'Pending'
+`).catch(err => console.error('stale notification cleanup:', err.message));
 
 // Terminate orphaned employees (user account deleted before terminate-on-delete existed)
 pool.query(`
