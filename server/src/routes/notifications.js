@@ -7,6 +7,27 @@ router.use(verifyToken);
 // ─── GET MY NOTIFICATIONS (with self-healing leave status sync) ─────
 router.get('/', async (req, res) => {
   try {
+    // ── Step 1: auto-cleanup ALL stale unread leave notifications across ALL users ──
+    // Marks as read anything linked to /leave?request= where the leave is no longer Pending.
+    // Runs globally (no user_id filter) so it catches every admin's unread notifications,
+    // acting as a safety net for any edge cases the approve/reject handler may miss.
+    try {
+      await pool.query(
+        `UPDATE notifications
+         SET is_read = TRUE
+         WHERE is_read = FALSE
+           AND link LIKE '/leave?request=%'
+           AND EXISTS (
+             SELECT 1 FROM leave_requests lr
+             WHERE lr.status <> 'Pending'
+               AND '/leave?request=' || lr.id = notifications.link
+           )`
+      );
+    } catch (cleanupErr) {
+      // Never let cleanup break the main fetch
+      console.error('Auto-cleanup stale leave notifications error:', cleanupErr.message);
+    }
+
     const result = await pool.query(
       `SELECT * FROM notifications
        WHERE user_id = $1
@@ -17,14 +38,14 @@ router.get('/', async (req, res) => {
 
     const notifications = result.rows;
 
-    // ── Self-healing: sync leave-request-linked notifications with actual status ──
-    // Extract leave request IDs from notification links that mention "Leave Request"
+    // ── Step 2: self-heal — fix title/message for notifications that still
+    //    show "Pending" in the title but the linked leave is finalized ──
+    // Extract leave request IDs from notification links
     const leaveIds = [];
     const notifMap = new Map(); // leaveRequestId -> [notification objects]
     for (const n of notifications) {
       const isLeave = /leave/i.test(n.title || '') || /leave/i.test(n.message || '');
       if (!isLeave) continue;
-      // Extract leave request ID from link like "/leave?request=123"
       const match = (n.link || '').match(/request=([^&]+)/);
       if (!match) continue;
       const leaveId = match[1];
@@ -35,7 +56,6 @@ router.get('/', async (req, res) => {
 
     if (leaveIds.length > 0) {
       try {
-        // Batch-fetch current leave request statuses
         const leaveResult = await pool.query(
           `SELECT id, status, leave_type, days_requested, start_date FROM leave_requests WHERE id = ANY($1)`,
           [leaveIds]
@@ -45,27 +65,24 @@ router.get('/', async (req, res) => {
           statusMap[lr.id] = lr;
         }
 
-        // For any notification whose title still says Pending but the leave is finalized, fix it
         const updates = [];
         for (const [leaveId, notifs] of notifMap.entries()) {
           const lr = statusMap[leaveId];
-          if (!lr || lr.status === 'Pending') continue; // still pending, nothing to fix
+          if (!lr || lr.status === 'Pending') continue;
           for (const n of notifs) {
             const titleLower = (n.title || '').toLowerCase();
-            if (!titleLower.includes('pending')) continue; // already updated
+            if (!titleLower.includes('pending')) continue;
 
             const startLabel = (lr.start_date || '').split('T')[0];
             const newTitle = `New Leave Request — ${lr.status}`;
             const newMsg = `${lr.leave_type} leave (${lr.days_requested} day(s) starting ${startLabel}) has been ${lr.status.toLowerCase()}.`;
 
-            // Exact-match UPDATE by notification PK — never fuzzy
             updates.push(
               pool.query(
                 `UPDATE notifications SET title = $1, message = $2, is_read = TRUE WHERE id = $3`,
                 [newTitle, newMsg, n.id]
               )
             );
-            // Also update the in-memory object so the response is already corrected
             n.title = newTitle;
             n.message = newMsg;
             n.is_read = true;
@@ -75,7 +92,6 @@ router.get('/', async (req, res) => {
           await Promise.all(updates);
         }
       } catch (syncErr) {
-        // Self-healing failure must never break the API — log and continue
         console.error('Notification self-heal error:', syncErr.message);
       }
     }
