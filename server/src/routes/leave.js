@@ -367,13 +367,17 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
     const startLabel = req_data.start_date ? new Date(req_data.start_date).toISOString().split('T')[0] : '';
     const reasonSuffix = rejection_reason ? ` Reason: ${rejection_reason}` : '';
 
-    // Update Admin inbox notifications for this request (Pending → Approved/Rejected)
-    // Match by exact link — every leave notification shares the same link, so this
-    // is precise and never fails due to name/text mismatches.
+    // Update ALL admin-created notifications for this leave request:
+    //   - Update title + message only for those matching the original "New Leave Request" pattern
+    //   - Mark ALL notifications with this link as read (regardless of title)
+    // This ensures every admin who received the "Pending" notification sees it as read
+    // once the leave is no longer pending, preventing unread pile-ups.
     await pool.query(
       `UPDATE notifications
-       SET title = $1, message = $2, is_read = TRUE
-       WHERE link = $3 AND title LIKE 'New Leave Request%'`,
+       SET is_read = TRUE,
+           title   = CASE WHEN title LIKE 'New Leave Request%' THEN $1 ELSE title   END,
+           message = CASE WHEN title LIKE 'New Leave Request%' THEN $2 ELSE message END
+       WHERE link = $3`,
       [
         `New Leave Request — ${status}`,
         `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been ${status.toLowerCase()}.${reasonSuffix}`,
@@ -470,13 +474,19 @@ router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (r
       : 'An employee';
     const startLabel = req_data.start_date ? new Date(req_data.start_date).toISOString().split('T')[0] : '';
 
-    // ── Update the admin notification for this request ──
-    // Match by exact link — no fuzzy LIKE on names needed.
+    // ── Update ALL admin notifications for this request ──
+    // Mark all notifications with this link as read; update title/message for the
+    // standard "New Leave Request" pattern ones.  The broad WHERE clause prevents
+    // unread pile-ups from edge-case notifications with variant titles.
     try {
       await pool.query(
         `UPDATE notifications
-         SET title = $1, message = $2, is_read = TRUE
-         WHERE link = $3 AND (title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%')`,
+         SET is_read = TRUE,
+             title   = CASE WHEN title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%'
+                             THEN $1 ELSE title END,
+             message = CASE WHEN title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%'
+                             THEN $2 ELSE message END
+         WHERE link = $3`,
         [
           `New Leave Request — ${newStatus} (Reversed)`,
           `${empName}'s ${req_data.leave_type} leave (${req_data.days_requested} day(s) starting ${startLabel}) has been reversed to ${newStatus.toLowerCase()} by an admin.`,

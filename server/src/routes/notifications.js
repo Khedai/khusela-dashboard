@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const pool = require('../config/db');
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, requireRole } = require('../middleware/auth');
 
 router.use(verifyToken);
 
@@ -97,6 +97,32 @@ router.patch('/read-all', async (req, res) => {
     res.json({ message: 'All marked as read.' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update.' });
+  }
+});
+
+// ─── CLEANUP STALE LEAVE NOTIFICATIONS (Admin only) ──────
+// Marks as read any unread leave notifications where the linked
+// leave_requests status is no longer 'Pending'.  Run once or
+// periodically to clear historic pile-ups.
+router.patch('/cleanup-leave-stale', requireRole('Admin'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE notifications
+       SET is_read = TRUE
+       WHERE is_read = FALSE
+         AND link LIKE '/leave?request=%'
+         AND EXISTS (
+           SELECT 1 FROM leave_requests lr
+           WHERE lr.status <> 'Pending'
+             AND '/leave?request=' || lr.id = notifications.link
+         )`
+    );
+    res.json({
+      message: `Cleanup complete. ${result.rowCount} stale leave notification(s) marked as read.`
+    });
+  } catch (err) {
+    console.error('Cleanup stale leave notifications error:', err.message);
+    res.status(500).json({ error: 'Failed to cleanup stale notifications.' });
   }
 });
 
