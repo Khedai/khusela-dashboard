@@ -372,7 +372,7 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
     // is precise and never fails due to name/text mismatches.
     await pool.query(
       `UPDATE notifications
-       SET title = $1, message = $2, is_read = FALSE
+       SET title = $1, message = $2, is_read = TRUE
        WHERE link = $3 AND title LIKE 'New Leave Request%'`,
       [
         `New Leave Request — ${status}`,
@@ -475,7 +475,7 @@ router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (r
     try {
       await pool.query(
         `UPDATE notifications
-         SET title = $1, message = $2, is_read = FALSE
+         SET title = $1, message = $2, is_read = TRUE
          WHERE link = $3 AND (title LIKE 'New Leave Request%' OR title LIKE 'Leave Request%')`,
         [
           `New Leave Request — ${newStatus} (Reversed)`,

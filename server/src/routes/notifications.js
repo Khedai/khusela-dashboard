@@ -25,10 +25,9 @@ router.get('/', async (req, res) => {
       const isLeave = /leave/i.test(n.title || '') || /leave/i.test(n.message || '');
       if (!isLeave) continue;
       // Extract leave request ID from link like "/leave?request=123"
-      const match = (n.link || '').match(/request=(\d+)/);
+      const match = (n.link || '').match(/request=([^&]+)/);
       if (!match) continue;
-      const leaveId = parseInt(match[1], 10);
-      if (isNaN(leaveId)) continue;
+      const leaveId = match[1];
       leaveIds.push(leaveId);
       if (!notifMap.has(leaveId)) notifMap.set(leaveId, []);
       notifMap.get(leaveId).push(n);
@@ -62,13 +61,14 @@ router.get('/', async (req, res) => {
             // Exact-match UPDATE by notification PK — never fuzzy
             updates.push(
               pool.query(
-                `UPDATE notifications SET title = $1, message = $2 WHERE id = $3`,
+                `UPDATE notifications SET title = $1, message = $2, is_read = TRUE WHERE id = $3`,
                 [newTitle, newMsg, n.id]
               )
             );
             // Also update the in-memory object so the response is already corrected
             n.title = newTitle;
             n.message = newMsg;
+            n.is_read = true;
           }
         }
         if (updates.length > 0) {
