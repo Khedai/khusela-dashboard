@@ -10,7 +10,7 @@ export default defineConfig({
       devOptions: {
         enabled: true,
       },
-      includeAssets: ['khusela-icon.png'],
+      includeAssets: ['khusela-192.png', 'khusela-512.png'],
       manifest: {
         id: '/',
         name: 'Khusela Dashboard',
@@ -19,42 +19,19 @@ export default defineConfig({
         theme_color: '#0c1220',
         background_color: '#0c1220',
         display: 'standalone',
-        orientation: 'portrait-primary',
         start_url: '/',
         scope: '/',
         icons: [
           {
-            src: 'khusela-icon.png',
+            src: 'khusela-192.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: 'khusela-icon.png',
+            src: 'khusela-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: 'khusela-icon.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-        screenshots: [
-          {
-            src: 'khusela-icon.png',
-            sizes: '512x512',
-            type: 'image/png',
-            form_factor: 'wide',
-            label: 'Dashboard',
-          },
-          {
-            src: 'khusela-icon.png',
-            sizes: '512x512',
-            type: 'image/png',
-            form_factor: 'narrow',
-            label: 'Khusela Dashboard',
+            purpose: 'any maskable',
           },
         ],
       },

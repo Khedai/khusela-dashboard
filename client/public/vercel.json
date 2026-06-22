@@ -4,8 +4,8 @@
     { "source": "/workbox-:hash.js", "destination": "/workbox-:hash.js" },
     { "source": "/manifest.webmanifest", "destination": "/manifest.webmanifest" },
     { "source": "/registerSW.js", "destination": "/registerSW.js" },
-    { "source": "/khusela-icon.svg", "destination": "/khusela-icon.svg" },
-    { "source": "/khusela-icon.png", "destination": "/khusela-icon.png" },
+    { "source": "/khusela-192.png", "destination": "/khusela-192.png" },
+    { "source": "/khusela-512.png", "destination": "/khusela-512.png" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
