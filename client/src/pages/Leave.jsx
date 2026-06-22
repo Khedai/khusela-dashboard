@@ -43,8 +43,7 @@ export default function Leave() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const isManager = user?.role === 'Admin'; // Only Admin manages leave; HR + Consultant see & apply for their own
-  const LEAVE_APPROVERS_FRONTEND = ['ayabonga', 'admin'];
-  const canApproveLeave = LEAVE_APPROVERS_FRONTEND.includes((user?.username || '').toLowerCase());
+  const canApproveLeave = user?.role === 'Admin';
 
   const [requests, setRequests] = useState([]);
   const [myEmployee, setMyEmployee] = useState(null);
@@ -262,7 +261,7 @@ export default function Leave() {
 
   // ── Leave Request Detail Panel ────────────────────────────
   if (selectedRequest) {
-  const isHR = LEAVE_APPROVERS_FRONTEND.includes((user?.username || '').toLowerCase());
+  const isHR = user?.role === 'Admin';
     const isPending = selectedRequest.status === 'Pending';
 
     return (
