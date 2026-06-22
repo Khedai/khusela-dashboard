@@ -5,6 +5,16 @@ const { sanitize } = require('../utils/sanitize');
 
 router.use(verifyToken);
 
+// ─── Middleware: only Ayabonga and "Admin" can approve/reject leave ───
+const LEAVE_APPROVERS = ['ayabonga', 'admin'];
+const requireLeaveApprover = (req, res, next) => {
+  const username = (req.user.username || '').toLowerCase();
+  if (!LEAVE_APPROVERS.includes(username)) {
+    return res.status(403).json({ error: 'Only Ayabonga and Admin can approve or reject leave requests.' });
+  }
+  next();
+};
+
 // ─── HELPER: calculate used days from source of truth (leave_requests) ───────
 async function calculateUsedDays(employeeId, year) {
    const result = await pool.query(
@@ -313,7 +323,7 @@ router.post('/request', async (req, res) => {
 });
 
 // ─── APPROVE / REJECT REQUEST (Admin only) ───────────────
-router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res) => {
+router.patch('/request/:id', verifyToken, requireLeaveApprover, async (req, res) => {
   const { status, rejection_reason } = req.body;
   if (!['Approved', 'Rejected'].includes(status)) {
     return res.status(400).json({ error: 'Status must be Approved or Rejected.' });
@@ -415,7 +425,7 @@ router.patch('/request/:id', verifyToken, requireRole('Admin'), async (req, res)
 
 // ─── REVERSE LEAVE DECISION (Admin only) ───────────────────
 // Flips an Approved <-> Rejected decision, adjusts balance, and sends notifications.
-router.patch('/request/:id/reverse', verifyToken, requireRole('Admin'), async (req, res) => {
+router.patch('/request/:id/reverse', verifyToken, requireLeaveApprover, async (req, res) => {
   try {
     // Fetch the request with employee info
     const reqResult = await pool.query(

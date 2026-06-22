@@ -43,6 +43,8 @@ export default function Leave() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const isManager = user?.role === 'Admin'; // Only Admin manages leave; HR + Consultant see & apply for their own
+  const LEAVE_APPROVERS_FRONTEND = ['ayabonga', 'admin'];
+  const canApproveLeave = LEAVE_APPROVERS_FRONTEND.includes((user?.username || '').toLowerCase());
 
   const [requests, setRequests] = useState([]);
   const [myEmployee, setMyEmployee] = useState(null);
@@ -260,7 +262,7 @@ export default function Leave() {
 
   // ── Leave Request Detail Panel ────────────────────────────
   if (selectedRequest) {
-    const isHR = user?.role === 'Admin'; // Only Admin can approve/reject (HR can view/comment)
+  const isHR = LEAVE_APPROVERS_FRONTEND.includes((user?.username || '').toLowerCase());
     const isPending = selectedRequest.status === 'Pending';
 
     return (
@@ -771,7 +773,7 @@ export default function Leave() {
             </p>
           )}
         </div>
-        {!isManager && myEmployee && (
+      {(!isManager || !canApproveLeave) && myEmployee && (
           <button onClick={() => { setShowForm(!showForm); setError(''); setWarning(''); }}
             className="btn-primary" style={S.primaryBtn}>
             {showForm ? 'Cancel' : '+ Apply for Leave'}
@@ -784,7 +786,7 @@ export default function Leave() {
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13.5px', marginBottom: '16px' }}>{success}</div>}
 
       {/* No employee record linked — show info banner */}
-      {!isManager && !loading && !myEmployee && (
+      {(!isManager || !canApproveLeave) && !loading && !myEmployee && (
         <div style={{ padding: '14px 16px', borderRadius: '10px', background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <span style={{ fontSize: '18px', lineHeight: 1 }}>ℹ️</span>
           <div>
@@ -797,7 +799,7 @@ export default function Leave() {
       )}
 
       {/* Leave Balance for Consultants / HR */}
-      {!isManager && balance && (
+      {(!isManager || !canApproveLeave) && balance && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
           {[
             { label: 'Annual Leave', total: Math.round(balance.annual_total), used: Math.round(balance.annual_used), color: '#2563eb' },
@@ -823,7 +825,7 @@ export default function Leave() {
       )}
 
       {/* Apply for Leave Form */}
-      {showForm && !isManager && (
+      {showForm && (!isManager || !canApproveLeave) && (
         <div style={{ ...S.card, marginBottom: '24px', overflow: 'visible' }}>
           <div style={{ padding: '18px 22px', borderBottom: '1px solid #f1f5f9' }}>
             <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Apply for Leave</h3>
@@ -1050,7 +1052,7 @@ export default function Leave() {
                             View
                           </button>
                         </div>
-                        {r.status === 'Pending' ? (
+                        {canApproveLeave && r.status === 'Pending' ? (
                           rejecting === r.id ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
                               <input
