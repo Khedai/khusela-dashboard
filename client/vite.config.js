@@ -10,7 +10,7 @@ export default defineConfig({
       devOptions: {
         enabled: true,
       },
-      includeAssets: ['khusela-icon.svg', 'khusela-icon.png'],
+      includeAssets: ['khusela-icon.png'],
       manifest: {
         id: '/',
         name: 'Khusela Dashboard',
