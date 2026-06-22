@@ -197,6 +197,50 @@ pool.query(`
     AND user_id NOT IN (SELECT id FROM users)
 `).catch(() => {});
 
+// ─── Time Tracking Tables ──────────────────────────────
+pool.query(`
+  CREATE TABLE IF NOT EXISTS attendance (
+    id SERIAL PRIMARY KEY,
+    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    status VARCHAR(20) DEFAULT 'absent',
+    clock_in TIMESTAMPTZ,
+    clock_out TIMESTAMPTZ,
+    total_work_minutes INTEGER,
+    tea_1_minutes INTEGER DEFAULT 0,
+    tea_2_minutes INTEGER DEFAULT 0,
+    lunch_minutes INTEGER DEFAULT 0,
+    idle_minutes INTEGER DEFAULT 0,
+    is_manual_entry BOOLEAN DEFAULT false,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (employee_id, date)
+  )
+`).catch(err => console.error('attendance migration error:', err.message));
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS time_logs (
+    id SERIAL PRIMARY KEY,
+    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    type VARCHAR(20) NOT NULL,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    date DATE NOT NULL,
+    idle_detected BOOLEAN DEFAULT false
+  )
+`).catch(err => console.error('time_logs migration error:', err.message));
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS idle_events (
+    id SERIAL PRIMARY KEY,
+    employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    idle_start TIMESTAMPTZ NOT NULL,
+    idle_end TIMESTAMPTZ,
+    duration_minutes INTEGER,
+    date DATE NOT NULL
+  )
+`).catch(err => console.error('idle_events migration error:', err.message));
+
 const app = express();
 app.set('trust proxy', 1); // Required for Render/Heroku
 
@@ -248,6 +292,7 @@ app.use('/api/franchises', require('./routes/franchises'));
 app.use('/api/employee-documents', require('./routes/employeeDocuments'));
 app.use('/api/leave', require('./routes/leave'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/time', require('./routes/time'));
 
 
 

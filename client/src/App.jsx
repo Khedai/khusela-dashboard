@@ -12,6 +12,7 @@ import Sidebar from './components/Sidebar';
 import SessionWarning from './components/SessionWarning';
 import Inbox from './pages/Inbox';
 import Leave from './pages/Leave';
+import TimeTracker from './pages/TimeTracker';
 
 
 function ProtectedLayout({ children }) {
@@ -57,6 +58,7 @@ function AppRoutes() {
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />
       <Route path="/leave" element={<ProtectedLayout><Leave /></ProtectedLayout>} />
+      <Route path="/time" element={<ProtectedLayout><TimeTracker /></ProtectedLayout>} />
       <Route path="/inbox" element={<ProtectedLayout><Inbox /></ProtectedLayout>} />
       <Route path="/users" element={<ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>} />
       <Route path="/franchises" element={<ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>} />

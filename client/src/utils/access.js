@@ -34,6 +34,11 @@ export const can = (user, action) => {
     'franchises.edit':           ['Admin'],
     'franchises.delete':         ['Admin'],
 
+    // Time Tracking
+    'time.clockSelf':            ['HR', 'Consultant'],
+    'time.viewAll':              ['Admin', 'HR'],
+    'time.manageAttendance':     ['Admin', 'HR'],
+
     // Dashboard
     'dashboard.viewAll':         ['Admin'],
     'dashboard.employeeCount':   ['Admin', 'HR'],

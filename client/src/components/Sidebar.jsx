@@ -19,6 +19,7 @@ const ICONS = {
   Employees:         'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',
   Applications:      'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2l6 6 M16 13H8 M16 17H8 M10 9H8',
   Leave:             'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z',
+  'Time Tracker':    'M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z',
   Inbox:             'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6',
   'User Management': 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M16 3.13a4 4 0 0 1 0 7.75 M21 15l-3-3 3-3',
   Franchises:        'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/employees', label: 'Employees', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/applications', label: 'Applications', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/leave', label: 'Leave', roles: ['Admin', 'HR', 'Consultant'] },
+  { to: '/time', label: 'Time Tracker', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/inbox', label: 'Inbox', roles: ['Admin', 'HR', 'Consultant'] },
 ];
 
