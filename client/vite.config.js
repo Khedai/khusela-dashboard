@@ -12,6 +12,7 @@ export default defineConfig({
       },
       includeAssets: ['khusela-icon.svg', 'khusela-icon.png'],
       manifest: {
+        id: '/',
         name: 'Khusela Dashboard',
         short_name: 'Khusela',
         description: 'HR Management & Time Tracking',
@@ -23,16 +24,37 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
-            src: 'khusela-icon.svg',
+            src: 'khusela-icon.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'khusela-icon.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any',
           },
           {
             src: 'khusela-icon.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable',
+            purpose: 'maskable',
+          },
+        ],
+        screenshots: [
+          {
+            src: 'khusela-icon.png',
+            sizes: '512x512',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Dashboard',
+          },
+          {
+            src: 'khusela-icon.png',
+            sizes: '512x512',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Khusela Dashboard',
           },
         ],
       },
