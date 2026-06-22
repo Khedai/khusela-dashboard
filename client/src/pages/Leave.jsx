@@ -42,8 +42,7 @@ export default function Leave() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
-  const isManager = user?.role === 'Admin'; // Only Admin manages leave; HR + Consultant see & apply for their own
-  const canApproveLeave = user?.role === 'Admin';
+  const isAdmin = user?.role === 'Admin';
 
   const [requests, setRequests] = useState([]);
   const [myEmployee, setMyEmployee] = useState(null);
@@ -51,7 +50,7 @@ export default function Leave() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [actioning, setActioning] = useState({}); // { [requestId]: 'Approved'|'Rejected' }
+  const [actioning, setActioning] = useState({});
   const [rejecting, setRejecting] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [error, setError] = useState('');
@@ -65,20 +64,17 @@ export default function Leave() {
   const [leaveDocs, setLeaveDocs] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
 
-  // Leave request notes (comment thread)
   const [reqNotes, setReqNotes] = useState([]);
   const [reqNotesLoading, setReqNotesLoading] = useState(false);
   const [newReqNote, setNewReqNote] = useState('');
   const [postingReqNote, setPostingReqNote] = useState(false);
   const [deletingReqNoteId, setDeletingReqNoteId] = useState(null);
 
-  // Employee balance shown to Admin when reviewing a request
   const [reqBalance, setReqBalance] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const LIMIT = 20;
 
-  // Leave balances overview (Admin + HR)
   const [allBalances, setAllBalances] = useState([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [balanceSearch, setBalanceSearch] = useState('');
@@ -105,30 +101,35 @@ export default function Leave() {
   const fetchData = async (p = page) => {
     setLoading(true);
     try {
-      if (isManager) {
-        const res = await api.get(`/leave/requests?page=${p}&limit=${LIMIT}`);
-        setRequests(res.data.data ? res.data.data : res.data);
-        if (res.data.pagination) setPagination(res.data.pagination);
-        // Also load balances for the Balances tab
+      // Always fetch own employee record first (needed for both admins & non-admins to apply for leave)
+      let emp = null;
+      let bal = null;
+      let myReqs = [];
+      try {
+        const empRes = await api.get('/leave/my-employee');
+        emp = empRes.data;
+        const [balRes] = await Promise.all([
+          api.get(`/leave/balance/${emp.id}`)
+        ]);
+        bal = balRes.data;
+      } catch {
+        emp = null;
+        bal = null;
+      }
+      setMyEmployee(emp);
+      setBalance(bal);
+
+      if (isAdmin) {
+        // Load all requests + balances
+        const [reqsRes] = await Promise.all([
+          api.get(`/leave/requests?page=${p}&limit=${LIMIT}`)
+        ]);
+        setRequests(reqsRes.data.data ? reqsRes.data.data : reqsRes.data);
+        if (reqsRes.data.pagination) setPagination(reqsRes.data.pagination);
         fetchBalances();
-      } else {
-        try {
-          const empRes = await api.get('/leave/my-employee');
-          setMyEmployee(empRes.data);
-          const [reqRes, balRes] = await Promise.all([
-            api.get(`/leave/my-requests/${empRes.data.id}`),
-            api.get(`/leave/balance/${empRes.data.id}`)
-          ]);
-          setRequests(reqRes.data);
-          setBalance(balRes.data);
-        } catch (empErr) {
-          if (empErr.response?.status === 404) {
-            // No employee record linked — not an error worth showing
-            setMyEmployee(null);
-          } else {
-            setError('Failed to load your leave data.');
-          }
-        }
+      } else if (emp) {
+        const reqRes = await api.get(`/leave/my-requests/${emp.id}`);
+        setRequests(reqRes.data);
       }
     } catch {
       setError('Failed to load leave data.');
@@ -176,7 +177,6 @@ export default function Leave() {
       setRejecting(null); setRejectionReason('');
       setSuccess(`Request ${status.toLowerCase()} successfully.`);
       fetchData(page);
-      // Notify other UI (sidebar/inbox) to refresh notifications and counts
       try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
       try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
     } catch { setError('Failed to update request.'); }
@@ -197,8 +197,7 @@ export default function Leave() {
     } catch { /* ignore */ }
     finally { setLoadingDocs(false); setReqNotesLoading(false); }
 
-    // Admin: also pull the employee's current leave balance
-    if (isManager && req.employee_id) {
+    if (isAdmin && req.employee_id) {
       try {
         const balRes = await api.get(`/leave/balance/${req.employee_id}`);
         setReqBalance(balRes.data);
@@ -206,7 +205,6 @@ export default function Leave() {
     }
   };
 
-  // Open request from inbox notification link (?request=<id>)
   useEffect(() => {
     const requestId = searchParams.get('request');
     if (!requestId || loading) return;
@@ -252,135 +250,56 @@ export default function Leave() {
     } catch { /* ignore */ }
   };
 
-  const [viewTab, setViewTab] = useState('list'); // 'list' | 'calendar' | 'balances'
-  const [calYear, setCalYear]   = useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(new Date().getMonth()); // 0-based
+  const [viewTab, setViewTab] = useState('list');
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
 
-  const allRequests = isManager ? requests : requests;
+  const allRequests = isAdmin ? requests : requests;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
 
   // ── Leave Request Detail Panel ────────────────────────────
   if (selectedRequest) {
-  const isHR = user?.role === 'Admin';
+    const isHR = isAdmin;
     const isPending = selectedRequest.status === 'Pending';
 
     return (
       <div style={{ maxWidth: '700px' }}>
         <button
           onClick={() => { setSelectedRequest(null); setLeaveDocs([]); setError(''); setSearchParams({}); }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#2563eb',
-            fontSize: '13px',
-            cursor: 'pointer',
-            fontFamily: 'DM Sans',
-            fontWeight: '500',
-            padding: '0 0 16px',
-            display: 'block',
-          }}
-        >
-          Back
+          style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: '0 0 16px', display: 'block' }}>
+          ← Back
         </button>
 
         {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13.5px', marginBottom: '16px' }}>{error}</div>}
 
-        {/* Request summary */}
-        <div
-          style={{
-            background: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            overflow: 'hidden',
-            marginBottom: '16px',
-          }}
-        >
-          <div
-            style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid #f1f5f9',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-            }}
-          >
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <h3
-                style={{
-                  fontFamily: 'Sora',
-                  fontSize: '15px',
-                  fontWeight: '700',
-                  color: '#0f172a',
-                  margin: '0 0 4px',
-                }}
-              >
-                {selectedRequest.leave_type} Leave
-              </h3>
+              <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>{selectedRequest.leave_type} Leave</h3>
               <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>
-                {selectedRequest.first_name} {selectedRequest.last_name} ·{' '}
-                {fmtDate(selectedRequest.start_date)} → {fmtDate(selectedRequest.end_date)} ·{' '}
-                {selectedRequest.days_requested} day{selectedRequest.days_requested !== 1 ? 's' : ''}
+                {selectedRequest.first_name} {selectedRequest.last_name} · {fmtDate(selectedRequest.start_date)} → {fmtDate(selectedRequest.end_date)} · {selectedRequest.days_requested} day{selectedRequest.days_requested !== 1 ? 's' : ''}
               </p>
             </div>
-            <span
-              style={{
-                padding: '4px 12px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: '600',
-                background:
-                  selectedRequest.status === 'Approved'
-                    ? '#f0fdf4'
-                    : selectedRequest.status === 'Rejected'
-                      ? '#fef2f2'
-                      : '#fffbeb',
-                color:
-                  selectedRequest.status === 'Approved'
-                    ? '#16a34a'
-                    : selectedRequest.status === 'Rejected'
-                      ? '#dc2626'
-                      : '#d97706',
-              }}
-            >
-              {selectedRequest.status}
-            </span>
+            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', background: selectedRequest.status === 'Approved' ? '#f0fdf4' : selectedRequest.status === 'Rejected' ? '#fef2f2' : '#fffbeb', color: selectedRequest.status === 'Approved' ? '#16a34a' : selectedRequest.status === 'Rejected' ? '#dc2626' : '#d97706' }}>{selectedRequest.status}</span>
           </div>
-
           {selectedRequest.reason && (
             <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
-              <p
-                style={{
-                  color: '#94a3b8',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  margin: '0 0 4px',
-                }}
-              >
-                Reason
-              </p>
+              <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Reason</p>
               <p style={{ color: '#334155', fontSize: '13px', margin: 0 }}>{selectedRequest.reason}</p>
             </div>
           )}
-
           {selectedRequest.rejection_reason && (
             <div style={{ padding: '14px 20px', background: '#fef2f2' }}>
-              <p style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600', margin: '0 0 2px' }}>
-                Rejection Reason
-              </p>
+              <p style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600', margin: '0 0 2px' }}>Rejection Reason</p>
               <p style={{ color: '#991b1b', fontSize: '13px', margin: 0 }}>{selectedRequest.rejection_reason}</p>
             </div>
           )}
         </div>
 
-        {/* Leave Balance (Admin only) */}
-        {isManager && reqBalance && (
+        {isAdmin && reqBalance && (
           <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
             <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
-              <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
-                {selectedRequest.first_name}'s Leave Balance
-              </p>
+              <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{selectedRequest.first_name}'s Leave Balance</p>
               <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8' }}>{new Date().getFullYear()} · remaining days</p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -408,134 +327,34 @@ export default function Leave() {
           </div>
         )}
 
-        {/* Supporting Documents */}
-        <div
-          style={{
-            background: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            overflow: 'hidden',
-            marginBottom: '16px',
-          }}
-        >
-          <div
-            style={{
-              padding: '14px 20px',
-              borderBottom: '1px solid #f1f5f9',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px' }}>
-                Supporting Documents
-              </h3>
-              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>
-                Sick notes, medical certificates, supporting letters
-              </p>
+              <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px' }}>Supporting Documents</h3>
+              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Sick notes, medical certificates, supporting letters</p>
             </div>
-            {leaveDocs.length > 0 && (
-              <span
-                style={{
-                  background: '#f1f5f9',
-                  color: '#64748b',
-                  borderRadius: '20px',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  padding: '2px 9px',
-                }}
-              >
-                {leaveDocs.length}
-              </span>
-            )}
+            {leaveDocs.length > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '20px', fontSize: '11px', fontWeight: '700', padding: '2px 9px' }}>{leaveDocs.length}</span>}
           </div>
-
           <div style={{ padding: '16px 20px' }}>
             <div style={{ marginBottom: '16px' }}>
-              <FileUpload
-                uploadUrl={`/documents/leave/${selectedRequest.id}`}
-                extraFields={{
-                  doc_type: selectedRequest.leave_type === 'Sick' ? 'Sick Note' : 'Supporting Document',
-                }}
-                onUploadComplete={(doc) => setLeaveDocs(prev => [doc, ...prev])}
-                label="Attach Supporting Document"
-              />
+              <FileUpload uploadUrl={`/documents/leave/${selectedRequest.id}`} extraFields={{ doc_type: selectedRequest.leave_type === 'Sick' ? 'Sick Note' : 'Supporting Document' }} onUploadComplete={(doc) => setLeaveDocs(prev => [doc, ...prev])} label="Attach Supporting Document" />
             </div>
-
             {loadingDocs ? (
               <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px' }}>Loading...</p>
             ) : leaveDocs.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-                No documents attached yet.
-              </p>
+              <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>No documents attached yet.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {leaveDocs.map(doc => (
-                  <div
-                    key={doc.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      background: '#f8fafc',
-                      border: '1px solid #f1f5f9',
-                    }}
-                  >
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: '20px' }}>{getIcon(doc.file_name)}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p
-                        style={{
-                          margin: '0 0 2px',
-                          fontSize: '13px',
-                          fontWeight: '500',
-                          color: '#0f172a',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {doc.file_name}
-                      </p>
-                      <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>
-                        {doc.doc_type} · {fmtDate(doc.uploaded_at)} {new Date(doc.uploaded_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '500', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.file_name}</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>{doc.doc_type} · {fmtDate(doc.uploaded_at)} {new Date(doc.uploaded_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                      <button
-                        onClick={() => getDocDownloadUrl(doc.file_key)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#2563eb',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          fontFamily: 'DM Sans',
-                          padding: 0,
-                        }}
-                      >
-                        Download
-                      </button>
-                      {isHR && (
-                        <button
-                          onClick={() => handleLeaveDocDelete(doc.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#dc2626',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            fontFamily: 'DM Sans',
-                            padding: 0,
-                          }}
-                        >
-                          Delete
-                        </button>
-                      )}
+                      <button onClick={() => getDocDownloadUrl(doc.file_key)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Download</button>
+                      {isHR && <button onClick={() => handleLeaveDocDelete(doc.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Delete</button>}
                     </div>
                   </div>
                 ))}
@@ -544,171 +363,43 @@ export default function Leave() {
           </div>
         </div>
 
-        {/* HR Approve/Reject */}
         {isHR && isPending && (
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '12px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              padding: '20px',
-            }}
-          >
-            <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 12px' }}>
-              Action Request
-            </p>
+          <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '20px' }}>
+            <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 12px' }}>Action Request</p>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Approved' });
-                  setSelectedRequest(prev => ({ ...prev, status: 'Approved' }));
-                  fetchData(page);
-                  try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
-                  try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
-                }}
-                style={{
-                  padding: '9px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#16a34a',
-                  color: 'white',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  fontFamily: 'DM Sans',
-                  cursor: 'pointer',
-                }}
-              >
-                Approve
-              </button>
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const reason = window.prompt('Reason for rejection (optional):');
-                  await api.patch(`/leave/request/${selectedRequest.id}`, {
-                    status: 'Rejected',
-                    rejection_reason: reason || '',
-                  });
-                  setSelectedRequest(prev => ({ ...prev, status: 'Rejected', rejection_reason: reason }));
-                  fetchData(page);
-                  try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
-                  try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
-                }}
-                style={{
-                  padding: '9px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#dc2626',
-                  color: 'white',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  fontFamily: 'DM Sans',
-                  cursor: 'pointer',
-                }}
-              >
-                Reject
-              </button>
+              <button onClick={async (e) => { e.stopPropagation(); await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Approved' }); setSelectedRequest(prev => ({ ...prev, status: 'Approved' })); fetchData(page); try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {} try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {} }} style={{ padding: '9px 20px', borderRadius: '8px', border: 'none', background: '#16a34a', color: 'white', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Approve</button>
+              <button onClick={async (e) => { e.stopPropagation(); const reason = window.prompt('Reason for rejection (optional):'); await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Rejected', rejection_reason: reason || '' }); setSelectedRequest(prev => ({ ...prev, status: 'Rejected', rejection_reason: reason })); fetchData(page); try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {} try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {} }} style={{ padding: '9px 20px', borderRadius: '8px', border: 'none', background: '#dc2626', color: 'white', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Reject</button>
             </div>
           </div>
         )}
 
-        {/* HR Reverse Decision (only on already finalized requests) */}
         {isHR && !isPending && (
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '12px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              padding: '20px',
-              marginTop: '16px',
-            }}
-          >
-            <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px' }}>
-              Reverse Decision
-            </p>
-            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 12px' }}>
-              This request is currently <strong>{selectedRequest.status}</strong>. Reversing will change it to{' '}
-              <strong>{selectedRequest.status === 'Approved' ? 'Rejected' : 'Approved'}</strong>
-              {selectedRequest.status === 'Approved' && ' and restore the leave balance.'}
-              {selectedRequest.status === 'Rejected' && ' and deduct from the leave balance.'}
-            </p>
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                const newStatus = selectedRequest.status === 'Approved' ? 'Rejected' : 'Approved';
-                const msg = `Are you sure you want to reverse this leave request from "${selectedRequest.status}" to "${newStatus}"?`;
-                if (!window.confirm(msg)) return;
-                try {
-                  await api.patch(`/leave/request/${selectedRequest.id}/reverse`);
-                  setSelectedRequest(prev => ({ ...prev, status: newStatus }));
-                  setSuccess(`Decision reversed to "${newStatus}" successfully.`);
-                  fetchData(page);
-                  try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
-                  try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
-                } catch (err) {
-                  setError(err.response?.data?.error || 'Failed to reverse decision.');
-                }
-              }}
-              style={{
-                padding: '9px 20px',
-                borderRadius: '8px',
-                border: '1px solid #f59e0b',
-                background: '#fffbeb',
-                color: '#d97706',
-                fontSize: '13px',
-                fontWeight: '600',
-                fontFamily: 'DM Sans',
-                cursor: 'pointer',
-              }}
-            >
-              {selectedRequest.status === 'Approved' ? '↩ Reverse to Rejected' : '↩ Reverse to Approved'}
-            </button>
+          <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '20px', marginTop: '16px' }}>
+            <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px' }}>Reverse Decision</p>
+            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 12px' }}>This request is currently <strong>{selectedRequest.status}</strong>. Reversing will change it to <strong>{selectedRequest.status === 'Approved' ? 'Rejected' : 'Approved'}</strong>{selectedRequest.status === 'Approved' && ' and restore the leave balance.'}{selectedRequest.status === 'Rejected' && ' and deduct from the leave balance.'}</p>
+            <button onClick={async (e) => { e.stopPropagation(); const newStatus = selectedRequest.status === 'Approved' ? 'Rejected' : 'Approved'; const msg = `Are you sure you want to reverse this leave request from "${selectedRequest.status}" to "${newStatus}"?`; if (!window.confirm(msg)) return; try { await api.patch(`/leave/request/${selectedRequest.id}/reverse`); setSelectedRequest(prev => ({ ...prev, status: newStatus })); setSuccess(`Decision reversed to "${newStatus}" successfully.`); fetchData(page); try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {} try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {} } catch (err) { setError(err.response?.data?.error || 'Failed to reverse decision.'); } }} style={{ padding: '9px 20px', borderRadius: '8px', border: '1px solid #f59e0b', background: '#fffbeb', color: '#d97706', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>{selectedRequest.status === 'Approved' ? '↩ Reverse to Rejected' : '↩ Reverse to Approved'}</button>
           </div>
         )}
 
-        {/* ── Notes ── */}
         <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px' }}>Notes</h3>
               <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Internal notes visible to HR and Admin only</p>
             </div>
-            {reqNotes.length > 0 && (
-              <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '20px', fontSize: '11px', fontWeight: '700', padding: '2px 9px' }}>
-                {reqNotes.length}
-              </span>
-            )}
+            {reqNotes.length > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '20px', fontSize: '11px', fontWeight: '700', padding: '2px 9px' }}>{reqNotes.length}</span>}
           </div>
-
-          {/* Compose new note */}
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f8fafc' }}>
-            <textarea
-              value={newReqNote}
-              onChange={e => setNewReqNote(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) postReqNote(); }}
-              placeholder="Add a note... (Ctrl+Enter to post)"
-              rows={3}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', resize: 'vertical', lineHeight: '1.6', boxSizing: 'border-box', outline: 'none' }}
-            />
+            <textarea value={newReqNote} onChange={e => setNewReqNote(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) postReqNote(); }} placeholder="Add a note... (Ctrl+Enter to post)" rows={3} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', resize: 'vertical', lineHeight: '1.6', boxSizing: 'border-box', outline: 'none' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
               <span style={{ color: '#94a3b8', fontSize: '11px' }}>Ctrl+Enter to post quickly</span>
-              <button
-                onClick={postReqNote}
-                disabled={postingReqNote || !newReqNote.trim()}
-                style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: newReqNote.trim() ? '#0f172a' : '#f1f5f9', color: newReqNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: newReqNote.trim() ? 'pointer' : 'default', opacity: postingReqNote ? 0.7 : 1 }}
-              >
-                {postingReqNote ? 'Posting...' : 'Post Note'}
-              </button>
+              <button onClick={postReqNote} disabled={postingReqNote || !newReqNote.trim()} style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: newReqNote.trim() ? '#0f172a' : '#f1f5f9', color: newReqNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: newReqNote.trim() ? 'pointer' : 'default', opacity: postingReqNote ? 0.7 : 1 }}>{postingReqNote ? 'Posting...' : 'Post Note'}</button>
             </div>
           </div>
-
-          {/* Notes list */}
           {reqNotesLoading ? (
             <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Loading...</div>
           ) : reqNotes.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-              No notes yet. Add one above.
-            </div>
+            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No notes yet. Add one above.</div>
           ) : (
             <div>
               {reqNotes.map((note) => {
@@ -719,37 +410,19 @@ export default function Leave() {
                   <div key={note.id} style={{ padding: '14px 20px', borderTop: '1px solid #f8fafc', background: isOwn ? '#fafbff' : 'white' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
-                          {note.username?.charAt(0).toUpperCase()}
-                        </div>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>{note.username?.charAt(0).toUpperCase()}</div>
                         <div>
                           <span style={{ fontWeight: '600', fontSize: '13px', color: '#0f172a' }}>@{note.username}</span>
                           <span style={{ background: rc.bg, color: rc.color, padding: '1px 7px', borderRadius: '4px', fontSize: '10px', fontWeight: '600', marginLeft: '6px' }}>{note.role}</span>
-                          {note.franchise_name && (
-                            <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: '6px' }}>· {note.franchise_name}</span>
-                          )}
+                          {note.franchise_name && <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: '6px' }}>· {note.franchise_name}</span>}
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                          {new Date(note.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        {(isOwn || user?.role === 'Admin') && (
-                          <button
-                            onClick={() => deleteReqNote(note.id)}
-                            disabled={deletingReqNoteId === note.id}
-                            style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0, fontSize: '14px', lineHeight: 1 }}
-                            onMouseEnter={e => e.target.style.color = '#dc2626'}
-                            onMouseLeave={e => e.target.style.color = '#cbd5e1'}
-                          >
-                            {deletingReqNoteId === note.id ? '...' : '×'}
-                          </button>
-                        )}
+                        <span style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>{new Date(note.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        {(isOwn || user?.role === 'Admin') && <button onClick={() => deleteReqNote(note.id)} disabled={deletingReqNoteId === note.id} style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0, fontSize: '14px', lineHeight: 1 }} onMouseEnter={e => e.target.style.color = '#dc2626'} onMouseLeave={e => e.target.style.color = '#cbd5e1'}>{deletingReqNoteId === note.id ? '...' : '×'}</button>}
                       </div>
                     </div>
-                    <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap', paddingLeft: '36px' }}>
-                      {note.note}
-                    </p>
+                    <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap', paddingLeft: '36px' }}>{note.note}</p>
                   </div>
                 );
               })}
@@ -762,19 +435,15 @@ export default function Leave() {
 
   return (
     <div style={{ maxWidth: '1000px' }}>
-      {/* Header */}
       <div style={S.pageHeader(isMobile)}>
         <div>
           <h2 style={S.pageTitle}>Leave Management</h2>
-          {pendingCount > 0 && isManager && (
-            <p style={{ color: '#d97706', fontSize: '13px', margin: '4px 0 0', fontWeight: '500' }}>
-              {pendingCount} pending request{pendingCount > 1 ? 's' : ''} awaiting action
-            </p>
+          {pendingCount > 0 && isAdmin && (
+            <p style={{ color: '#d97706', fontSize: '13px', margin: '4px 0 0', fontWeight: '500' }}>{pendingCount} pending request{pendingCount > 1 ? 's' : ''} awaiting action</p>
           )}
         </div>
-      {(!isManager || !canApproveLeave) && myEmployee && (
-          <button onClick={() => { setShowForm(!showForm); setError(''); setWarning(''); }}
-            className="btn-primary" style={S.primaryBtn}>
+        {myEmployee && (
+          <button onClick={() => { setShowForm(!showForm); setError(''); setWarning(''); }} className="btn-primary" style={S.primaryBtn}>
             {showForm ? 'Cancel' : '+ Apply for Leave'}
           </button>
         )}
@@ -784,21 +453,17 @@ export default function Leave() {
       {warning && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', fontSize: '13.5px', marginBottom: '16px' }}>{warning}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13.5px', marginBottom: '16px' }}>{success}</div>}
 
-      {/* No employee record linked — show info banner */}
-      {(!isManager || !canApproveLeave) && !loading && !myEmployee && (
+      {!loading && !myEmployee && (
         <div style={{ padding: '14px 16px', borderRadius: '10px', background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <span style={{ fontSize: '18px', lineHeight: 1 }}>ℹ️</span>
           <div>
             <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: '#1e40af' }}>No employee record linked</p>
-            <p style={{ margin: 0, fontSize: '12.5px', color: '#3b82f6' }}>
-              Your account isn't linked to an employee profile yet. Ask an Admin to link your user account to your employee record so you can apply for leave and view your balance.
-            </p>
+            <p style={{ margin: 0, fontSize: '12.5px', color: '#3b82f6' }}>Your account isn't linked to an employee profile yet. Ask an Admin to link your user account to your employee record so you can apply for leave and view your balance.</p>
           </div>
         </div>
       )}
 
-      {/* Leave Balance for Consultants / HR */}
-      {(!isManager || !canApproveLeave) && balance && (
+      {balance && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
           {[
             { label: 'Annual Leave', total: Math.round(balance.annual_total), used: Math.round(balance.annual_used), color: '#2563eb' },
@@ -823,8 +488,7 @@ export default function Leave() {
         </div>
       )}
 
-      {/* Apply for Leave Form */}
-      {showForm && (!isManager || !canApproveLeave) && (
+      {showForm && (
         <div style={{ ...S.card, marginBottom: '24px', overflow: 'visible' }}>
           <div style={{ padding: '18px 22px', borderBottom: '1px solid #f1f5f9' }}>
             <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Apply for Leave</h3>
@@ -840,287 +504,153 @@ export default function Leave() {
               <div />
               <div>
                 <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Start Date *</label>
-                <DatePicker
-                  value={form.start_date}
-                  onChange={v => setForm(p => ({ ...p, start_date: v }))}
-                  minDate={new Date().toISOString().split('T')[0]}
-                  placeholder="YYYY/MM/DD"
-                />
+                <DatePicker value={form.start_date} onChange={v => setForm(p => ({ ...p, start_date: v }))} minDate={new Date().toISOString().split('T')[0]} placeholder="YYYY/MM/DD" />
               </div>
               <div>
                 <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>End Date *</label>
-                <DatePicker
-                  value={form.end_date}
-                  onChange={v => setForm(p => ({ ...p, end_date: v }))}
-                  minDate={form.start_date || new Date().toISOString().split('T')[0]}
-                  placeholder="YYYY/MM/DD"
-                />
+                <DatePicker value={form.end_date} onChange={v => setForm(p => ({ ...p, end_date: v }))} minDate={form.start_date || new Date().toISOString().split('T')[0]} placeholder="YYYY/MM/DD" />
               </div>
             </div>
-
             {daysRequested > 0 && (
               <div style={{ margin: '14px 0', padding: '12px 16px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#1d4ed8', fontSize: '13px', fontWeight: '500' }}>Working days requested</span>
                 <span style={{ color: '#1d4ed8', fontSize: '18px', fontWeight: '700', fontFamily: 'Sora' }}>{daysRequested}</span>
               </div>
             )}
-
             <div style={{ marginTop: '14px' }}>
               <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Reason</label>
-              <textarea value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))}
-                rows={3} placeholder="Optional reason for leave..."
-                style={{ ...S.input, resize: 'vertical' }} />
+              <textarea value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} rows={3} placeholder="Optional reason for leave..." style={{ ...S.input, resize: 'vertical' }} />
             </div>
-
             <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-              <button type="submit" disabled={submitting}
-                className="btn-primary" style={{ ...S.primaryBtn, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {submitting ? <><Spinner size="sm" inline /> Submitting...</> : 'Submit Request'}
-              </button>
-              <button type="button" onClick={() => setShowForm(false)}
-                className="btn-ghost" style={S.ghostBtn}>Cancel</button>
+              <button type="submit" disabled={submitting} className="btn-primary" style={{ ...S.primaryBtn, display: 'flex', alignItems: 'center', gap: '8px' }}>{submitting ? <><Spinner size="sm" inline /> Submitting...</> : 'Submit Request'}</button>
+              <button type="button" onClick={() => setShowForm(false)} className="btn-ghost" style={S.ghostBtn}>Cancel</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Requests Table / Calendar */}
       <div style={S.card}>
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>
-            {viewTab === 'balances' ? 'Employee Leave Balances' : isManager ? 'All Leave Requests' : 'My Leave Requests'}
-          </h3>
-          {/* List / Calendar / Balances toggle */}
+          <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{viewTab === 'balances' ? 'Employee Leave Balances' : isAdmin ? 'All Leave Requests' : 'My Leave Requests'}</h3>
           <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '2px' }}>
-            {[
-              { key: 'list', label: 'List' },
-              { key: 'calendar', label: 'Calendar' },
-              ...(isManager ? [{ key: 'balances', label: 'Balances' }] : []),
-            ].map(opt => (
-              <button key={opt.key} onClick={() => setViewTab(opt.key)}
-                style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', background: viewTab === opt.key ? 'white' : 'transparent', color: viewTab === opt.key ? '#0f172a' : '#94a3b8', boxShadow: viewTab === opt.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
-                {opt.label}
-              </button>
+            {[{ key: 'list', label: 'List' }, { key: 'calendar', label: 'Calendar' }, ...(isAdmin ? [{ key: 'balances', label: 'Balances' }] : [])].map(opt => (
+              <button key={opt.key} onClick={() => setViewTab(opt.key)} style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', background: viewTab === opt.key ? 'white' : 'transparent', color: viewTab === opt.key ? '#0f172a' : '#94a3b8', boxShadow: viewTab === opt.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>{opt.label}</button>
             ))}
           </div>
         </div>
 
         {loading ? (
           <Spinner size="lg" dark label="Loading leave data..." />
-        ) : viewTab === 'balances' && isManager ? (
-          /* ── Balances Tab ── */
+        ) : viewTab === 'balances' && isAdmin ? (
           balancesLoading ? (
             <Spinner size="lg" dark label="Loading balances..." />
           ) : (
             <div>
               <div style={{ padding: '12px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input
-                  placeholder="Search employees..."
-                  value={balanceSearch}
-                  onChange={e => setBalanceSearch(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', width: '100%', maxWidth: '280px', boxSizing: 'border-box', outline: 'none', color: '#0f172a' }}
-                />
-                <button
-                  onClick={fetchBalances}
-                  disabled={balancesLoading}
-                  title="Refresh balances"
-                  style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 13px', cursor: balancesLoading ? 'default' : 'pointer', color: '#64748b', fontSize: '12px', fontFamily: 'DM Sans', whiteSpace: 'nowrap', opacity: balancesLoading ? 0.5 : 1 }}
-                >
-                  {balancesLoading ? '...' : '↻ Refresh'}
-                </button>
+                <input placeholder="Search employees..." value={balanceSearch} onChange={e => setBalanceSearch(e.target.value)} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'DM Sans', width: '100%', maxWidth: '280px', boxSizing: 'border-box', outline: 'none', color: '#0f172a' }} />
+                <button onClick={fetchBalances} disabled={balancesLoading} title="Refresh balances" style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 13px', cursor: balancesLoading ? 'default' : 'pointer', color: '#64748b', fontSize: '12px', fontFamily: 'DM Sans', whiteSpace: 'nowrap', opacity: balancesLoading ? 0.5 : 1 }}>{balancesLoading ? '...' : '↻ Refresh'}</button>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
                   <thead>
                     <tr>
-                      {['Employee', 'Franchise', 'Annual', 'Sick', 'Family Resp.'].map(h => (
-                        <th key={h} style={S.tableHeader}>{h}</th>
-                      ))}
+                      {['Employee', 'Franchise', 'Annual', 'Sick', 'Family Resp.'].map(h => <th key={h} style={S.tableHeader}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {allBalances
-                      .filter(e => {
-                        if (!balanceSearch.trim()) return true;
-                        const s = balanceSearch.toLowerCase();
-                        return `${e.first_name} ${e.last_name}`.toLowerCase().includes(s) ||
-                               (e.franchise_name || '').toLowerCase().includes(s);
-                      })
-                      .map(e => {
-                        const annualLeft = (e.annual_total || 0) - (e.annual_used || 0);
-                        const sickLeft   = (e.sick_total || 0)   - (e.sick_used || 0);
-                        const familyLeft = (e.family_total || 0) - (e.family_used || 0);
-                        const balCell = (left, total, color) => (
-                          <td style={S.tableCell}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontWeight: '700', fontSize: '14px', color: left <= 0 ? '#dc2626' : '#0f172a', fontFamily: 'Sora', minWidth: '28px' }}>{left}</span>
-                              <div style={{ flex: 1, maxWidth: '80px' }}>
-                                <div style={{ height: '4px', borderRadius: '2px', background: '#f1f5f9', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', borderRadius: '2px', background: left <= 0 ? '#dc2626' : color, width: `${total ? Math.min(((total - left) / total) * 100, 100) : 0}%`, transition: 'width 0.3s' }} />
-                                </div>
-                              </div>
-                              <span style={{ fontSize: '11px', color: '#94a3b8' }}>/ {total}</span>
-                            </div>
-                          </td>
-                        );
-                        return (
-                          <tr key={e.employee_id} className="table-row">
-                            <td style={{ ...S.tableCell, fontWeight: '500' }}>{e.first_name} {e.last_name}</td>
-                            <td style={{ ...S.tableCell, color: '#64748b' }}>{e.franchise_name || '—'}</td>
-                            {balCell(annualLeft, e.annual_total, '#2563eb')}
-                            {balCell(sickLeft, e.sick_total, '#0891b2')}
-                            {balCell(familyLeft, e.family_total, '#16a34a')}
-                          </tr>
-                        );
-                      })}
+                    {allBalances.filter(e => { if (!balanceSearch.trim()) return true; const s = balanceSearch.toLowerCase(); return `${e.first_name} ${e.last_name}`.toLowerCase().includes(s) || (e.franchise_name || '').toLowerCase().includes(s); }).map(e => {
+                      const annualLeft = (e.annual_total || 0) - (e.annual_used || 0);
+                      const sickLeft = (e.sick_total || 0) - (e.sick_used || 0);
+                      const familyLeft = (e.family_total || 0) - (e.family_used || 0);
+                      const balCell = (left, total, color) => (
+                        <td style={S.tableCell}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: '700', fontSize: '14px', color: left <= 0 ? '#dc2626' : '#0f172a', fontFamily: 'Sora', minWidth: '28px' }}>{left}</span>
+                            <div style={{ flex: 1, maxWidth: '80px' }}><div style={{ height: '4px', borderRadius: '2px', background: '#f1f5f9', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: '2px', background: left <= 0 ? '#dc2626' : color, width: `${total ? Math.min(((total - left) / total) * 100, 100) : 0}%`, transition: 'width 0.3s' }} /></div></div>
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>/ {total}</span>
+                          </div>
+                        </td>
+                      );
+                      return (
+                        <tr key={e.employee_id} className="table-row">
+                          <td style={{ ...S.tableCell, fontWeight: '500' }}>{e.first_name} {e.last_name}</td>
+                          <td style={{ ...S.tableCell, color: '#64748b' }}>{e.franchise_name || '—'}</td>
+                          {balCell(annualLeft, e.annual_total, '#2563eb')}
+                          {balCell(sickLeft, e.sick_total, '#0891b2')}
+                          {balCell(familyLeft, e.family_total, '#16a34a')}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
-                {allBalances.length === 0 && (
-                  <p style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No employees found.</p>
-                )}
+                {allBalances.length === 0 && <p style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No employees found.</p>}
               </div>
             </div>
           )
         ) : viewTab === 'calendar' ? (
-          <LeaveCalendar
-            requests={allRequests}
-            year={calYear} month={calMonth}
-            onPrev={() => {
-              if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
-              else setCalMonth(m => m - 1);
-            }}
-            onNext={() => {
-              if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
-              else setCalMonth(m => m + 1);
-            }}
-            isManager={isManager}
-            onSelect={openLeaveDetail}
-          />
+          <LeaveCalendar requests={allRequests} year={calYear} month={calMonth} onPrev={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }} onNext={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }} isAdmin={isAdmin} onSelect={openLeaveDetail} />
         ) : allRequests.length === 0 ? (
-          <EmptyState
-            icon="🗓️"
-            title="No leave requests yet"
-            subtitle={isManager ? 'Leave requests from your team will appear here.' : 'Submit your first leave request using the button above.'}
-          />
+          <EmptyState icon="🗓️" title="No leave requests yet" subtitle={isAdmin ? 'Leave requests from your team will appear here.' : 'Submit your first leave request using the button above.'} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
               <thead>
                 <tr>
-                  {[
-                    ...(isManager ? ['Employee'] : []),
-                    'Type', 'Dates', 'Days', 'Reason', 'Status',
-                    ...(isManager ? ['Action'] : ['Documents'])
-                  ].map(h => <th key={h} style={S.tableHeader}>{h}</th>)}
+                  {[...(isAdmin ? ['Employee'] : []), 'Type', 'Dates', 'Days', 'Reason', 'Status', ...(isAdmin ? ['Action'] : ['Documents'])].map(h => <th key={h} style={S.tableHeader}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {allRequests.map(r => (
-                  <tr
-                    key={r.id}
-                    className="table-row"
-                    onClick={() => openLeaveDetail(r)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {isManager && (
-                      <td style={{ ...S.tableCell, fontWeight: '500' }}>{r.first_name} {r.last_name}</td>
-                    )}
+                  <tr key={r.id} className="table-row" onClick={() => openLeaveDetail(r)} style={{ cursor: 'pointer' }}>
+                    {isAdmin && <td style={{ ...S.tableCell, fontWeight: '500' }}>{r.first_name} {r.last_name}</td>}
                     <td style={S.tableCell}>{r.leave_type}</td>
-                    <td style={{ ...S.tableCell, whiteSpace: 'nowrap', color: '#64748b' }}>
-                      {fmtDate(r.start_date)} → {fmtDate(r.end_date)}
-                    </td>
+                    <td style={{ ...S.tableCell, whiteSpace: 'nowrap', color: '#64748b' }}>{fmtDate(r.start_date)} → {fmtDate(r.end_date)}</td>
                     <td style={{ ...S.tableCell, textAlign: 'center' }}>{r.days_requested}</td>
-                    <td style={{ ...S.tableCell, color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.reason || '—'}
-                    </td>
+                    <td style={{ ...S.tableCell, color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason || '—'}</td>
                     <td style={S.tableCell}>
-                      <span style={{ ...STATUS_STYLES[r.status], padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', display: 'inline-block' }}>
-                        {r.status}
-                      </span>
-                      {r.rejection_reason && (
-                        <p style={{ color: '#dc2626', fontSize: '11px', margin: '3px 0 0' }}>{r.rejection_reason}</p>
-                      )}
+                      <span style={{ ...STATUS_STYLES[r.status], padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', display: 'inline-block' }}>{r.status}</span>
+                      {r.rejection_reason && <p style={{ color: '#dc2626', fontSize: '11px', margin: '3px 0 0' }}>{r.rejection_reason}</p>}
                     </td>
-                    {isManager ? (
+                    {isAdmin ? (
                       <td style={S.tableCell}>
                         <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '8px' }}>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openLeaveDetail(r); }}
-                            style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}
-                          >
-                            View
-                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); openLeaveDetail(r); }} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>View</button>
                         </div>
-                        {canApproveLeave && r.status === 'Pending' ? (
+                        {r.status === 'Pending' ? (
                           rejecting === r.id ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
-                              <input
-                                placeholder="Rejection reason..."
-                                value={rejectionReason}
-                                onChange={e => setRejectionReason(e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                                style={{ ...S.input, padding: '5px 9px', fontSize: '12px' }}
-                              />
+                              <input placeholder="Rejection reason..." value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} onClick={(e) => e.stopPropagation()} style={{ ...S.input, padding: '5px 9px', fontSize: '12px' }} />
                               <div style={{ display: 'flex', gap: '6px' }}>
-                                <button onClick={(e) => { e.stopPropagation(); handleAction(r.id, 'Rejected'); }}
-                                  style={{ ...S.primaryBtn, background: 'linear-gradient(135deg,#dc2626,#b91c1c)', fontSize: '11px', padding: '5px 10px', boxShadow: 'none' }}>
-                                  Confirm
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); setRejecting(null); setRejectionReason(''); }} style={{ ...S.ghostBtn, fontSize: '11px', padding: '5px 10px' }}>
-                                  Cancel
-                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); handleAction(r.id, 'Rejected'); }} style={{ ...S.primaryBtn, background: 'linear-gradient(135deg,#dc2626,#b91c1c)', fontSize: '11px', padding: '5px 10px', boxShadow: 'none' }}>Confirm</button>
+                                <button onClick={(e) => { e.stopPropagation(); setRejecting(null); setRejectionReason(''); }} style={{ ...S.ghostBtn, fontSize: '11px', padding: '5px 10px' }}>Cancel</button>
                               </div>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                               {actioning[r.id] ? (
-                                <><Spinner size="sm" dark inline />
-                                <span style={{ color: '#94a3b8', fontSize: '12px' }}>{actioning[r.id]}…</span></>
+                                <><Spinner size="sm" dark inline /><span style={{ color: '#94a3b8', fontSize: '12px' }}>{actioning[r.id]}…</span></>
                               ) : (
                                 <>
-                                  <button onClick={(e) => { e.stopPropagation(); handleAction(r.id, 'Approved'); }}
-                                    className="btn-success btn-link"
-                                    style={{ background: 'none', border: 'none', color: '#16a34a', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px' }}>
-                                    Approve
-                                  </button>
-                                  <button onClick={(e) => { e.stopPropagation(); setRejecting(r.id); }}
-                                    className="btn-danger btn-link"
-                                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px' }}>
-                                    Reject
-                                  </button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleAction(r.id, 'Approved'); }} className="btn-success btn-link" style={{ background: 'none', border: 'none', color: '#16a34a', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px' }}>Approve</button>
+                                  <button onClick={(e) => { e.stopPropagation(); setRejecting(r.id); }} className="btn-danger btn-link" style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: '4px' }}>Reject</button>
                                 </>
                               )}
                             </div>
                           )
                         ) : (
-                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>
-                            {r.approved_by_username ? `by ${r.approved_by_username}` : '—'}
-                          </span>
+                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>{r.approved_by_username ? `by ${r.approved_by_username}` : '—'}</span>
                         )}
                       </td>
                     ) : (
                       <td style={S.tableCell}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openLeaveDetail(r); }}
-                          style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}
-                        >
-                          View / Attach Docs
-                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); openLeaveDetail(r); }} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>View / Attach Docs</button>
                       </td>
                     )}
                   </tr>
                 ))}
               </tbody>
             </table>
-            {isManager && pagination && (
-              <Pagination
-                page={pagination.page}
-                totalPages={pagination.totalPages}
-                total={pagination.total}
-                limit={pagination.limit}
-                onPageChange={handlePageChange}
-              />
-            )}
+            {isAdmin && pagination && <Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} limit={pagination.limit} onPageChange={handlePageChange} />}
           </div>
         )}
       </div>
@@ -1141,7 +671,6 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', minDate }) {
   const [viewMonth, setViewMonth] = useState(value ? parseInt(value.slice(5,7)) - 1 : today.getMonth());
   const triggerRef = useRef(null);
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
-
   const selected = value || null;
 
   const openPicker = () => {
@@ -1149,91 +678,42 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', minDate }) {
     if (rect) {
       const spaceBelow = window.innerHeight - rect.bottom;
       const popupH = 320;
-      setPopupPos({
-        top: spaceBelow >= popupH ? rect.bottom + window.scrollY + 4 : rect.top + window.scrollY - popupH - 4,
-        left: Math.min(rect.left + window.scrollX, window.innerWidth + window.scrollX - 280),
-      });
+      setPopupPos({ top: spaceBelow >= popupH ? rect.bottom + window.scrollY + 4 : rect.top + window.scrollY - popupH - 4, left: Math.min(rect.left + window.scrollX, window.innerWidth + window.scrollX - 280) });
     }
     setOpen(o => !o);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const close = (e) => { if (!e.target.closest('[data-dp-popup]') && !e.target.closest('[data-dp-trigger]')) setOpen(false); };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [open]);
+  useEffect(() => { if (!open) return; const close = (e) => { if (!e.target.closest('[data-dp-popup]') && !e.target.closest('[data-dp-trigger]')) setOpen(false); }; document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close); }, [open]);
 
   const firstDay = new Date(viewYear, viewMonth, 1);
-  const lastDay  = new Date(viewYear, viewMonth + 1, 0);
+  const lastDay = new Date(viewYear, viewMonth + 1, 0);
   const startDow = (firstDay.getDay() + 6) % 7;
   const totalCells = Math.ceil((startDow + lastDay.getDate()) / 7) * 7;
   const cells = [];
-  for (let i = 0; i < totalCells; i++) {
-    const d = i - startDow + 1;
-    cells.push(d >= 1 && d <= lastDay.getDate() ? d : null);
-  }
+  for (let i = 0; i < totalCells; i++) { const d = i - startDow + 1; cells.push(d >= 1 && d <= lastDay.getDate() ? d : null); }
 
   const fmt = (y, m, d) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   const display = selected ? `${selected.slice(0,4)}/${selected.slice(5,7)}/${selected.slice(8,10)}` : '';
-
-  const isDisabled = (y, m, d) => {
-    if (!minDate) return false;
-    return fmt(y, m, d) < minDate;
-  };
-
-  const years = [];
-  for (let y = today.getFullYear() - 5; y <= today.getFullYear() + 10; y++) years.push(y);
+  const isDisabled = (y, m, d) => { if (!minDate) return false; return fmt(y, m, d) < minDate; };
+  const years = []; for (let y = today.getFullYear() - 5; y <= today.getFullYear() + 10; y++) years.push(y);
 
   return (
     <>
-      <div
-        ref={triggerRef}
-        data-dp-trigger
-        onClick={openPicker}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
-          background: 'white', cursor: 'pointer', fontFamily: 'DM Sans', fontSize: '13.5px',
-          color: display ? '#0f172a' : '#94a3b8', userSelect: 'none',
-          minWidth: '140px',
-        }}
-      >
+      <div ref={triggerRef} data-dp-trigger onClick={openPicker} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontFamily: 'DM Sans', fontSize: '13.5px', color: display ? '#0f172a' : '#94a3b8', userSelect: 'none', minWidth: '140px' }}>
         <span>{display || placeholder}</span>
         <span style={{ color: '#94a3b8', fontSize: '14px', marginLeft: '8px' }}>📅</span>
       </div>
-
       {open && (
-        <div
-          data-dp-popup
-          style={{
-            position: 'fixed', top: popupPos.top, left: popupPos.left,
-            zIndex: 9999, background: 'white', borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.14)', padding: '14px', width: '270px',
-          }}
-        >
-          {/* Nav */}
+        <div data-dp-popup style={{ position: 'fixed', top: popupPos.top, left: popupPos.left, zIndex: 9999, background: 'white', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.14)', padding: '14px', width: '270px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '6px' }}>
             <button style={dpNavBtn} onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1); } else setViewMonth(m => m-1); }}>‹</button>
             <div style={{ display: 'flex', gap: '4px', flex: 1, justifyContent: 'center' }}>
-              <select value={viewMonth} onChange={e => setViewMonth(+e.target.value)} style={dpSelStyle}>
-                {DP_MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-              </select>
-              <select value={viewYear} onChange={e => setViewYear(+e.target.value)} style={dpSelStyle}>
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
+              <select value={viewMonth} onChange={e => setViewMonth(+e.target.value)} style={dpSelStyle}>{DP_MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}</select>
+              <select value={viewYear} onChange={e => setViewYear(+e.target.value)} style={dpSelStyle}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
             </div>
             <button style={dpNavBtn} onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1); } else setViewMonth(m => m+1); }}>›</button>
           </div>
-
-          {/* Weekday headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: '4px' }}>
-            {DP_WEEKDAYS.map(d => (
-              <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: '700', color: '#94a3b8', padding: '2px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{d}</div>
-            ))}
-          </div>
-
-          {/* Day cells */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: '4px' }}>{DP_WEEKDAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: '700', color: '#94a3b8', padding: '2px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{d}</div>)}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px' }}>
             {cells.map((d, i) => {
               if (!d) return <div key={i} />;
@@ -1241,33 +721,10 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', minDate }) {
               const isSel = ds === selected;
               const isToday = ds === today.toISOString().split('T')[0];
               const disabled = isDisabled(viewYear, viewMonth, d);
-              return (
-                <button
-                  key={i}
-                  disabled={disabled}
-                  onClick={() => { onChange(ds); setOpen(false); }}
-                  style={{
-                    border: 'none', borderRadius: '6px', padding: '5px 0', textAlign: 'center',
-                    fontSize: '12px', fontFamily: 'DM Sans', cursor: disabled ? 'default' : 'pointer',
-                    background: isSel ? '#0f172a' : isToday ? '#eff6ff' : 'transparent',
-                    color: isSel ? 'white' : isToday ? '#2563eb' : disabled ? '#cbd5e1' : '#0f172a',
-                    fontWeight: isSel || isToday ? '700' : '400',
-                  }}
-                >
-                  {d}
-                </button>
-              );
+              return <button key={i} disabled={disabled} onClick={() => { onChange(ds); setOpen(false); }} style={{ border: 'none', borderRadius: '6px', padding: '5px 0', textAlign: 'center', fontSize: '12px', fontFamily: 'DM Sans', cursor: disabled ? 'default' : 'pointer', background: isSel ? '#0f172a' : isToday ? '#eff6ff' : 'transparent', color: isSel ? 'white' : isToday ? '#2563eb' : disabled ? '#cbd5e1' : '#0f172a', fontWeight: isSel || isToday ? '700' : '400' }}>{d}</button>;
             })}
           </div>
-
-          {selected && (
-            <button
-              onClick={() => { onChange(''); setOpen(false); }}
-              style={{ marginTop: '10px', width: '100%', background: 'none', border: '1px solid #e2e8f0', borderRadius: '7px', padding: '5px', fontSize: '12px', color: '#94a3b8', fontFamily: 'DM Sans', cursor: 'pointer' }}
-            >
-              Clear
-            </button>
-          )}
+          {selected && <button onClick={() => { onChange(''); setOpen(false); }} style={{ marginTop: '10px', width: '100%', background: 'none', border: '1px solid #e2e8f0', borderRadius: '7px', padding: '5px', fontSize: '12px', color: '#94a3b8', fontFamily: 'DM Sans', cursor: 'pointer' }}>Clear</button>}
         </div>
       )}
     </>
@@ -1276,119 +733,46 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', minDate }) {
 
 // ── Leave Calendar Component ──────────────────────────────
 const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const CAL_DAYS   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const CAL_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const STATUS_CAL = { Approved: { bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' }, Pending: { bg: '#fef9c3', color: '#ca8a04', border: '#fde68a' }, Rejected: { bg: '#fee2e2', color: '#dc2626', border: '#fecaca' } };
 
-const STATUS_CAL = {
-  Approved: { bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
-  Pending:  { bg: '#fef9c3', color: '#ca8a04', border: '#fde68a' },
-  Rejected: { bg: '#fee2e2', color: '#dc2626', border: '#fecaca' },
-};
-
-function LeaveCalendar({ requests, year, month, onPrev, onNext, isManager, onSelect }) {
-  // Build days grid (Mon-first)
+function LeaveCalendar({ requests, year, month, onPrev, onNext, isAdmin, onSelect }) {
   const firstDay = new Date(year, month, 1);
-  const lastDay  = new Date(year, month + 1, 0);
-  const startDow = (firstDay.getDay() + 6) % 7; // Mon=0
+  const lastDay = new Date(year, month + 1, 0);
+  const startDow = (firstDay.getDay() + 6) % 7;
   const totalCells = Math.ceil((startDow + lastDay.getDate()) / 7) * 7;
-
   const cells = [];
-  for (let i = 0; i < totalCells; i++) {
-    const dayNum = i - startDow + 1;
-    cells.push(dayNum >= 1 && dayNum <= lastDay.getDate() ? dayNum : null);
-  }
-
-  // Map each day to overlapping requests
+  for (let i = 0; i < totalCells; i++) { const dayNum = i - startDow + 1; cells.push(dayNum >= 1 && dayNum <= lastDay.getDate() ? dayNum : null); }
   const dateStr = (y, m, d) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-
   const dayEvents = {};
-  requests.forEach(r => {
-    const start = r.start_date?.split('T')[0];
-    const end   = r.end_date?.split('T')[0];
-    if (!start || !end) return;
-    // iterate days in month
-    for (let d = 1; d <= lastDay.getDate(); d++) {
-      const ds = dateStr(year, month, d);
-      if (ds >= start && ds <= end) {
-        if (!dayEvents[d]) dayEvents[d] = [];
-        dayEvents[d].push(r);
-      }
-    }
-  });
-
+  requests.forEach(r => { const start = r.start_date?.split('T')[0]; const end = r.end_date?.split('T')[0]; if (!start || !end) return; for (let d = 1; d <= lastDay.getDate(); d++) { const ds = dateStr(year, month, d); if (ds >= start && ds <= end) { if (!dayEvents[d]) dayEvents[d] = []; dayEvents[d].push(r); } } });
   const today = new Date();
   const isToday = (d) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
   return (
     <div style={{ padding: '0 0 16px' }}>
-      {/* Month nav */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 22px 14px' }}>
         <button onClick={onPrev} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer', color: '#64748b', fontSize: '14px', fontFamily: 'DM Sans' }}>‹</button>
-        <span style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
-          {CAL_MONTHS[month]} {year}
-        </span>
+        <span style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{CAL_MONTHS[month]} {year}</span>
         <button onClick={onNext} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer', color: '#64748b', fontSize: '14px', fontFamily: 'DM Sans' }}>›</button>
       </div>
-
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: '16px', padding: '0 22px 12px', flexWrap: 'wrap' }}>
-        {Object.entries(STATUS_CAL).map(([s, c]) => (
-          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: c.bg, border: `1px solid ${c.border}` }} />
-            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>{s}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Day headers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', padding: '0 16px' }}>
-        {CAL_DAYS.map(d => (
-          <div key={d} style={{ textAlign: 'center', padding: '6px 4px', fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Cells grid */}
+      <div style={{ display: 'flex', gap: '16px', padding: '0 22px 12px', flexWrap: 'wrap' }}>{Object.entries(STATUS_CAL).map(([s, c]) => <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><div style={{ width: '10px', height: '10px', borderRadius: '3px', background: c.bg, border: `1px solid ${c.border}` }} /><span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>{s}</span></div>)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', padding: '0 16px' }}>{CAL_DAYS.map(d => <div key={d} style={{ textAlign: 'center', padding: '6px 4px', fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{d}</div>)}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', padding: '0 16px 8px' }}>
         {cells.map((d, i) => {
           const events = d ? (dayEvents[d] || []) : [];
           return (
-            <div key={i} style={{
-              minHeight: '72px',
-              borderRadius: '8px',
-              background: d ? (isToday(d) ? '#eff6ff' : '#fafafa') : 'transparent',
-              border: d ? (isToday(d) ? '1.5px solid #bfdbfe' : '1px solid #f1f5f9') : 'none',
-              padding: '4px',
-            }}>
-              {d && (
-                <>
-                  <div style={{ fontSize: '11px', fontWeight: isToday(d) ? '700' : '400', color: isToday(d) ? '#2563eb' : '#64748b', textAlign: 'right', marginBottom: '3px', lineHeight: 1 }}>
-                    {d}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {events.slice(0, 3).map(r => {
-                      const cs = STATUS_CAL[r.status] || STATUS_CAL.Pending;
-                      return (
-                        <button key={r.id} onClick={() => onSelect(r)}
-                          title={`${isManager ? `${r.first_name} ${r.last_name} — ` : ''}${r.leave_type} (${r.status})`}
-                          style={{
-                            display: 'block', width: '100%', border: `1px solid ${cs.border}`,
-                            borderRadius: '4px', background: cs.bg, color: cs.color,
-                            fontSize: '9px', fontWeight: '600', fontFamily: 'DM Sans',
-                            padding: '2px 4px', textAlign: 'left', cursor: 'pointer',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            lineHeight: '1.3',
-                          }}>
-                          {isManager ? `${r.first_name?.charAt(0)}. ${r.last_name}` : r.leave_type}
-                        </button>
-                      );
-                    })}
-                    {events.length > 3 && (
-                      <span style={{ fontSize: '9px', color: '#94a3b8', textAlign: 'center' }}>+{events.length - 3} more</span>
-                    )}
-                  </div>
-                </>
-              )}
+            <div key={i} style={{ minHeight: '72px', borderRadius: '8px', background: d ? (isToday(d) ? '#eff6ff' : '#fafafa') : 'transparent', border: d ? (isToday(d) ? '1.5px solid #bfdbfe' : '1px solid #f1f5f9') : 'none', padding: '4px' }}>
+              {d && <>
+                <div style={{ fontSize: '11px', fontWeight: isToday(d) ? '700' : '400', color: isToday(d) ? '#2563eb' : '#64748b', textAlign: 'right', marginBottom: '3px', lineHeight: 1 }}>{d}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {events.slice(0, 3).map(r => {
+                    const cs = STATUS_CAL[r.status] || STATUS_CAL.Pending;
+                    return <button key={r.id} onClick={() => onSelect(r)} title={`${isAdmin ? `${r.first_name} ${r.last_name} — ` : ''}${r.leave_type} (${r.status})`} style={{ display: 'block', width: '100%', border: `1px solid ${cs.border}`, borderRadius: '4px', background: cs.bg, color: cs.color, fontSize: '9px', fontWeight: '600', fontFamily: 'DM Sans', padding: '2px 4px', textAlign: 'left', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.3' }}>{isAdmin ? `${r.first_name?.charAt(0)}. ${r.last_name}` : r.leave_type}</button>;
+                  })}
+                  {events.length > 3 && <span style={{ fontSize: '9px', color: '#94a3b8', textAlign: 'center' }}>+{events.length - 3} more</span>}
+                </div>
+              </>}
             </div>
           );
         })}
