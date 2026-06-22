@@ -1,3 +1,11 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/sw.js", "destination": "/sw.js" },
+    { "source": "/workbox-:hash.js", "destination": "/workbox-:hash.js" },
+    { "source": "/manifest.webmanifest", "destination": "/manifest.webmanifest" },
+    { "source": "/registerSW.js", "destination": "/registerSW.js" },
+    { "source": "/khusela-icon.svg", "destination": "/khusela-icon.svg" },
+    { "source": "/khusela-icon.png", "destination": "/khusela-icon.png" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

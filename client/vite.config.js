@@ -10,7 +10,7 @@ export default defineConfig({
       devOptions: {
         enabled: true,
       },
-      includeAssets: ['khusela-icon.svg'],
+      includeAssets: ['khusela-icon.svg', 'khusela-icon.png'],
       manifest: {
         name: 'Khusela Dashboard',
         short_name: 'Khusela',
@@ -27,6 +27,12 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/svg+xml',
             purpose: 'any',
+          },
+          {
+            src: 'khusela-icon.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
           },
         ],
       },
