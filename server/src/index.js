@@ -198,6 +198,8 @@ pool.query(`
 `).catch(() => {});
 
 // ─── Time Tracking Tables ──────────────────────────────
+pool.query('ALTER TABLE attendance ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION').catch(() => {});
+pool.query('ALTER TABLE attendance ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION').catch(() => {});
 pool.query(`
   CREATE TABLE IF NOT EXISTS attendance (
     id SERIAL PRIMARY KEY,
