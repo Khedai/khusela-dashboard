@@ -115,30 +115,30 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
        ORDER BY id`,
       [employeeId, today]
     );
-    let tea1Min = 0, tea2Min = 0, lunchMin = 0;
-    const breakStarts = {};
-    for (const log of breakLogs.rows) {
-      if (log.type.endsWith('_start')) {
-        breakStarts[log.type.replace('_start', '')] = new Date(log.timestamp);
-      } else if (log.type.endsWith('_end')) {
-        const key = log.type.replace('_end', '');
-        if (breakStarts[key]) {
-          const diff = (new Date(log.timestamp) - breakStarts[key]) / 60000;
-          if (key === 'tea_1') tea1Min += diff;
-          else if (key === 'tea_2') tea2Min += diff;
-          else if (key === 'lunch') lunchMin += diff;
-          delete breakStarts[key];
-        }
-      }
-    }
-    // Handle any still-active break at clock-out time
-    if (activeBreak.rows.length > 0) {
-      const ab = activeBreak.rows[0];
-      const key = ab.type.replace('_start', '');
-      const diff = (new Date() - new Date(ab.timestamp)) / 60000;
-      if (key === 'tea_1') tea1Min += diff;
-      else if (key === 'tea_2') tea2Min += diff;
-      else if (key === 'lunch') lunchMin += diff;
+     let tea1Min = 0, tea2Min = 0, lunchMin = 0;
+     const breakStarts = {};
+     for (const log of breakLogs.rows) {
+       if (log.type.endsWith('_start')) {
+         breakStarts[log.type.replace('_start', '')] = new Date(log.timestamp);
+       } else if (log.type.endsWith('_end')) {
+         const key = log.type.replace('_end', '');
+         if (breakStarts[key]) {
+           const diff = Math.min((new Date(log.timestamp) - breakStarts[key]) / 60000, key === 'lunch' ? LUNCH_DURATION : TEA_DURATION);
+           if (key === 'tea_1') tea1Min += diff;
+           else if (key === 'tea_2') tea2Min += diff;
+           else if (key === 'lunch') lunchMin += diff;
+           delete breakStarts[key];
+         }
+       }
+     }
+     // Handle any still-active break at clock-out time
+     if (activeBreak.rows.length > 0) {
+       const ab = activeBreak.rows[0];
+       const key = ab.type.replace('_start', '');
+       const diff = Math.min((new Date() - new Date(ab.timestamp)) / 60000, key === 'lunch' ? LUNCH_DURATION : TEA_DURATION);
+       if (key === 'tea_1') tea1Min += diff;
+       else if (key === 'tea_2') tea2Min += diff;
+       else if (key === 'lunch') lunchMin += diff;
       await pool.query(
         `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, NOW(), $3)`,
         [employeeId, key === 'tea_1' ? 'tea_1_end' : key === 'tea_2' ? 'tea_2_end' : 'lunch_end', today]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+                                                                                                                                                                                                                                                                                                                                                                              import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import Spinner from '../components/Spinner';
@@ -174,6 +174,7 @@ function EmployeeView() {
   const idleTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const breakStartRef = useRef(null);
+  const activeBreakTypeRef = useRef(null); // 'tea_1', 'tea_2', 'lunch', or null
   const [actionLoading, setActionLoading] = useState('');
   const [displayBreakSeconds, setDisplayBreakSeconds] = useState(0);
   const IDLE_THRESHOLD = 5 * 60;
@@ -184,7 +185,11 @@ function EmployeeView() {
     stopTimer();
     timerRef.current = setInterval(() => {
       setLiveSeconds(prev => prev + 1);
-      if (breakStartRef.current) setDisplayBreakSeconds(Math.floor((Date.now() - breakStartRef.current) / 1000));
+      if (breakStartRef.current) {
+        const raw = Math.floor((Date.now() - breakStartRef.current) / 1000);
+        const cap = activeBreakTypeRef.current === 'lunch' ? 30 * 60 : 15 * 60;
+        setDisplayBreakSeconds(Math.min(raw, cap));
+      }
     }, 1000);
   };
 
@@ -196,7 +201,13 @@ function EmployeeView() {
         setLiveSeconds(Math.floor((Date.now() - new Date(res.data.attendance.clock_in).getTime()) / 1000));
         startTimer();
       } else { stopTimer(); setLiveSeconds(0); }
-      breakStartRef.current = res.data.activeBreak?.startedAt ? new Date(res.data.activeBreak.startedAt).getTime() : null;
+      if (res.data.activeBreak?.startedAt) {
+        breakStartRef.current = new Date(res.data.activeBreak.startedAt).getTime();
+        activeBreakTypeRef.current = res.data.activeBreak.type;
+      } else {
+        breakStartRef.current = null;
+        activeBreakTypeRef.current = null;
+      }
     } catch (err) { console.error('fetch status error:', err); }
     finally { setLoading(false); }
   }, []);
