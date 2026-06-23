@@ -240,10 +240,20 @@ function AdminView({ user }) {
 // ════════════════════════════════════════════════════════
 //  EMPLOYEE VIEW — Clock In/Out + Breaks + Idle
 // ════════════════════════════════════════════════════════
+function isMobileOrTouch() {
+  if (typeof window === 'undefined') return false;
+  // Check touch capability (mobile/tablet)
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  // Check narrow screen (typical phone width)
+  const isNarrow = window.innerWidth < 768;
+  return hasTouch || isNarrow;
+}
+
 function EmployeeView() {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [status, setStatus] = useState(null);
@@ -285,6 +295,13 @@ function EmployeeView() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    setIsMobile(isMobileOrTouch());
+    const onResize = () => setIsMobile(isMobileOrTouch());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
@@ -341,7 +358,24 @@ function EmployeeView() {
   const handleClockIn = async () => {
     setError(''); setSuccess('');
     try {
-      const res = await api.post('/time/clock-in');
+      // Capture geolocation (optional — if user denies, clock-in still proceeds)
+      let latitude = null;
+      let longitude = null;
+      if ('geolocation' in navigator) {
+        try {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 8000,
+              maximumAge: 60000,
+            });
+          });
+          latitude = position.coords.latitude;
+          longitude = position.coords.longitude;
+        } catch {
+          // Location denied or unavailable — proceed without it
+        }
+      }
+      const res = await api.post('/time/clock-in', { latitude, longitude });
       setSuccess(`Clocked in at ${fmtTime(res.data.clock_in)}`);
       await fetchStatus();
     } catch (err) {
@@ -475,7 +509,14 @@ function EmployeeView() {
           </div>
           <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {!isClockedIn ? (
-              <button onClick={handleClockIn} style={btnStyle('#16a34a')}>🟢 Clock In</button>
+              isMobile ? (
+                <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#1e40af', fontWeight: '600' }}>🖥 Clock in from your work computer</p>
+                  <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#3b82f6' }}>Mobile clock-in is disabled to ensure you're at your workstation.</p>
+                </div>
+              ) : (
+                <button onClick={handleClockIn} style={btnStyle('#16a34a')}>🟢 Clock In</button>
+              )
             ) : (
               <>
                 <button onClick={handleClockOut} style={btnStyle('#dc2626')}>🛑 Clock Out</button>

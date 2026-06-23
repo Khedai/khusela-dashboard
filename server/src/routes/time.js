@@ -52,14 +52,16 @@ router.post('/clock-in', blockMonitoringAdmin, async (req, res) => {
       return res.status(400).json({ error: 'You are on approved leave today. No clock-in needed.' });
     }
 
+    const { latitude, longitude } = req.body;
     const now = new Date();
     const result = await pool.query(
-      `INSERT INTO attendance (employee_id, date, status, clock_in)
-       VALUES ($1, $2, 'present', $3)
+      `INSERT INTO attendance (employee_id, date, status, clock_in, latitude, longitude)
+       VALUES ($1, $2, 'present', $3, $4, $5)
        ON CONFLICT (employee_id, date) DO UPDATE
-       SET status = 'present', clock_in = $3, clock_out = NULL, total_work_minutes = NULL
+       SET status = 'present', clock_in = $3, clock_out = NULL, total_work_minutes = NULL,
+           latitude = COALESCE($4, attendance.latitude), longitude = COALESCE($5, attendance.longitude)
        RETURNING *`,
-      [employeeId, today, now]
+      [employeeId, today, now, latitude || null, longitude || null]
     );
 
     await pool.query(

@@ -215,6 +215,8 @@ pool.query(`
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
     UNIQUE (employee_id, date)
   )
 `).catch(err => console.error('attendance migration error:', err.message));
