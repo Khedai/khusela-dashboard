@@ -243,7 +243,8 @@ function EmployeeView() {
     idleTimerRef.current = setInterval(() => {
       const t = Math.floor((Date.now() - lastActivityRef.current) / 1000);
       setIdleSeconds(t);
-      if (status?.attendance?.clock_in && !status?.attendance?.clock_out && !isIdle) {
+      const onBreak = !!status?.activeBreak;
+      if (status?.attendance?.clock_in && !status?.attendance?.clock_out && !isIdle && !onBreak) {
         if (t >= IDLE_THRESHOLD && !showIdleWarning) setShowIdleWarning(true);
         if (t >= IDLE_THRESHOLD + IDLE_WARN_GRACE && !isIdle) { setIsIdle(true); api.post('/time/idle', { action: 'start' }).catch(() => {}); }
       }
