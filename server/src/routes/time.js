@@ -500,6 +500,42 @@ router.get('/attendance', requireRole('Admin', 'HR'), async (req, res) => {
   }
 });
 
+// ─── GET MY HISTORY (self) ─────────────────────────────
+router.get('/my-history', async (req, res) => {
+  try {
+    const employeeId = await getEmployeeId(req.user.id);
+    if (!employeeId) return res.status(400).json({ error: 'No active employee record linked to your account.' });
+
+    const { page = 1, limit = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const countRes = await pool.query(
+      'SELECT COUNT(*) FROM attendance WHERE employee_id = $1',
+      [employeeId]
+    );
+    const total = parseInt(countRes.rows[0].count);
+
+    const result = await pool.query(
+      `SELECT a.*, f.franchise_name
+       FROM attendance a
+       LEFT JOIN employees e ON a.employee_id = e.id
+       LEFT JOIN franchises f ON e.franchise_id = f.id
+       WHERE a.employee_id = $1
+       ORDER BY a.date DESC
+       LIMIT $2 OFFSET $3`,
+      [employeeId, parseInt(limit), offset]
+    );
+
+    res.json({
+      data: result.rows,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) },
+    });
+  } catch (err) {
+    console.error('my-history error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch history.' });
+  }
+});
+
 // ─── MARK ABSENT (Admin/HR) ────────────────────────────
 router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
   try {

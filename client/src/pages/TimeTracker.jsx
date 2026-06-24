@@ -381,6 +381,84 @@ function EmployeeView() {
         </div>
       </div>}
       {!status && !loading && <div style={{ padding: '14px 16px', borderRadius: '8px', background: '#fffbeb', border: '1px solid #fde68a', marginTop: '16px' }}><p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>Your user account is not linked to an active employee record. Contact an Admin to link your account.</p></div>}
+      <MyHistory />
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  MY HISTORY — Past attendance records
+// ════════════════════════════════════════════════════
+function MyHistory() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const LIMIT = 10;
+
+  const fetchHistory = async (p = page) => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/time/my-history?page=${p}&limit=${LIMIT}`);
+      setData(res.data.data || []);
+      setPagination(res.data.pagination);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchHistory(page); }, [page]);
+
+  if (loading && data.length === 0) return null; // silent initial load
+
+  return (
+    <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
+      <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>📋 My History</p>
+        {pagination && <span style={{ color: '#94a3b8', fontSize: '11px' }}>{pagination.total} record{pagination.total !== 1 ? 's' : ''}</span>}
+      </div>
+      {data.length === 0 ? (
+        <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No attendance records yet.</div>
+      ) : (
+        <>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  {['Date','Status','Clock In','Clock Out','Work','Tea 1','Tea 2','Lunch','Idle'].map(h => <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map(row => (
+                  <tr key={row.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{new Date(row.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                    <td style={{ padding: '8px 10px' }}>
+                      <span style={{ display: 'inline-block', padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700',
+                        background: row.status === 'present' ? '#f0fdf4' : '#fef2f2',
+                        color: row.status === 'present' ? '#16a34a' : '#dc2626' }}>
+                        {row.status === 'present' ? '✓ Present' : '✗ Absent'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtTime(row.clock_in)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtTime(row.clock_out)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.total_work_minutes)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.tea_1_minutes)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.tea_2_minutes)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.lunch_minutes)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.idle_minutes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {pagination && pagination.pages > 1 && (
+            <div style={{ padding: '8px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center', gap: '5px', flexWrap: 'wrap' }}>
+              {Array.from({ length: pagination.pages }, (_, i) => i + 1).map(p => (
+                <button key={p} onClick={() => setPage(p)} style={{ padding: '3px 10px', borderRadius: '5px', border: p === page ? '1px solid #6366f1' : '1px solid #e2e8f0', background: p === page ? '#eef2ff' : 'white', color: p === page ? '#4f46e5' : '#64748b', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>{p}</button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
