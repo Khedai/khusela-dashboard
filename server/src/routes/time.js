@@ -536,14 +536,14 @@ router.get('/my-history', async (req, res) => {
   }
 });
 
-// ─── MARK ABSENT (Admin/HR) ────────────────────────────
+// ─── MARK ABSENT + AUTO-CLOCK-OUT (Admin/HR) ───────────
 router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
 
-    // Find employees who haven't clocked in today, are active (not terminated),
-    // and are not on approved leave today
-    const result = await pool.query(`
+    // ── Step 1: Mark employees who never clocked in as absent ──
+    const absentResult = await pool.query(`
       INSERT INTO attendance (employee_id, date, status)
       SELECT e.id, $1::date, 'absent'
       FROM employees e
@@ -562,9 +562,100 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
       RETURNING employee_id
     `, [today]);
 
+    // ── Step 2: Auto-clock-out employees who clocked in but never clocked out ──
+    // Find all attendance rows with clock_in but no clock_out for today
+    const stragglers = await pool.query(
+      `SELECT * FROM attendance WHERE date = $1 AND clock_in IS NOT NULL AND clock_out IS NULL`,
+      [today]
+    );
+
+    let autoClockedOut = 0;
+    for (const row of stragglers.rows) {
+      const employeeId = row.employee_id;
+
+      // End any active break
+      const activeBreak = await pool.query(
+        `SELECT * FROM time_logs
+         WHERE employee_id = $1 AND date = $2 AND type LIKE '%_start'
+           AND id > (SELECT COALESCE(MAX(id), 0) FROM time_logs WHERE employee_id = $1 AND date = $2 AND type LIKE '%_end')
+         ORDER BY id DESC LIMIT 1`,
+        [employeeId, today]
+      );
+      if (activeBreak.rows.length > 0) {
+        const ab = activeBreak.rows[0];
+        const key = ab.type.replace('_start', '');
+        await pool.query(
+          `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, NOW(), $3)`,
+          [employeeId, key === 'tea_1' ? 'tea_1_end' : key === 'tea_2' ? 'tea_2_end' : 'lunch_end', today]
+        );
+      }
+
+      // Close open idle events
+      await pool.query(
+        `UPDATE idle_events SET idle_end = NOW(), duration_minutes = EXTRACT(EPOCH FROM (NOW() - idle_start)) / 60
+         WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL`,
+        [employeeId, today]
+      );
+
+      // Calculate break minutes (capped)
+      const breakLogs = await pool.query(
+        `SELECT type, timestamp FROM time_logs
+         WHERE employee_id = $1 AND date = $2
+           AND type IN ('tea_1_start','tea_1_end','tea_2_start','tea_2_end','lunch_start','lunch_end')
+         ORDER BY id`,
+        [employeeId, today]
+      );
+      let tea1Min = 0, tea2Min = 0, lunchMin = 0;
+      const breakStarts = {};
+      for (const log of breakLogs.rows) {
+        if (log.type.endsWith('_start')) {
+          breakStarts[log.type.replace('_start', '')] = new Date(log.timestamp);
+        } else if (log.type.endsWith('_end')) {
+          const key = log.type.replace('_end', '');
+          if (breakStarts[key]) {
+            const diff = Math.min((new Date(log.timestamp) - breakStarts[key]) / 60000, key === 'lunch' ? LUNCH_DURATION : TEA_DURATION);
+            if (key === 'tea_1') tea1Min += diff;
+            else if (key === 'tea_2') tea2Min += diff;
+            else if (key === 'lunch') lunchMin += diff;
+            delete breakStarts[key];
+          }
+        }
+      }
+
+      // Calculate idle minutes
+      const idleRows = await pool.query(
+        `SELECT COALESCE(SUM(COALESCE(duration_minutes, 0)), 0) as total_idle
+         FROM idle_events WHERE employee_id = $1 AND date = $2`,
+        [employeeId, today]
+      );
+      const idleMin = Math.round(parseFloat(idleRows.rows[0].total_idle) || 0);
+
+      const totalBreakMin = Math.round(tea1Min + tea2Min + lunchMin);
+      const rawWorkMin = (now - new Date(row.clock_in)) / 60000;
+      const workMin = Math.max(0, Math.round(rawWorkMin - totalBreakMin - idleMin));
+
+      await pool.query(
+        `UPDATE attendance SET
+           clock_out = $1, status = 'present',
+           total_work_minutes = $2,
+           tea_1_minutes = $3, tea_2_minutes = $4, lunch_minutes = $5,
+           idle_minutes = $6, notes = 'Auto clocked out by admin',
+           updated_at = NOW()
+         WHERE id = $7`,
+        [now, workMin, Math.round(tea1Min), Math.round(tea2Min), Math.round(lunchMin), idleMin, row.id]
+      );
+
+      await pool.query(
+        `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, 'clock_out', $2, $3)`,
+        [employeeId, now, today]
+      );
+      autoClockedOut++;
+    }
+
     res.json({
-      message: `Marked ${result.rows.length} employees as absent for ${today}.`,
-      absentCount: result.rows.length,
+      message: `Marked ${absentResult.rows.length} absent and auto-clocked out ${autoClockedOut} for ${today}.`,
+      absentCount: absentResult.rows.length,
+      autoClockedOut,
       date: today,
     });
   } catch (err) {
