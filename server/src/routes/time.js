@@ -460,10 +460,30 @@ router.get('/attendance', requireRole('Admin', 'HR'), async (req, res) => {
     const total = parseInt(countRes.rows[0].count);
 
     const result = await pool.query(
-      `SELECT a.*, e.first_name, e.last_name, f.franchise_name
+      `SELECT a.*, e.first_name, e.last_name, f.franchise_name,
+              ab.type AS active_break_type, ab.timestamp AS active_break_since,
+              ie.id AS active_idle_id
        FROM attendance a
        JOIN employees e ON a.employee_id = e.id
        LEFT JOIN franchises f ON e.franchise_id = f.id
+       LEFT JOIN LATERAL (
+         SELECT type, timestamp FROM time_logs tl
+         WHERE tl.employee_id = a.employee_id
+           AND tl.date = a.date
+           AND tl.type IN ('tea_1_start','tea_2_start','lunch_start')
+           AND tl.id > COALESCE(
+             (SELECT MAX(tl2.id) FROM time_logs tl2 WHERE tl2.employee_id = a.employee_id AND tl2.date = a.date AND tl2.type IN ('tea_1_end','tea_2_end','lunch_end')),
+             0
+           )
+         ORDER BY tl.id DESC LIMIT 1
+       ) ab ON true
+       LEFT JOIN LATERAL (
+         SELECT id FROM idle_events ie2
+         WHERE ie2.employee_id = a.employee_id
+           AND ie2.date = a.date
+           AND ie2.idle_end IS NULL
+         LIMIT 1
+       ) ie ON true
        ${where}
        ORDER BY a.date DESC, e.first_name
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,

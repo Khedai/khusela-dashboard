@@ -1,4 +1,4 @@
-                                                                                                                                                                                                                                                                                                                                                                              import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import Spinner from '../components/Spinner';
@@ -115,7 +115,7 @@ function AdminView({ user }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                {['Employee','Branch','Date','Status','Clock In','Clock Out','Work','Tea 1','Tea 2','Lunch','Idle'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                {['Employee','Branch','Date','Status','Clock In','Clock Out','Work','Tea 1','Tea 2','Lunch','Idle','Location'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {data.map(row => (
@@ -124,11 +124,22 @@ function AdminView({ user }) {
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{row.franchise_name || '—'}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{new Date(row.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700',
-                        background: row.status === 'present' && !row.clock_out ? '#f0fdf4' : row.status === 'present' ? '#f1f5f9' : '#fef2f2',
-                        color: row.status === 'present' && !row.clock_out ? '#16a34a' : row.status === 'present' ? '#64748b' : '#dc2626' }}>
-                        {row.status === 'present' && !row.clock_out ? 'Working' : row.status === 'present' ? 'Done' : 'Absent'}
-                      </span>
+                      {(() => {
+                        if (row.status === 'absent') {
+                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fef2f2', color: '#dc2626' }}>Absent</span>;
+                        }
+                        if (row.clock_out) {
+                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f1f5f9', color: '#64748b' }}>Done</span>;
+                        }
+                        if (row.active_idle_id) {
+                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fef2f2', color: '#dc2626' }}>⏸ Idle</span>;
+                        }
+                        if (row.active_break_type) {
+                          const bm = { tea_1: '☕ Tea 1', tea_2: '☕ Tea 2', lunch: '🍽 Lunch' };
+                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fffbeb', color: '#d97706' }}>{bm[row.active_break_type] || 'On Break'}</span>;
+                        }
+                        return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f0fdf4', color: '#16a34a' }}>🟢 Working</span>;
+                      })()}
                     </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtTime(row.clock_in)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtTime(row.clock_out)}</td>
@@ -137,6 +148,7 @@ function AdminView({ user }) {
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.tea_2_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.lunch_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.idle_minutes)}</td>
+                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '11px' }}>{row.latitude ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}` : '—'}</td>
                   </tr>
                 ))}
               </tbody>
