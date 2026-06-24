@@ -24,7 +24,7 @@ function formatLiveTime(seconds) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-const BREAK_LABELS = { tea_1: '☕ Tea 1 (15 min)', tea_2: '☕ Tea 2 (15 min)', lunch: '🍽 Lunch (30 min)' };
+const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: 'Lunch (30 min)' };
 const BREAK_ORDER = ['tea_1', 'tea_2', 'lunch'];
 const MONITORING_ONLY = ['ayabonga', 'ayabulela'];
 
@@ -82,16 +82,16 @@ function AdminView({ user }) {
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontFamily: 'Sora', fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>⏱ Time Tracker — Monitoring</h2>
+        <h2 style={{ fontFamily: 'Sora', fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>Time Tracker — Monitoring</h2>
         <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>{todayStr}</p>
       </div>
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '16px' }}>
-        <StatCard label="🟢 Working" value={presentCount} color="#16a34a" bg="#f0fdf4" />
-        <StatCard label="⚫ Done" value={clockedOutCount} color="#64748b" bg="#f8fafc" />
-        <StatCard label="🔴 Absent" value={absentCount} color="#dc2626" bg="#fef2f2" />
-        <StatCard label="📋 Total" value={data.length} color="#0f172a" bg="#f1f5f9" />
+        <StatCard label="Working" value={presentCount} color="#16a34a" bg="#f0fdf4" />
+        <StatCard label="Done" value={clockedOutCount} color="#64748b" bg="#f8fafc" />
+        <StatCard label="Absent" value={absentCount} color="#dc2626" bg="#fef2f2" />
+        <StatCard label="Total" value={data.length} color="#0f172a" bg="#f1f5f9" />
       </div>
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 20px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
@@ -106,7 +106,7 @@ function AdminView({ user }) {
         </div>
         <div style={{ flex: 1 }} />
         <button onClick={handleMarkAbsent} disabled={absentLoading} style={{ padding: '10px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: absentLoading ? 'not-allowed' : 'pointer', opacity: absentLoading ? 0.7 : 1 }}>
-          {absentLoading ? 'Marking...' : '🔴 Mark All Absent'}
+          {absentLoading ? 'Marking...' : 'Mark All Absent'}
         </button>
       </div>
       {loading ? <Spinner size="lg" dark label="Loading attendance..." />
@@ -132,13 +132,13 @@ function AdminView({ user }) {
                           return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f1f5f9', color: '#64748b' }}>Done</span>;
                         }
                         if (row.active_idle_id) {
-                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fef2f2', color: '#dc2626' }}>⏸ Idle</span>;
+                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fef2f2', color: '#dc2626' }}>Idle</span>;
                         }
                         if (row.active_break_type) {
-                          const bm = { tea_1: '☕ Tea 1', tea_2: '☕ Tea 2', lunch: '🍽 Lunch' };
+                          const bm = { tea_1: 'Tea 1', tea_2: 'Tea 2', lunch: 'Lunch' };
                           return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fffbeb', color: '#d97706' }}>{bm[row.active_break_type] || 'On Break'}</span>;
                         }
-                        return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f0fdf4', color: '#16a34a' }}>🟢 Working</span>;
+                        return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f0fdf4', color: '#16a34a' }}>Working</span>;
                       })()}
                     </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtTime(row.clock_in)}</td>
@@ -186,7 +186,7 @@ function EmployeeView() {
   const idleTimerRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const breakStartRef = useRef(null);
-  const activeBreakTypeRef = useRef(null); // 'tea_1', 'tea_2', 'lunch', or null
+  const activeBreakTypeRef = useRef(null);
   const [actionLoading, setActionLoading] = useState('');
   const [displayBreakSeconds, setDisplayBreakSeconds] = useState(0);
   const IDLE_THRESHOLD = 5 * 60;
@@ -305,7 +305,7 @@ function EmployeeView() {
   return (
     <div style={{ maxWidth: '680px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontFamily: 'Sora', fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>⏱ Time Tracker</h2>
+        <h2 style={{ fontFamily: 'Sora', fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>Time Tracker</h2>
         <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>{todayStr}</p>
       </div>
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
@@ -321,10 +321,10 @@ function EmployeeView() {
               <StatusRow label="Clocked In" value={fmtTime(status?.attendance?.clock_in)} />
               <StatusRow label="Work Time" value={formatLiveTime(displayWorkSeconds)} highlight />
               {activeBreak && <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#fffbeb', border: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#92400e', fontWeight: '600' }}>{activeBreak.type === 'tea_1' ? '☕ Tea 1' : activeBreak.type === 'tea_2' ? '☕ Tea 2' : '🍽 Lunch'} in progress</span>
+                <span style={{ fontSize: '13px', color: '#92400e', fontWeight: '600' }}>{activeBreak.type === 'tea_1' ? 'Tea 1' : activeBreak.type === 'tea_2' ? 'Tea 2' : 'Lunch'} in progress</span>
                 <span style={{ fontSize: '14px', color: '#92400e', fontWeight: '700', fontFamily: 'monospace' }}>{formatLiveTime(displayBreakSeconds)}</span>
               </div>}
-              {isIdle && <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca' }}><span style={{ fontSize: '13px', color: '#991b1b', fontWeight: '600' }}>⏸ Idle — timer paused</span></div>}
+              {isIdle && <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca' }}><span style={{ fontSize: '13px', color: '#991b1b', fontWeight: '600' }}>Idle — timer paused</span></div>}
               {showIdleWarning && !isIdle && !isClockedOut && <IdleWarning onImHere={resetIdle} />}
             </div>
           ) : isClockedOut ? (
@@ -345,15 +345,15 @@ function EmployeeView() {
         <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {!isClockedIn ? (
             isMobile ? <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#1e40af', fontWeight: '600' }}>🖥 Clock in from your work computer</p>
+              <p style={{ margin: 0, fontSize: '13px', color: '#1e40af', fontWeight: '600' }}>Clock in from your work computer</p>
               <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#3b82f6' }}>Mobile clock-in is disabled to ensure you're at your workstation.</p>
             </div> : <button onClick={handleClockIn} disabled={!!actionLoading} style={{ width: '100%', padding: '12px 16px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', fontFamily: 'DM Sans', cursor: actionLoading ? 'wait' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
-              {actionLoading === 'clock-in' ? 'Clocking in...' : '🟢 Clock In'}</button>
+              {actionLoading === 'clock-in' ? 'Clocking in...' : 'Clock In'}</button>
           ) : <>
             <button onClick={handleClockOut} disabled={!!actionLoading} style={{ width: '100%', padding: '12px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', fontFamily: 'DM Sans', cursor: actionLoading ? 'wait' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
-              {actionLoading === 'clock-out' ? 'Clocking out...' : '🛑 Clock Out'}</button>
+              {actionLoading === 'clock-out' ? 'Clocking out...' : 'Clock Out'}</button>
             {activeBreak ? <button onClick={handleEndBreak} disabled={actionLoading === 'break-end'} style={{ width: '100%', padding: '12px 16px', background: '#d97706', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', fontFamily: 'DM Sans', cursor: actionLoading === 'break-end' ? 'wait' : 'pointer', opacity: actionLoading === 'break-end' ? 0.6 : 1 }}>
-              {actionLoading === 'break-end' ? 'Ending break...' : `⏹ End ${activeBreak.type === 'tea_1' ? 'Tea 1' : activeBreak.type === 'tea_2' ? 'Tea 2' : 'Lunch'} Break`}</button>
+              {actionLoading === 'break-end' ? 'Ending break...' : `End ${activeBreak.type === 'tea_1' ? 'Tea 1' : activeBreak.type === 'tea_2' ? 'Tea 2' : 'Lunch'} Break`}</button>
             : isIdle ? <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', margin: 0 }}>Return to your keyboard to resume.</p>
             : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <p style={{ color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '4px 0 0' }}>Breaks</p>
@@ -363,7 +363,7 @@ function EmployeeView() {
                   const blocked = !available || done;
                   return <button key={b} onClick={() => handleStartBreak(b)} disabled={blocked || !!actionLoading}
                     style={{ width: '100%', padding: '12px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', fontFamily: 'DM Sans', cursor: blocked ? 'not-allowed' : actionLoading ? 'wait' : 'pointer', opacity: blocked ? 0.4 : actionLoading ? 0.6 : 1 }}>
-                    {actionLoading === b ? 'Starting...' : BREAK_LABELS[b]}{done && ' ✓'}{!done && !available && ' 🔒'}</button>;
+                    {actionLoading === b ? 'Starting...' : BREAK_LABELS[b]}{done ? ' (done)' : ''}{!done && !available ? ' (locked)' : ''}</button>;
                 })}
               </div>}
           </>}
@@ -387,7 +387,7 @@ function EmployeeView() {
 }
 
 // ════════════════════════════════════════════════════
-//  MY HISTORY — Past attendance records
+//  MY HISTORY
 // ════════════════════════════════════════════════════
 function MyHistory() {
   const [data, setData] = useState([]);
@@ -408,12 +408,12 @@ function MyHistory() {
 
   useEffect(() => { fetchHistory(page); }, [page]);
 
-  if (loading && data.length === 0) return null; // silent initial load
+  if (loading && data.length === 0) return null;
 
   return (
     <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
       <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>📋 My History</p>
+        <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>My History</p>
         {pagination && <span style={{ color: '#94a3b8', fontSize: '11px' }}>{pagination.total} record{pagination.total !== 1 ? 's' : ''}</span>}
       </div>
       {data.length === 0 ? (
@@ -435,7 +435,7 @@ function MyHistory() {
                       <span style={{ display: 'inline-block', padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700',
                         background: row.status === 'present' ? '#f0fdf4' : '#fef2f2',
                         color: row.status === 'present' ? '#16a34a' : '#dc2626' }}>
-                        {row.status === 'present' ? '✓ Present' : '✗ Absent'}
+                        {row.status === 'present' ? 'Present' : 'Absent'}
                       </span>
                     </td>
                     <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtTime(row.clock_in)}</td>
@@ -465,11 +465,11 @@ function MyHistory() {
 
 // ─── Shared sub-components ──────────────────────────
 function StatusBadge({ isClockedIn, isClockedOut }) {
-  if (isClockedIn) return <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #bbf7d0' }}>🟢 Working</span>;
-  if (isClockedOut) return <span style={{ background: '#f1f5f9', color: '#64748b', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #e2e8f0' }}>⚫ Done</span>;
-  return <span style={{ background: '#fef2f2', color: '#dc2626', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #fecaca' }}>🔴 Not Clocked In</span>;
+  if (isClockedIn) return <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #bbf7d0' }}>Working</span>;
+  if (isClockedOut) return <span style={{ background: '#f1f5f9', color: '#64748b', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #e2e8f0' }}>Done</span>;
+  return <span style={{ background: '#fef2f2', color: '#dc2626', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #fecaca' }}>Not Clocked In</span>;
 }
 function StatusRow({ label, value, highlight }) { return <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: '#64748b', fontSize: '13px' }}>{label}</span><span style={{ color: highlight ? '#0f172a' : '#1e293b', fontSize: highlight ? '18px' : '14px', fontWeight: highlight ? '700' : '500', fontFamily: highlight ? 'monospace' : 'inherit' }}>{value}</span></div>; }
 function StatBox({ label, value, color }) { return <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px 12px', border: '1px solid #e2e8f0' }}><p style={{ margin: '0 0 3px', color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p><p style={{ margin: 0, color, fontSize: '16px', fontWeight: '700' }}>{value}</p></div>; }
 function StatCard({ label, value, color, bg }) { return <div style={{ background: bg, borderRadius: '10px', padding: '14px 16px', border: `1px solid ${color}20` }}><p style={{ margin: '0 0 6px', fontSize: '12px', color: '#64748b', fontWeight: '600' }}>{label}</p><p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color }}>{value}</p></div>; }
-function IdleWarning({ onImHere }) { return <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}><span style={{ fontSize: '13px', color: '#9a3412', fontWeight: '600' }}>⚠️ Are you still there? Idle detected.</span><button onClick={onImHere} style={{ background: '#ea580c', color: 'white', border: 'none', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'DM Sans' }}>I'm here</button></div>; }
+function IdleWarning({ onImHere }) { return <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}><span style={{ fontSize: '13px', color: '#9a3412', fontWeight: '600' }}>Are you still there? Idle detected.</span><button onClick={onImHere} style={{ background: '#ea580c', color: 'white', border: 'none', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'DM Sans' }}>I'm here</button></div>; }
