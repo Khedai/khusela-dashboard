@@ -257,7 +257,17 @@ function EmployeeView() {
     try {
       let lat = null, lng = null;
       if ('geolocation' in navigator) {
-        try { const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, maximumAge: 60000 })); lat = pos.coords.latitude; lng = pos.coords.longitude; } catch {}
+        try {
+          const pos = await new Promise((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 0,
+            })
+          );
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        } catch {}
       }
       const res = await api.post('/time/clock-in', { latitude: lat, longitude: lng });
       setSuccess(`Clocked in at ${fmtTime(res.data.clock_in)}`);
