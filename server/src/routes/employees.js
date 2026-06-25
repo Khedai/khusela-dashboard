@@ -41,7 +41,7 @@ router.get('/birthdays', requireRole('Admin', 'HR'), async (req, res) => {
 // ─── GET ALL EMPLOYEES ────────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const { franchise_id, page = 1, limit = 20 } = req.query;
+    const { franchise_id, search, page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     // Non-Admin roles get only non-confidential columns (name, phone, job title, franchise)
@@ -77,6 +77,14 @@ router.get('/', verifyToken, async (req, res) => {
     conditions.push('e.terminated_at IS NULL');
     // Exclude employees whose linked user account has been deleted
     conditions.push('(e.user_id IS NULL OR EXISTS (SELECT 1 FROM users u WHERE u.id = e.user_id))');
+
+    // Search filter
+    if (search && search.trim()) {
+      const q = `%${search.trim()}%`;
+      const idx = params.length + 1;
+      conditions.push(`(e.first_name ILIKE $${idx} OR e.last_name ILIKE $${idx} OR e.id_number ILIKE $${idx} OR e.email ILIKE $${idx} OR e.job_title ILIKE $${idx})`);
+      params.push(q);
+    }
 
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;

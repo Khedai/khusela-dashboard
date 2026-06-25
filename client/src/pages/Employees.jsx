@@ -147,6 +147,7 @@ export default function Employees() {
     try {
       const q = [];
       if (user?.role !== 'Admin' && user?.franchise_id) q.push(`franchise_id=${user.franchise_id}`);
+      if (search.trim()) q.push(`search=${encodeURIComponent(search.trim())}`);
       q.push(`page=${p}`);
       q.push(`limit=${LIMIT}`);
 
@@ -448,16 +449,7 @@ export default function Employees() {
     return s.substring(0, 10);                                  // fallback
   };
 
-  const filtered = employees.filter(e => {
-    const q = search.toLowerCase();
-    return (
-      e.first_name?.toLowerCase().includes(q) ||
-      e.last_name?.toLowerCase().includes(q) ||
-      e.id_number?.toLowerCase().includes(q) ||
-      e.email?.toLowerCase().includes(q) ||
-      e.job_title?.toLowerCase().includes(q)
-    );
-  });
+  const filtered = employees;
 
   // ── EDIT VIEW ──────────────────────────────────────────
   if (view === 'edit') {

@@ -242,14 +242,23 @@ router.post('/break/start', blockMonitoringAdmin, async (req, res) => {
       return res.status(400).json({ error: `Already on a break (${activeBreak.rows[0].type.replace('_start', '')}). End it first.` });
     }
 
-    // Enforce order: tea_1 before tea_2
-    if (break_type === 'tea_2') {
+    // Enforce order: tea_1 → lunch → tea_2
+    if (break_type === 'lunch') {
       const tea1Done = await pool.query(
         `SELECT 1 FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'tea_1_end' LIMIT 1`,
         [employeeId, today]
       );
       if (tea1Done.rows.length === 0) {
-        return res.status(400).json({ error: 'Complete Tea 1 before starting Tea 2.' });
+        return res.status(400).json({ error: 'Complete Tea 1 before starting Lunch.' });
+      }
+    }
+    if (break_type === 'tea_2') {
+      const lunchDone = await pool.query(
+        `SELECT 1 FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'lunch_end' LIMIT 1`,
+        [employeeId, today]
+      );
+      if (lunchDone.rows.length === 0) {
+        return res.status(400).json({ error: 'Complete Lunch before starting Tea 2.' });
       }
     }
 

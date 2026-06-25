@@ -25,7 +25,7 @@ function formatLiveTime(seconds) {
 }
 
 const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: 'Lunch (30 min)' };
-const BREAK_ORDER = ['tea_1', 'tea_2', 'lunch'];
+const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
 const MONITORING_ONLY = ['ayabonga', 'ayabulela'];
 const IDLE_EXEMPT = ['shafieka', 'letasha'];
 
