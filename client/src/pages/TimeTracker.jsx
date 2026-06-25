@@ -27,6 +27,7 @@ function formatLiveTime(seconds) {
 const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: 'Lunch (30 min)' };
 const BREAK_ORDER = ['tea_1', 'tea_2', 'lunch'];
 const MONITORING_ONLY = ['ayabonga', 'ayabulela'];
+const IDLE_EXEMPT = ['shafieka', 'letasha'];
 
 export default function TimeTracker() {
   const { user } = useAuth();
@@ -173,11 +174,16 @@ function isMobileOrTouch() {
 }
 
 function EmployeeView() {
+  const { user } = useAuth();
+  const username = (user?.username || '').toLowerCase();
+  const idleExempt = IDLE_EXEMPT.includes(username);
+
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [status, setStatus] = useState(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [liveSeconds, setLiveSeconds] = useState(0);
   const timerRef = useRef(null);
   const [idleSeconds, setIdleSeconds] = useState(0);
@@ -220,6 +226,7 @@ function EmployeeView() {
         breakStartRef.current = null;
         activeBreakTypeRef.current = null;
       }
+      setHistoryRefreshKey(k => k + 1);
     } catch (err) { console.error('fetch status error:', err); }
     finally { setLoading(false); }
   }, []);
@@ -228,18 +235,22 @@ function EmployeeView() {
   useEffect(() => { fetchStatus(); return () => { stopTimer(); clearInterval(idleTimerRef.current); }; }, [fetchStatus]);
 
   const resetIdle = useCallback(() => {
-    lastActivityRef.current = Date.now(); setIdleSeconds(0); setShowIdleWarning(false);
+    lastActivityRef.current = Date.now();
+    if (idleExempt) return;
+    setIdleSeconds(0); setShowIdleWarning(false);
     if (isIdle) { setIsIdle(false); api.post('/time/idle', { action: 'end' }).catch(() => {}); setSuccess('Welcome back!'); setTimeout(() => setSuccess(''), 3000); }
-  }, [isIdle]);
+  }, [isIdle, idleExempt]);
 
   useEffect(() => {
+    if (idleExempt) return;
     const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
     const h = () => resetIdle();
     events.forEach(e => window.addEventListener(e, h, { passive: true }));
     return () => events.forEach(e => window.removeEventListener(e, h));
-  }, [resetIdle]);
+  }, [resetIdle, idleExempt]);
 
   useEffect(() => {
+    if (idleExempt) return;
     idleTimerRef.current = setInterval(() => {
       const t = Math.floor((Date.now() - lastActivityRef.current) / 1000);
       setIdleSeconds(t);
@@ -250,7 +261,7 @@ function EmployeeView() {
       }
     }, 1000);
     return () => clearInterval(idleTimerRef.current);
-  }, [status, showIdleWarning, isIdle]);
+  }, [status, showIdleWarning, isIdle, idleExempt]);
 
   const handleClockIn = async () => {
     setError(''); setSuccess(''); setActionLoading('clock-in');
@@ -391,7 +402,7 @@ function EmployeeView() {
         </div>
       </div>}
       {!status && !loading && <div style={{ padding: '14px 16px', borderRadius: '8px', background: '#fffbeb', border: '1px solid #fde68a', marginTop: '16px' }}><p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>Your user account is not linked to an active employee record. Contact an Admin to link your account.</p></div>}
-      <MyHistory />
+      <MyHistory refreshKey={historyRefreshKey} />
     </div>
   );
 }
@@ -399,7 +410,7 @@ function EmployeeView() {
 // ════════════════════════════════════════════════════
 //  MY HISTORY
 // ════════════════════════════════════════════════════
-function MyHistory() {
+function MyHistory({ refreshKey = 0 }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -416,7 +427,7 @@ function MyHistory() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchHistory(page); }, [page]);
+  useEffect(() => { fetchHistory(page); }, [page, refreshKey]);
 
   if (loading && data.length === 0) return null;
 

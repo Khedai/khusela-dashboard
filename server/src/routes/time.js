@@ -304,11 +304,21 @@ router.post('/break/end', blockMonitoringAdmin, async (req, res) => {
     const breakType = ab.type.replace('_start', '');
     const endType = `${breakType}_end`;
     const now = new Date();
-    const durationMin = Math.round((now - new Date(ab.timestamp)) / 60000);
+    const rawDuration = (now - new Date(ab.timestamp)) / 60000;
+    const cap = breakType === 'lunch' ? LUNCH_DURATION : TEA_DURATION;
+    const durationMin = Math.round(Math.min(rawDuration, cap));
 
     await pool.query(
       `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, $3, $4)`,
       [employeeId, endType, now, today]
+    );
+
+    // Update attendance with this break's duration immediately for near-real-time history
+    const column = breakType === 'tea_1' ? 'tea_1_minutes' : breakType === 'tea_2' ? 'tea_2_minutes' : 'lunch_minutes';
+    await pool.query(
+      `UPDATE attendance SET ${column} = COALESCE(${column}, 0) + $1, updated_at = NOW()
+       WHERE employee_id = $2 AND date = $3`,
+      [durationMin, employeeId, today]
     );
 
     res.json({ message: `${breakType.replace('_', ' ')} break ended (${durationMin} min)`, break_type: breakType, duration: durationMin });
