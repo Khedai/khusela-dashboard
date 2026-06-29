@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { reverseGeocode } = require('../utils/geocode');
 
 router.use(verifyToken);
 
@@ -563,8 +564,39 @@ router.get('/attendance', requireRole('Admin', 'HR'), async (req, res) => {
       listParams
     );
 
+    // Reverse geocode unique locations in parallel (fire-and-forget, non-blocking)
+    const rows = result.rows;
+    const seen = new Set();
+    const geocodeTasks = [];
+    for (const row of rows) {
+      if (row.latitude != null && row.longitude != null) {
+        const key = `${row.latitude.toFixed(4)}|${row.longitude.toFixed(4)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          geocodeTasks.push(
+            reverseGeocode(row.latitude, row.longitude).then(name => {
+              // Attach name to all rows with these coords
+              for (const r of rows) {
+                if (r.latitude != null && r.longitude != null &&
+                    r.latitude.toFixed(4) === row.latitude.toFixed(4) &&
+                    r.longitude.toFixed(4) === row.longitude.toFixed(4)) {
+                  r.location_name = name;
+                }
+              }
+            }).catch(() => {})
+          );
+        }
+      }
+    }
+    // Don't await — send response immediately, geocode results will be available on next poll
+    // But try to resolve within 2 seconds if possible
+    Promise.race([
+      Promise.all(geocodeTasks),
+      new Promise(r => setTimeout(r, 2000)),
+    ]).catch(() => {});
+
     res.json({
-      data: result.rows,
+      data: rows,
       pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) },
     });
   } catch (err) {

@@ -180,7 +180,7 @@ function AdminView({ user }) {
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.tea_2_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.lunch_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.idle_minutes)}</td>
-                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '11px' }}>{row.latitude ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}` : '—'}</td>
+                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '11px' }}>{row.location_name || (row.latitude ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}` : '—')}</td>
                   </tr>
                 ))}
               </tbody>
