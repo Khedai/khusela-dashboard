@@ -6,7 +6,21 @@ router.use(verifyToken);
 
 // ─── Break durations (minutes) ─────────────────────────
 const TEA_DURATION = 15;
-const LUNCH_DURATION = 30;
+const LUNCH_DURATION_WEEKDAY = 30;
+const LUNCH_DURATION_FRIDAY = 60;
+const LATE_CLOCK_IN_HOUR = 8; // 8:00 AM threshold for late marking
+
+function getLunchDuration(date) {
+  // Friday (5 in JavaScript getDay()) = 60 min, else 30 min
+  const d = date || new Date();
+  return d.getDay() === 5 ? LUNCH_DURATION_FRIDAY : LUNCH_DURATION_WEEKDAY;
+}
+
+function isLateClockIn(date) {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  return (h > LATE_CLOCK_IN_HOUR) || (h === LATE_CLOCK_IN_HOUR && m > 0);
+}
 
 // ─── Middleware: block monitoring-only admins from clocking ───
 const MONITORING_ONLY_ADMINS = ['ayabonga', 'ayabulela'];
@@ -54,14 +68,15 @@ router.post('/clock-in', blockMonitoringAdmin, async (req, res) => {
 
     const { latitude, longitude } = req.body;
     const now = new Date();
+    const clockInStatus = isLateClockIn(now) ? 'late' : 'present';
     const result = await pool.query(
       `INSERT INTO attendance (employee_id, date, status, clock_in, latitude, longitude)
-       VALUES ($1, $2, 'present', $3, $4, $5)
+       VALUES ($1, $2, $6, $3, $4, $5)
        ON CONFLICT (employee_id, date) DO UPDATE
-       SET status = 'present', clock_in = $3, clock_out = NULL, total_work_minutes = NULL,
+       SET status = $6, clock_in = $3, clock_out = NULL, total_work_minutes = NULL,
            latitude = COALESCE($4, attendance.latitude), longitude = COALESCE($5, attendance.longitude)
        RETURNING *`,
-      [employeeId, today, now, latitude || null, longitude || null]
+      [employeeId, today, now, latitude || null, longitude || null, clockInStatus]
     );
 
     await pool.query(
@@ -83,19 +98,16 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
     const employeeId = await getEmployeeId(req.user.id);
     if (!employeeId) return res.status(400).json({ error: 'No active employee record linked to your account.' });
 
-    const today = new Date().toISOString().split('T')[0];
     const attendance = await pool.query(
-      'SELECT * FROM attendance WHERE employee_id = $1 AND date = $2 AND clock_in IS NOT NULL',
-      [employeeId, today]
+      'SELECT * FROM attendance WHERE employee_id = $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date DESC LIMIT 1',
+      [employeeId]
     );
     if (attendance.rows.length === 0) {
       return res.status(400).json({ error: 'Not clocked in today.' });
     }
 
     const row = attendance.rows[0];
-    if (row.clock_out) {
-      return res.status(400).json({ error: 'Already clocked out today.' });
-    }
+    const shiftDateStr = new Date(row.date).toISOString().split('T')[0];
 
     // End any active break first
     const activeBreak = await pool.query(
@@ -104,7 +116,7 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
          AND type LIKE '%_start'
          AND id > (SELECT COALESCE(MAX(id), 0) FROM time_logs WHERE employee_id = $1 AND date = $2 AND type LIKE '%_end' AND type NOT LIKE '%_start')
        ORDER BY id DESC LIMIT 1`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
     let breakMinutesToAdd = 0;
     // Simplified: just count break durations from time_logs for today
@@ -113,7 +125,7 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
        WHERE employee_id = $1 AND date = $2
          AND type IN ('tea_1_start','tea_1_end','tea_2_start','tea_2_end','lunch_start','lunch_end')
        ORDER BY id`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
      let tea1Min = 0, tea2Min = 0, lunchMin = 0;
      const breakStarts = {};
@@ -123,7 +135,7 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
        } else if (log.type.endsWith('_end')) {
          const key = log.type.replace('_end', '');
          if (breakStarts[key]) {
-           const diff = Math.min((new Date(log.timestamp) - breakStarts[key]) / 60000, key === 'lunch' ? LUNCH_DURATION : TEA_DURATION);
+           const diff = (new Date(log.timestamp) - breakStarts[key]) / 60000;
            if (key === 'tea_1') tea1Min += diff;
            else if (key === 'tea_2') tea2Min += diff;
            else if (key === 'lunch') lunchMin += diff;
@@ -135,13 +147,13 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
      if (activeBreak.rows.length > 0) {
        const ab = activeBreak.rows[0];
        const key = ab.type.replace('_start', '');
-       const diff = Math.min((new Date() - new Date(ab.timestamp)) / 60000, key === 'lunch' ? LUNCH_DURATION : TEA_DURATION);
+       const diff = (new Date() - new Date(ab.timestamp)) / 60000;
        if (key === 'tea_1') tea1Min += diff;
        else if (key === 'tea_2') tea2Min += diff;
        else if (key === 'lunch') lunchMin += diff;
       await pool.query(
         `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, NOW(), $3)`,
-        [employeeId, key === 'tea_1' ? 'tea_1_end' : key === 'tea_2' ? 'tea_2_end' : 'lunch_end', today]
+        [employeeId, key === 'tea_1' ? 'tea_1_end' : key === 'tea_2' ? 'tea_2_end' : 'lunch_end', shiftDateStr]
       );
     }
 
@@ -149,7 +161,7 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
     const idleRows = await pool.query(
       `SELECT COALESCE(SUM(COALESCE(duration_minutes, EXTRACT(EPOCH FROM (COALESCE(idle_end, NOW()) - idle_start)) / 60)), 0) as total_idle
        FROM idle_events WHERE employee_id = $1 AND date = $2`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
     const idleMin = Math.round(parseFloat(idleRows.rows[0].total_idle) || 0);
 
@@ -157,7 +169,7 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
     await pool.query(
       `UPDATE idle_events SET idle_end = NOW(), duration_minutes = EXTRACT(EPOCH FROM (NOW() - idle_start)) / 60
        WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
 
     const now = new Date();
@@ -178,7 +190,7 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
 
     await pool.query(
       `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, 'clock_out', $2, $3)`,
-      [employeeId, now, today]
+      [employeeId, now, shiftDateStr]
     );
 
     res.json(result.rows[0]);
@@ -199,16 +211,17 @@ router.post('/break/start', blockMonitoringAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid break type. Use: tea_1, tea_2, or lunch.' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
-
     // Verify clocked in and not clocked out
     const attendance = await pool.query(
-      'SELECT * FROM attendance WHERE employee_id = $1 AND date = $2 AND clock_in IS NOT NULL AND clock_out IS NULL',
-      [employeeId, today]
+      'SELECT * FROM attendance WHERE employee_id = $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date DESC LIMIT 1',
+      [employeeId]
     );
     if (attendance.rows.length === 0) {
       return res.status(400).json({ error: 'Must be clocked in to take a break.' });
     }
+
+    const row = attendance.rows[0];
+    const shiftDateStr = new Date(row.date).toISOString().split('T')[0];
 
     // Check this break type hasn't already been started (without matching end)
     const breakTypeStart = `${break_type}_start`;
@@ -220,7 +233,7 @@ router.post('/break/start', blockMonitoringAdmin, async (req, res) => {
        WHERE employee_id = $1 AND date = $2 AND type = $3
          AND id > (SELECT COALESCE(MAX(id), 0) FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = $4)
        LIMIT 1`,
-      [employeeId, today, breakTypeStart, breakTypeEnd]
+      [employeeId, shiftDateStr, breakTypeStart, breakTypeEnd]
     );
     if (existingStart.rows.length > 0) {
       return res.status(400).json({ error: `${break_type.replace('_', ' ')} break already started.` });
@@ -236,26 +249,17 @@ router.post('/break/start', blockMonitoringAdmin, async (req, res) => {
            0
          )
        LIMIT 1`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
     if (activeBreak.rows.length > 0) {
       return res.status(400).json({ error: `Already on a break (${activeBreak.rows[0].type.replace('_start', '')}). End it first.` });
     }
 
-    // Enforce order: tea_1 → lunch → tea_2
-    if (break_type === 'lunch') {
-      const tea1Done = await pool.query(
-        `SELECT 1 FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'tea_1_end' LIMIT 1`,
-        [employeeId, today]
-      );
-      if (tea1Done.rows.length === 0) {
-        return res.status(400).json({ error: 'Complete Tea 1 before starting Lunch.' });
-      }
-    }
+    // Enforce order: tea_2 only after lunch (tea_1 no longer required before lunch for late arrivals)
     if (break_type === 'tea_2') {
       const lunchDone = await pool.query(
         `SELECT 1 FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'lunch_end' LIMIT 1`,
-        [employeeId, today]
+        [employeeId, shiftDateStr]
       );
       if (lunchDone.rows.length === 0) {
         return res.status(400).json({ error: 'Complete Lunch before starting Tea 2.' });
@@ -265,7 +269,7 @@ router.post('/break/start', blockMonitoringAdmin, async (req, res) => {
     // Enforce that each break type is only used once per day
     const alreadyCompleted = await pool.query(
       `SELECT 1 FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = $3 LIMIT 1`,
-      [employeeId, today, breakTypeEnd]
+      [employeeId, shiftDateStr, breakTypeEnd]
     );
     if (alreadyCompleted.rows.length > 0) {
       return res.status(400).json({ error: `${break_type.replace('_', ' ')} break already completed for today.` });
@@ -274,10 +278,11 @@ router.post('/break/start', blockMonitoringAdmin, async (req, res) => {
     const now = new Date();
     await pool.query(
       `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, $3, $4)`,
-      [employeeId, breakTypeStart, now, today]
+      [employeeId, breakTypeStart, now, shiftDateStr]
     );
 
-    const duration = break_type === 'lunch' ? LUNCH_DURATION : TEA_DURATION;
+    const lunchDuration = getLunchDuration(new Date(shiftDateStr));
+    const duration = break_type === 'lunch' ? lunchDuration : TEA_DURATION;
     res.json({ message: `${break_type.replace('_', ' ')} break started (${duration} min)`, break_type, duration });
   } catch (err) {
     console.error('break start error:', err.message);
@@ -291,7 +296,17 @@ router.post('/break/end', blockMonitoringAdmin, async (req, res) => {
     const employeeId = await getEmployeeId(req.user.id);
     if (!employeeId) return res.status(400).json({ error: 'No active employee record linked to your account.' });
 
-    const today = new Date().toISOString().split('T')[0];
+    // Verify clocked in and not clocked out
+    const attendance = await pool.query(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date DESC LIMIT 1',
+      [employeeId]
+    );
+    if (attendance.rows.length === 0) {
+      return res.status(400).json({ error: 'Not clocked in.' });
+    }
+
+    const row = attendance.rows[0];
+    const shiftDateStr = new Date(row.date).toISOString().split('T')[0];
 
     // Find active break
     const activeBreak = await pool.query(
@@ -303,7 +318,7 @@ router.post('/break/end', blockMonitoringAdmin, async (req, res) => {
            0
          )
        ORDER BY id DESC LIMIT 1`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
     if (activeBreak.rows.length === 0) {
       return res.status(400).json({ error: 'No active break to end.' });
@@ -314,12 +329,11 @@ router.post('/break/end', blockMonitoringAdmin, async (req, res) => {
     const endType = `${breakType}_end`;
     const now = new Date();
     const rawDuration = (now - new Date(ab.timestamp)) / 60000;
-    const cap = breakType === 'lunch' ? LUNCH_DURATION : TEA_DURATION;
-    const durationMin = Math.round(Math.min(rawDuration, cap));
+    const durationMin = Math.round(rawDuration);
 
     await pool.query(
       `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, $3, $4)`,
-      [employeeId, endType, now, today]
+      [employeeId, endType, now, shiftDateStr]
     );
 
     // Update attendance with this break's duration immediately for near-real-time history
@@ -327,7 +341,7 @@ router.post('/break/end', blockMonitoringAdmin, async (req, res) => {
     await pool.query(
       `UPDATE attendance SET ${column} = COALESCE(${column}, 0) + $1, updated_at = NOW()
        WHERE employee_id = $2 AND date = $3`,
-      [durationMin, employeeId, today]
+      [durationMin, employeeId, shiftDateStr]
     );
 
     res.json({ message: `${breakType.replace('_', ' ')} break ended (${durationMin} min)`, break_type: breakType, duration: durationMin });
@@ -343,20 +357,31 @@ router.post('/idle', blockMonitoringAdmin, async (req, res) => {
     const employeeId = await getEmployeeId(req.user.id);
     if (!employeeId) return res.status(400).json({ error: 'No active employee record linked to your account.' });
 
+    // Verify clocked in and not clocked out
+    const attendance = await pool.query(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date DESC LIMIT 1',
+      [employeeId]
+    );
+    if (attendance.rows.length === 0) {
+      return res.status(400).json({ error: 'Must be clocked in to record idle event.' });
+    }
+
+    const row = attendance.rows[0];
+    const shiftDateStr = new Date(row.date).toISOString().split('T')[0];
+
     const { action } = req.body; // 'start' or 'end'
-    const today = new Date().toISOString().split('T')[0];
     const now = new Date();
 
     if (action === 'start') {
       const result = await pool.query(
         `INSERT INTO idle_events (employee_id, idle_start, date) VALUES ($1, $2, $3) RETURNING *`,
-        [employeeId, now, today]
+        [employeeId, now, shiftDateStr]
       );
       return res.json(result.rows[0]);
     } else if (action === 'end') {
       const active = await pool.query(
         `SELECT * FROM idle_events WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL ORDER BY idle_start DESC LIMIT 1`,
-        [employeeId, today]
+        [employeeId, shiftDateStr]
       );
       if (active.rows.length === 0) {
         return res.status(400).json({ error: 'No active idle session.' });
@@ -396,12 +421,25 @@ router.get('/today', async (req, res) => {
       return res.status(400).json({ error: 'No active employee record linked to your account.' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const attendance = await pool.query(
-      'SELECT * FROM attendance WHERE employee_id = $1 AND date = $2',
-      [employeeId, today]
+    // First check if there is an active shift (clocked in but not clocked out)
+    let attendance = await pool.query(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date DESC LIMIT 1',
+      [employeeId]
     );
-    const row = attendance.rows[0] || null;
+    let row = attendance.rows[0] || null;
+    let shiftDateStr;
+
+    if (row) {
+      shiftDateStr = new Date(row.date).toISOString().split('T')[0];
+    } else {
+      // Fallback to current UTC date if no active shift
+      shiftDateStr = new Date().toISOString().split('T')[0];
+      const todayRes = await pool.query(
+        'SELECT * FROM attendance WHERE employee_id = $1 AND date = $2',
+        [employeeId, shiftDateStr]
+      );
+      row = todayRes.rows[0] || null;
+    }
 
     // Get active break
     const activeBreak = await pool.query(
@@ -413,13 +451,13 @@ router.get('/today', async (req, res) => {
            0
          )
        ORDER BY id DESC LIMIT 1`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
 
     // Get active idle
     const activeIdle = await pool.query(
       `SELECT * FROM idle_events WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL ORDER BY idle_start DESC LIMIT 1`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
 
     // Get completed breaks for today
@@ -428,7 +466,7 @@ router.get('/today', async (req, res) => {
        WHERE employee_id = $1 AND date = $2
          AND type IN ('tea_1_end','tea_2_end','lunch_end')
        ORDER BY id`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
     const completedBreaks = breakLogs.rows.map(r => r.type.replace('_end', ''));
 
@@ -436,7 +474,7 @@ router.get('/today', async (req, res) => {
     const idleTotal = await pool.query(
       `SELECT COALESCE(SUM(COALESCE(duration_minutes, 0)), 0) as total_idle
        FROM idle_events WHERE employee_id = $1 AND date = $2`,
-      [employeeId, today]
+      [employeeId, shiftDateStr]
     );
 
     res.json({
@@ -558,8 +596,15 @@ router.get('/my-history', async (req, res) => {
 // ─── MARK ABSENT + AUTO-CLOCK-OUT (Admin/HR) ───────────
 router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date();
+    const today = req.body.date || new Date().toISOString().split('T')[0];
+    const isCurrentDay = today === new Date().toISOString().split('T')[0];
+    let now = new Date();
+    if (!isCurrentDay) {
+      now = new Date(`${today}T17:00:00`);
+      if (isNaN(now.getTime())) {
+        now = new Date();
+      }
+    }
 
     // ── Step 1: Mark employees who never clocked in as absent ──
     const absentResult = await pool.query(`
@@ -604,19 +649,19 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
         const ab = activeBreak.rows[0];
         const key = ab.type.replace('_start', '');
         await pool.query(
-          `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, NOW(), $3)`,
-          [employeeId, key === 'tea_1' ? 'tea_1_end' : key === 'tea_2' ? 'tea_2_end' : 'lunch_end', today]
+          `INSERT INTO time_logs (employee_id, type, timestamp, date) VALUES ($1, $2, $4, $3)`,
+          [employeeId, key === 'tea_1' ? 'tea_1_end' : key === 'tea_2' ? 'tea_2_end' : 'lunch_end', today, now]
         );
       }
 
       // Close open idle events
       await pool.query(
-        `UPDATE idle_events SET idle_end = NOW(), duration_minutes = EXTRACT(EPOCH FROM (NOW() - idle_start)) / 60
+        `UPDATE idle_events SET idle_end = $3, duration_minutes = EXTRACT(EPOCH FROM ($3::timestamp - idle_start)) / 60
          WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL`,
-        [employeeId, today]
+        [employeeId, today, now]
       );
 
-      // Calculate break minutes (capped)
+      // Calculate break minutes (uncapped)
       const breakLogs = await pool.query(
         `SELECT type, timestamp FROM time_logs
          WHERE employee_id = $1 AND date = $2
@@ -632,7 +677,7 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
         } else if (log.type.endsWith('_end')) {
           const key = log.type.replace('_end', '');
           if (breakStarts[key]) {
-            const diff = Math.min((new Date(log.timestamp) - breakStarts[key]) / 60000, key === 'lunch' ? LUNCH_DURATION : TEA_DURATION);
+            const diff = (new Date(log.timestamp) - breakStarts[key]) / 60000;
             if (key === 'tea_1') tea1Min += diff;
             else if (key === 'tea_2') tea2Min += diff;
             else if (key === 'lunch') lunchMin += diff;

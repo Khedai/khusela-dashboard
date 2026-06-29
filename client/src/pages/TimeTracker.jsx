@@ -24,7 +24,11 @@ function formatLiveTime(seconds) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: 'Lunch (30 min)' };
+function getLunchLabel() {
+  // Friday (5) = 60 min, else 30 min
+  return new Date().getDay() === 5 ? 'Lunch (60 min)' : 'Lunch (30 min)';
+}
+const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: getLunchLabel() };
 const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
 const MONITORING_ONLY = ['ayabonga', 'ayabulela'];
 const IDLE_EXEMPT = ['shafieka', 'letasha'];
@@ -70,13 +74,14 @@ function AdminView({ user }) {
   const handleMarkAbsent = async () => {
     if (!window.confirm(`Mark all unclocked employees as absent for ${dateFilter}?`)) return;
     setAbsentLoading(true); setError(''); setSuccess('');
-    try { const res = await api.post('/time/absent/run'); setSuccess(res.data.message); fetchData(page); }
+    try { const res = await api.post('/time/absent/run', { date: dateFilter }); setSuccess(res.data.message); fetchData(page); }
     catch { setError('Failed to mark absent.'); }
     finally { setAbsentLoading(false); }
   };
 
-  const presentCount = data.filter(d => d.status === 'present' && !d.clock_out).length;
-  const clockedOutCount = data.filter(d => d.status === 'present' && d.clock_out).length;
+  const presentCount = data.filter(d => (d.status === 'present' || d.status === 'late') && !d.clock_out).length;
+  const lateCount = data.filter(d => d.status === 'late' && !d.clock_out).length;
+  const clockedOutCount = data.filter(d => (d.status === 'present' || d.status === 'late') && d.clock_out).length;
   const absentCount = data.filter(d => d.status === 'absent').length;
   const todayStr = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -88,8 +93,9 @@ function AdminView({ user }) {
       </div>
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '16px' }}>
         <StatCard label="Working" value={presentCount} color="#16a34a" bg="#f0fdf4" />
+        <StatCard label="Late" value={lateCount} color="#d97706" bg="#fff7ed" />
         <StatCard label="Done" value={clockedOutCount} color="#64748b" bg="#f8fafc" />
         <StatCard label="Absent" value={absentCount} color="#dc2626" bg="#fef2f2" />
         <StatCard label="Total" value={data.length} color="#0f172a" bg="#f1f5f9" />
@@ -102,7 +108,7 @@ function AdminView({ user }) {
         <div>
           <label style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}>
-            <option value="">All</option><option value="present">Present</option><option value="absent">Absent</option>
+            <option value="">All</option><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option>
           </select>
         </div>
         <div style={{ flex: 1 }} />
@@ -138,6 +144,9 @@ function AdminView({ user }) {
                         if (row.active_break_type) {
                           const bm = { tea_1: 'Tea 1', tea_2: 'Tea 2', lunch: 'Lunch' };
                           return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fffbeb', color: '#d97706' }}>{bm[row.active_break_type] || 'On Break'}</span>;
+                        }
+                        if (row.status === 'late') {
+                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fff7ed', color: '#c2410c' }}>Late</span>;
                         }
                         return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f0fdf4', color: '#16a34a' }}>Working</span>;
                       })()}
@@ -205,8 +214,7 @@ function EmployeeView() {
       setLiveSeconds(prev => prev + 1);
       if (breakStartRef.current) {
         const raw = Math.floor((Date.now() - breakStartRef.current) / 1000);
-        const cap = activeBreakTypeRef.current === 'lunch' ? 30 * 60 : 15 * 60;
-        setDisplayBreakSeconds(Math.min(raw, cap));
+        setDisplayBreakSeconds(raw);
       }
     }, 1000);
   };
@@ -318,7 +326,19 @@ function EmployeeView() {
   const activeBreak = status?.activeBreak;
   const completedBreaks = status?.completedBreaks || [];
   const nextAvailableBreak = BREAK_ORDER.find(b => !completedBreaks.includes(b));
-  const displayWorkSeconds = Math.max(0, liveSeconds - (activeBreak ? displayBreakSeconds : 0) - (isIdle ? idleSeconds - IDLE_THRESHOLD : 0));
+  const completedBreakMinutes = 
+    (status?.attendance?.tea_1_minutes || 0) + 
+    (status?.attendance?.tea_2_minutes || 0) + 
+    (status?.attendance?.lunch_minutes || 0);
+  const completedIdleMinutes = status?.totalIdleMinutes || 0;
+  
+  const displayWorkSeconds = Math.max(0, 
+    liveSeconds - 
+    (activeBreak ? displayBreakSeconds : 0) - 
+    (isIdle ? idleSeconds - IDLE_THRESHOLD : 0) - 
+    (completedBreakMinutes * 60) - 
+    (completedIdleMinutes * 60)
+  );
   const todayStr = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
 
   if (loading) return <Spinner size="lg" dark label="Loading time tracker..." />;
@@ -334,7 +354,7 @@ function EmployeeView() {
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Today's Status</p>
-          <StatusBadge isClockedIn={isClockedIn} isClockedOut={isClockedOut} />
+          <StatusBadge isClockedIn={isClockedIn} isClockedOut={isClockedOut} statusData={status} />
         </div>
         <div style={{ padding: '20px 22px' }}>
           {isClockedIn ? (
@@ -454,9 +474,9 @@ function MyHistory({ refreshKey = 0 }) {
                     <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{new Date(row.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
                     <td style={{ padding: '8px 10px' }}>
                       <span style={{ display: 'inline-block', padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700',
-                        background: row.status === 'present' ? '#f0fdf4' : '#fef2f2',
-                        color: row.status === 'present' ? '#16a34a' : '#dc2626' }}>
-                        {row.status === 'present' ? 'Present' : 'Absent'}
+                        background: row.status === 'present' ? '#f0fdf4' : row.status === 'late' ? '#fff7ed' : '#fef2f2',
+                        color: row.status === 'present' ? '#16a34a' : row.status === 'late' ? '#c2410c' : '#dc2626' }}>
+                        {row.status === 'present' ? 'Present' : row.status === 'late' ? 'Late' : 'Absent'}
                       </span>
                     </td>
                     <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtTime(row.clock_in)}</td>
@@ -485,8 +505,11 @@ function MyHistory({ refreshKey = 0 }) {
 }
 
 // ─── Shared sub-components ──────────────────────────
-function StatusBadge({ isClockedIn, isClockedOut }) {
-  if (isClockedIn) return <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #bbf7d0' }}>Working</span>;
+function StatusBadge({ isClockedIn, isClockedOut, statusData }) {
+  if (isClockedIn) {
+    const isLate = statusData?.attendance?.status === 'late';
+    return <span style={{ background: isLate ? '#fff7ed' : '#f0fdf4', color: isLate ? '#c2410c' : '#16a34a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: isLate ? '1px solid #fed7aa' : '1px solid #bbf7d0' }}>{isLate ? 'Working (Late)' : 'Working'}</span>;
+  }
   if (isClockedOut) return <span style={{ background: '#f1f5f9', color: '#64748b', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #e2e8f0' }}>Done</span>;
   return <span style={{ background: '#fef2f2', color: '#dc2626', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #fecaca' }}>Not Clocked In</span>;
 }
