@@ -24,6 +24,13 @@ function formatLiveTime(seconds) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+function isTea1WindowClosed() {
+  const now = new Date();
+  const saHour = (now.getUTCHours() + 2 + 24) % 24;
+  const saMin = now.getUTCMinutes();
+  return (saHour > 10) || (saHour === 10 && saMin >= 30);
+}
+
 function getLunchLabel() {
   // Friday (5) = 60 min, else 30 min
   return new Date().getDay() === 5 ? 'Lunch (60 min)' : 'Lunch (30 min)';
@@ -415,11 +422,12 @@ function EmployeeView() {
                 <p style={{ color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '4px 0 0' }}>Breaks</p>
                 {BREAK_ORDER.map(b => {
                   const done = completedBreaks.includes(b);
-                  const available = b === nextAvailableBreak && !done;
-                  const blocked = !available || done;
+                  const tea1Expired = b === 'tea_1' && !done && isTea1WindowClosed();
+                  const available = b === nextAvailableBreak && !done && !tea1Expired;
+                  const blocked = !available || done || tea1Expired;
                   return <button key={b} onClick={() => handleStartBreak(b)} disabled={blocked || !!actionLoading}
                     style={{ width: '100%', padding: '12px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', fontFamily: 'DM Sans', cursor: blocked ? 'not-allowed' : actionLoading ? 'wait' : 'pointer', opacity: blocked ? 0.4 : actionLoading ? 0.6 : 1 }}>
-                    {actionLoading === b ? 'Starting...' : BREAK_LABELS[b]}{done ? ' (done)' : ''}{!done && !available ? ' (locked)' : ''}</button>;
+                    {actionLoading === b ? 'Starting...' : BREAK_LABELS[b]}{done ? ' (done)' : ''}{tea1Expired ? ' (expired — after 10:30)' : ''}{!done && !available && !tea1Expired ? ' (locked)' : ''}</button>;
                 })}
               </div>}
           </>}

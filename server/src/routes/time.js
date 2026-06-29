@@ -9,6 +9,9 @@ const TEA_DURATION = 15;
 const LUNCH_DURATION_WEEKDAY = 30;
 const LUNCH_DURATION_FRIDAY = 60;
 const LATE_CLOCK_IN_HOUR = 8; // 8:00 AM threshold for late marking
+const TEA1_WINDOW_CLOSE_HOUR = 10; // Tea 1 only available 10:00-10:30 SA time
+const TEA1_WINDOW_CLOSE_MIN = 30;
+const SA_TIMEZONE_OFFSET = 2; // SAST = UTC+2
 
 function getLunchDuration(date) {
   // Friday (5 in JavaScript getDay()) = 60 min, else 30 min
@@ -20,6 +23,14 @@ function isLateClockIn(date) {
   const h = date.getHours();
   const m = date.getMinutes();
   return (h > LATE_CLOCK_IN_HOUR) || (h === LATE_CLOCK_IN_HOUR && m > 0);
+}
+
+function isTea1WindowClosed() {
+  // Check current SA time (UTC+2)
+  const now = new Date();
+  const saHour = (now.getUTCHours() + SA_TIMEZONE_OFFSET + 24) % 24;
+  const saMin = now.getUTCMinutes();
+  return (saHour > TEA1_WINDOW_CLOSE_HOUR) || (saHour === TEA1_WINDOW_CLOSE_HOUR && saMin >= TEA1_WINDOW_CLOSE_MIN);
 }
 
 // ─── Middleware: block monitoring-only admins from clocking ───
@@ -253,6 +264,11 @@ router.post('/break/start', blockMonitoringAdmin, async (req, res) => {
     );
     if (activeBreak.rows.length > 0) {
       return res.status(400).json({ error: `Already on a break (${activeBreak.rows[0].type.replace('_start', '')}). End it first.` });
+    }
+
+    // Tea 1 window: must start between 10:00-10:30 SA time
+    if (break_type === 'tea_1' && isTea1WindowClosed()) {
+      return res.status(400).json({ error: 'Tea 1 window has closed (10:00-10:30 SA time). You can take Lunch instead.' });
     }
 
     // Enforce order: tea_2 only after lunch (tea_1 no longer required before lunch for late arrivals)
