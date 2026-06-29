@@ -53,6 +53,7 @@ function AdminView({ user }) {
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState('');
   const [absentLoading, setAbsentLoading] = useState(false);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
   const LIMIT = 25;
 
   const fetchData = async (p = page) => {
@@ -77,6 +78,17 @@ function AdminView({ user }) {
     try { const res = await api.post('/time/absent/run', { date: dateFilter }); setSuccess(res.data.message); fetchData(page); }
     catch { setError('Failed to mark absent.'); }
     finally { setAbsentLoading(false); }
+  };
+
+  const handleCleanup = async () => {
+    if (!window.confirm('Auto-clock-out ALL past open shifts at 17:00? This will close every forgotten shift across all dates before today.')) return;
+    setCleanupLoading(true); setError(''); setSuccess('');
+    try {
+      const res = await api.post('/time/cleanup');
+      setSuccess(res.data.message + (res.data.details?.length ? `\n${res.data.details.map(d => `${d.employee} (${d.date}): ${d.workMinutes}min`).join('\n')}` : ''));
+      fetchData(page);
+    } catch { setError('Failed to clean up past shifts.'); }
+    finally { setCleanupLoading(false); }
   };
 
   const presentCount = data.filter(d => (d.status === 'present' || d.status === 'late') && !d.clock_out).length;
@@ -112,6 +124,9 @@ function AdminView({ user }) {
           </select>
         </div>
         <div style={{ flex: 1 }} />
+        <button onClick={handleCleanup} disabled={cleanupLoading} style={{ padding: '10px 16px', background: '#d97706', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: cleanupLoading ? 'not-allowed' : 'pointer', opacity: cleanupLoading ? 0.7 : 1, marginRight: '8px' }}>
+          {cleanupLoading ? 'Cleaning...' : 'Clean Up Past Shifts'}
+        </button>
         <button onClick={handleMarkAbsent} disabled={absentLoading} style={{ padding: '10px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: absentLoading ? 'not-allowed' : 'pointer', opacity: absentLoading ? 0.7 : 1 }}>
           {absentLoading ? 'Marking...' : 'Mark All Absent'}
         </button>
