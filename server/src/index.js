@@ -291,8 +291,10 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // ─── Automatic daily cleanup at 17:10 SA time ─────────
-// Every 60 seconds, check if it's 5:10 PM SAST and run the cleanup if not done today
+// Every 30 seconds, check if we're past 17:10 SAST and run cleanup if not done today.
+// Also runs on startup to catch missed cleanups while server was asleep (Render free tier).
 let cleanupRanDate = null;
+const DAILY_CLEANUP_MINUTE = 10; // 17:10 SA time
 
 async function runDailyCleanup() {
   try {
@@ -301,8 +303,15 @@ async function runDailyCleanup() {
     const saMin = now.getUTCMinutes();
     const todayStr = now.toISOString().split('T')[0];
 
-    // Only run at exactly 17:10 SA time and only once per day
-    if (saHour !== 17 || saMin !== 10 || cleanupRanDate === todayStr) return;
+    // Run at 17:10 or shortly after (within 3 minutes), only once per day
+    // Also run on startup if past 17:10 and not yet cleaned today
+    const pastCleanupTime = (saHour > 17) || (saHour === 17 && saMin >= DAILY_CLEANUP_MINUTE);
+    const withinWindow = (saHour === 17 && saMin >= DAILY_CLEANUP_MINUTE && saMin <= DAILY_CLEANUP_MINUTE + 3);
+    const alreadyDone = cleanupRanDate === todayStr;
+    
+    if (alreadyDone || (!withinWindow && cleanupRanDate !== null)) return;
+    // If cleanupRanDate is null (just started), allow any time past 17:10
+    if (cleanupRanDate !== null && !withinWindow && !(pastCleanupTime && cleanupRanDate !== todayStr)) return;
 
     cleanupRanDate = todayStr;
     console.log(`[cleanup] Running daily auto-clock-out at ${now.toISOString()}...`);
@@ -410,9 +419,11 @@ async function runDailyCleanup() {
   }
 }
 
-// Check every 60 seconds
-setInterval(runDailyCleanup, 60 * 1000);
-console.log('[cleanup] Daily auto-clock-out scheduler started (runs at 17:10 SA time).');
+// Check every 30 seconds (faster than 60s to catch the 17:10 window more reliably)
+setInterval(runDailyCleanup, 30 * 1000);
+// Also run immediately on startup to catch any missed cleanups while server was asleep
+setTimeout(() => runDailyCleanup(), 5000);
+console.log('[cleanup] Daily auto-clock-out scheduler started (runs at 17:10 SA time, + on startup).');
 
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/users', require('./routes/users'));
