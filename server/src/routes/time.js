@@ -191,13 +191,13 @@ router.post('/clock-out', blockMonitoringAdmin, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE attendance SET
-         clock_out = $1, status = 'present',
+         clock_out = $1, status = CASE WHEN $8 = 'late' THEN 'late' ELSE 'present' END,
          total_work_minutes = $2,
          tea_1_minutes = $3, tea_2_minutes = $4, lunch_minutes = $5,
          idle_minutes = $6, updated_at = NOW()
        WHERE id = $7
        RETURNING *`,
-      [now, workMin, Math.round(tea1Min), Math.round(tea2Min), Math.round(lunchMin), idleMin, row.id]
+      [now, workMin, Math.round(tea1Min), Math.round(tea2Min), Math.round(lunchMin), idleMin, row.id, row.status]
     );
 
     await pool.query(
@@ -474,7 +474,7 @@ router.get('/today', async (req, res) => {
 
         // Close open idle events
         await pool.query(
-          `UPDATE idle_events SET idle_end = $3, duration_minutes = EXTRACT(EPOCH FROM ($3::timestamp - idle_start)) / 60
+          `UPDATE idle_events SET idle_end = $3, duration_minutes = EXTRACT(EPOCH FROM ($3::timestamptz - idle_start)) / 60
            WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL`,
           [employeeId, shiftDateStr, closeTime]
         );
@@ -794,7 +794,7 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
 
       // Close open idle events
       await pool.query(
-        `UPDATE idle_events SET idle_end = $3, duration_minutes = EXTRACT(EPOCH FROM ($3::timestamp - idle_start)) / 60
+        `UPDATE idle_events SET idle_end = $3, duration_minutes = EXTRACT(EPOCH FROM ($3::timestamptz - idle_start)) / 60
          WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL`,
         [employeeId, today, now]
       );
@@ -838,13 +838,13 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
 
       await pool.query(
         `UPDATE attendance SET
-           clock_out = $1, status = 'present',
+           clock_out = $1, status = $8,
            total_work_minutes = $2,
            tea_1_minutes = $3, tea_2_minutes = $4, lunch_minutes = $5,
            idle_minutes = $6, notes = 'Auto clocked out by admin',
            updated_at = NOW()
          WHERE id = $7`,
-        [now, workMin, Math.round(tea1Min), Math.round(tea2Min), Math.round(lunchMin), idleMin, row.id]
+        [now, workMin, Math.round(tea1Min), Math.round(tea2Min), Math.round(lunchMin), idleMin, row.id, row.status]
       );
 
       await pool.query(
