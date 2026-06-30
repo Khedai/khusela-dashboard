@@ -308,7 +308,12 @@ function EmployeeView() {
   const isClockedOut = status?.attendance?.clock_out;
   const activeBreak = status?.activeBreak;
   const completedBreaks = status?.completedBreaks || [];
-  const nextAvailableBreak = BREAK_ORDER.find(b => !completedBreaks.includes(b));
+  // If Tea 1 is expired and not done, skip it so lunch becomes available
+  const tea1ExpiredGlobal = !completedBreaks.includes('tea_1') && isTea1WindowClosed();
+  const nextAvailableBreak = BREAK_ORDER.find(b => {
+    if (b === 'tea_1' && tea1ExpiredGlobal) return false; // skip expired tea_1
+    return !completedBreaks.includes(b);
+  });
   const completedBreakMinutes = 
     (status?.attendance?.tea_1_minutes || 0) + 
     (status?.attendance?.tea_2_minutes || 0) + 
