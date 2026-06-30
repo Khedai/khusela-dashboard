@@ -363,7 +363,17 @@ function EmployeeView() {
               <StatusRow label="Lunch" value={fmtDuration(status?.attendance?.lunch_minutes)} />
               <StatusRow label="Idle" value={fmtDuration(status?.attendance?.idle_minutes)} />
             </>
-          ) : <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0, textAlign: 'center', padding: '10px 0' }}>You haven't clocked in today.</p>}
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ padding: '14px 16px', borderRadius: '8px', background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '20px' }}>⏰</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#c2410c', fontWeight: '700' }}>Don't forget to clock in!</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#9a3412' }}>You need to clock in to start tracking your work hours for today.</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {!isClockedOut && <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
