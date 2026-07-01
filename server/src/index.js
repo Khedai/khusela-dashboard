@@ -316,10 +316,12 @@ async function runDailyCleanup() {
     cleanupRanDate = todayStr;
     console.log(`[cleanup] Running daily auto-clock-out at ${now.toISOString()}...`);
 
-    // Find all open shifts on dates before today (NOT today itself — that's too early)
-    // AND today's shifts if they haven't clocked out by 17:10
+    // On startup (cleanupRanDate was null), only clean up past dates, NOT today.
+    // At 17:10, include today as well (people should have clocked out by then).
+    const isStartupRun = cleanupRanDate === null;
+    const dateOp = isStartupRun ? '<' : '<=';
     const stragglers = await pool.query(
-      `SELECT * FROM attendance WHERE date <= $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date`,
+      `SELECT * FROM attendance WHERE date ${dateOp} $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date`,
       [todayStr]
     );
 
