@@ -37,7 +37,7 @@ function getLunchLabel() {
 }
 const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: getLunchLabel() };
 const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
-const MONITORING_ONLY = ['ayabonga', 'ayabulela'];
+const MONITORING_ONLY = ['ayabonga', 'ayabulela', 'admin'];
 const IDLE_EXEMPT = ['shafieka', 'luqmaanc', 'curwins', 'letasha'];
 
 export default function TimeTracker() {
@@ -231,7 +231,7 @@ function EmployeeView() {
   const activeBreakTypeRef = useRef(null);
   const [actionLoading, setActionLoading] = useState('');
   const [displayBreakSeconds, setDisplayBreakSeconds] = useState(0);
-  const IDLE_THRESHOLD = 5 * 60;
+  const IDLE_THRESHOLD = 10 * 60;
   const IDLE_WARN_GRACE = 2 * 60;
 
   const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
