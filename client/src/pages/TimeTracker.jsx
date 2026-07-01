@@ -38,6 +38,7 @@ function getLunchLabel() {
 const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: getLunchLabel() };
 const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
 const MONITORING_ONLY = ['ayabonga', 'ayabulela'];
+const IDLE_EXEMPT = ['shafieka', 'luqmaanc', 'curwins', 'letasha'];
 
 export default function TimeTracker() {
   const { user } = useAuth();
@@ -143,7 +144,7 @@ function AdminView({ user }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                {['Employee','Branch','Date','Status','Clock In','Clock Out','Work','Tea 1','Tea 2','Lunch','Idle','Location'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                {['Employee','Branch','Date','Status','Clock In','Live Work','Clock Out','Work','Tea 1','Tea 2','Lunch','Idle','Location'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {data.map(row => (
@@ -173,6 +174,11 @@ function AdminView({ user }) {
                       })()}
                     </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtTime(row.clock_in)}</td>
+                    <td style={{ padding: '10px 12px', color: '#0f172a', fontSize: '14px', fontWeight: '700', fontFamily: 'monospace' }}>
+                      {!row.clock_out && row.clock_in
+                        ? formatLiveTime(Math.floor((Date.now() - new Date(row.clock_in).getTime()) / 1000))
+                        : '—'}
+                    </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtTime(row.clock_out)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.total_work_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.tea_1_minutes)}</td>
@@ -205,6 +211,8 @@ function isSmallScreen() {
 
 function EmployeeView() {
   const { user } = useAuth();
+  const username = (user?.username || '').toLowerCase();
+  const idleExempt = IDLE_EXEMPT.includes(username);
 
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -214,10 +222,17 @@ function EmployeeView() {
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [liveSeconds, setLiveSeconds] = useState(0);
   const timerRef = useRef(null);
+  const [idleSeconds, setIdleSeconds] = useState(0);
+  const [showIdleWarning, setShowIdleWarning] = useState(false);
+  const [isIdle, setIsIdle] = useState(false);
+  const idleTimerRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
   const breakStartRef = useRef(null);
   const activeBreakTypeRef = useRef(null);
   const [actionLoading, setActionLoading] = useState('');
   const [displayBreakSeconds, setDisplayBreakSeconds] = useState(0);
+  const IDLE_THRESHOLD = 5 * 60;
+  const IDLE_WARN_GRACE = 2 * 60;
 
   const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   const startTimer = () => {
@@ -252,7 +267,36 @@ function EmployeeView() {
   }, []);
 
   useEffect(() => { setIsMobile(isSmallScreen()); const r = () => setIsMobile(isSmallScreen()); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
-  useEffect(() => { fetchStatus(); return () => { stopTimer(); }; }, [fetchStatus]);
+  useEffect(() => { fetchStatus(); return () => { stopTimer(); clearInterval(idleTimerRef.current); }; }, [fetchStatus]);
+
+  const resetIdle = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    if (idleExempt) return;
+    setIdleSeconds(0); setShowIdleWarning(false);
+    if (isIdle) { setIsIdle(false); api.post('/time/idle', { action: 'end' }).catch(() => {}); setSuccess('Welcome back!'); setTimeout(() => setSuccess(''), 3000); }
+  }, [isIdle, idleExempt]);
+
+  useEffect(() => {
+    if (idleExempt) return;
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    const h = () => resetIdle();
+    events.forEach(e => window.addEventListener(e, h, { passive: true }));
+    return () => events.forEach(e => window.removeEventListener(e, h));
+  }, [resetIdle, idleExempt]);
+
+  useEffect(() => {
+    if (idleExempt) return;
+    idleTimerRef.current = setInterval(() => {
+      const t = Math.floor((Date.now() - lastActivityRef.current) / 1000);
+      setIdleSeconds(t);
+      const onBreak = !!status?.activeBreak;
+      if (status?.attendance?.clock_in && !status?.attendance?.clock_out && !isIdle && !onBreak) {
+        if (t >= IDLE_THRESHOLD && !showIdleWarning) setShowIdleWarning(true);
+        if (t >= IDLE_THRESHOLD + IDLE_WARN_GRACE && !isIdle) { setIsIdle(true); api.post('/time/idle', { action: 'start' }).catch(() => {}); }
+      }
+    }, 1000);
+    return () => clearInterval(idleTimerRef.current);
+  }, [status, showIdleWarning, isIdle, idleExempt]);
 
   const handleClockIn = async () => {
     setError(''); setSuccess(''); setActionLoading('clock-in');
@@ -325,6 +369,7 @@ function EmployeeView() {
   const displayWorkSeconds = Math.max(0, 
     liveSeconds - 
     (activeBreak ? displayBreakSeconds : 0) - 
+    (isIdle ? idleSeconds - IDLE_THRESHOLD : 0) - 
     (completedBreakMinutes * 60) - 
     (completedIdleMinutes * 60)
   );
@@ -354,6 +399,8 @@ function EmployeeView() {
                 <span style={{ fontSize: '13px', color: '#92400e', fontWeight: '600' }}>{activeBreak.type === 'tea_1' ? 'Tea 1' : activeBreak.type === 'tea_2' ? 'Tea 2' : 'Lunch'} in progress</span>
                 <span style={{ fontSize: '14px', color: '#92400e', fontWeight: '700', fontFamily: 'monospace' }}>{formatLiveTime(displayBreakSeconds)}</span>
               </div>}
+              {isIdle && <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca' }}><span style={{ fontSize: '13px', color: '#991b1b', fontWeight: '600' }}>Idle — timer paused</span></div>}
+              {showIdleWarning && !isIdle && !isClockedOut && <IdleWarning onImHere={resetIdle} />}
             </div>
           ) : isClockedOut ? (
             <>
@@ -403,6 +450,7 @@ function EmployeeView() {
               {actionLoading === 'clock-out' ? 'Clocking out...' : 'Clock Out'}</button>
             {activeBreak ? <button onClick={handleEndBreak} disabled={actionLoading === 'break-end'} style={{ width: '100%', padding: '12px 16px', background: '#d97706', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', fontFamily: 'DM Sans', cursor: actionLoading === 'break-end' ? 'wait' : 'pointer', opacity: actionLoading === 'break-end' ? 0.6 : 1 }}>
               {actionLoading === 'break-end' ? 'Ending break...' : `End ${activeBreak.type === 'tea_1' ? 'Tea 1' : activeBreak.type === 'tea_2' ? 'Tea 2' : 'Lunch'} Break`}</button>
+            : isIdle ? <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', margin: 0 }}>Return to your keyboard to resume.</p>
             : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <p style={{ color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '4px 0 0' }}>Breaks</p>
                 {BREAK_ORDER.map(b => {
@@ -523,4 +571,4 @@ function StatusBadge({ isClockedIn, isClockedOut, statusData }) {
 }
 function StatusRow({ label, value, highlight }) { return <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: '#64748b', fontSize: '13px' }}>{label}</span><span style={{ color: highlight ? '#0f172a' : '#1e293b', fontSize: highlight ? '18px' : '14px', fontWeight: highlight ? '700' : '500', fontFamily: highlight ? 'monospace' : 'inherit' }}>{value}</span></div>; }
 function StatBox({ label, value, color }) { return <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '10px 12px', border: '1px solid #e2e8f0' }}><p style={{ margin: '0 0 3px', color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p><p style={{ margin: 0, color, fontSize: '16px', fontWeight: '700' }}>{value}</p></div>; }
-function StatCard({ label, value, color, bg }) { return <div style={{ background: bg, borderRadius: '10px', padding: '14px 16px', border: `1px solid ${color}20` }}><p style={{ margin: '0 0 6px', fontSize: '12px', color: '#64748b', fontWeight: '600' }}>{label}</p><p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color }}>{value}</p></div>; }
+function IdleWarning({ onImHere }) { return <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}><span style={{ fontSize: '13px', color: '#9a3412', fontWeight: '600' }}>Are you still there? Idle detected.</span><button onClick={onImHere} style={{ background: '#ea580c', color: 'white', border: 'none', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', fontFamily: 'DM Sans' }}>I'm here</button></div>; }
