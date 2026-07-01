@@ -353,7 +353,7 @@ async function runDailyCleanup() {
 
       // Close open idle events
       await pool.query(
-        `UPDATE idle_events SET idle_end = $3, duration_minutes = EXTRACT(EPOCH FROM ($3::timestamp - idle_start)) / 60
+        `UPDATE idle_events SET idle_end = $3, duration_minutes = EXTRACT(EPOCH FROM ($3 - idle_start)) / 60
          WHERE employee_id = $1 AND date = $2 AND idle_end IS NULL`,
         [employeeId, shiftDate, closeTime]
       );

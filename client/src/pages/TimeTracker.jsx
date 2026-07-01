@@ -291,6 +291,7 @@ function EmployeeView() {
   };
 
   const handleStartBreak = async (breakType) => {
+    if (!window.confirm(`Start ${breakType === 'tea_1' ? 'Tea 1 (15 min)' : breakType === 'tea_2' ? 'Tea 2 (15 min)' : 'Lunch'} break now?`)) return;
     setError(''); setSuccess(''); setActionLoading(breakType);
     try { await api.post('/time/break/start', { break_type: breakType }); await fetchStatus(); }
     catch (err) { setError(err.response?.data?.error || 'Failed to start break.'); }
@@ -298,6 +299,7 @@ function EmployeeView() {
   };
 
   const handleEndBreak = async () => {
+    if (!window.confirm('End your current break and resume work?')) return;
     setError(''); setSuccess(''); setActionLoading('break-end');
     try { await api.post('/time/break/end'); breakStartRef.current = null; setDisplayBreakSeconds(0); await fetchStatus(); }
     catch (err) { setError(err.response?.data?.error || 'Failed to end break.'); }
@@ -374,6 +376,17 @@ function EmployeeView() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid #f1f5f9', background: '#f0f9ff' }}><p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>📋 How it works</p></div>
+        <div style={{ padding: '14px 22px', fontSize: '12px', color: '#475569', lineHeight: '1.6' }}>
+          <p style={{ margin: '0 0 4px' }}><strong>1.</strong> Click <strong>Clock In</strong> when you start work.</p>
+          <p style={{ margin: '0 0 4px' }}><strong>2.</strong> Take <strong>Tea 1</strong> between <strong>10:00 – 10:30</strong>. After 10:30, Tea 1 is unavailable — go straight to Lunch.</p>
+          <p style={{ margin: '0 0 4px' }}><strong>3.</strong> Take <strong>Lunch</strong> (30 min, or 60 min on Fridays).</p>
+          <p style={{ margin: '0 0 4px' }}><strong>4.</strong> Take <strong>Tea 2</strong> after Lunch.</p>
+          <p style={{ margin: '0 0 4px' }}><strong>5.</strong> Click <strong>Clock Out</strong> when you're done for the day.</p>
+          <p style={{ margin: 0, color: '#94a3b8', fontStyle: 'italic' }}>If you forget to clock out, you'll be automatically clocked out at 17:10.</p>
         </div>
       </div>
       {!isClockedOut && <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
