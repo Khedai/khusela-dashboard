@@ -198,9 +198,9 @@ function AdminView({ user }) {
 // ════════════════════════════════════════════════════
 //  EMPLOYEE VIEW
 // ════════════════════════════════════════════════════
-function isMobileOrTouch() {
+function isSmallScreen() {
   if (typeof window === 'undefined') return false;
-  return ('ontouchstart' in window || navigator.maxTouchPoints > 0) || window.innerWidth < 768;
+  return window.innerWidth < 768;
 }
 
 function EmployeeView() {
@@ -251,7 +251,7 @@ function EmployeeView() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { setIsMobile(isMobileOrTouch()); const r = () => setIsMobile(isMobileOrTouch()); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
+  useEffect(() => { setIsMobile(isSmallScreen()); const r = () => setIsMobile(isSmallScreen()); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
   useEffect(() => { fetchStatus(); return () => { stopTimer(); }; }, [fetchStatus]);
 
   const handleClockIn = async () => {
