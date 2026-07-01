@@ -313,12 +313,14 @@ async function runDailyCleanup() {
     // If cleanupRanDate is null (just started), allow any time past 17:10
     if (cleanupRanDate !== null && !withinWindow && !(pastCleanupTime && cleanupRanDate !== todayStr)) return;
 
-    cleanupRanDate = todayStr;
-    console.log(`[cleanup] Running daily auto-clock-out at ${now.toISOString()}...`);
-
-    // On startup (cleanupRanDate was null), only clean up past dates, NOT today.
-    // At 17:10, include today as well (people should have clocked out by then).
+    // Save startup flag BEFORE setting cleanupRanDate
     const isStartupRun = cleanupRanDate === null;
+    cleanupRanDate = todayStr;
+
+    console.log(`[cleanup] Running daily auto-clock-out at ${now.toISOString()} (${isStartupRun ? 'startup' : 'scheduled'})...`);
+
+    // On startup, only clean up past dates, NOT today.
+    // At 17:10, include today as well (people should have clocked out by then).
     const dateOp = isStartupRun ? '<' : '<=';
     const stragglers = await pool.query(
       `SELECT * FROM attendance WHERE date ${dateOp} $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date`,
@@ -423,8 +425,8 @@ async function runDailyCleanup() {
 
 // Check every 30 seconds (faster than 60s to catch the 17:10 window more reliably)
 setInterval(runDailyCleanup, 30 * 1000);
-// Also run immediately on startup to catch any missed cleanups while server was asleep
-setTimeout(() => runDailyCleanup(), 5000);
+// Startup cleanup REMOVED — it was closing today's shifts on every deploy/restart.
+// The /today endpoint now handles stale shifts when users log in.
 console.log('[cleanup] Daily auto-clock-out scheduler started (runs at 17:10 SA time, + on startup).');
 
 app.use('/api/documents', require('./routes/documents'));
