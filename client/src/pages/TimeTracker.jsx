@@ -143,7 +143,7 @@ function AdminView({ user }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                {['Employee','Branch','Date','Status','Clock In','Live Work','Clock Out','Work','Tea 1','Tea 2','Lunch','Idle','Location'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                {['Employee','Branch','Date','Status','Clock In','Live Work','Clock Out','Work','Tea 1','Tea 2','Lunch','Location'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {data.map(row => (
@@ -158,9 +158,6 @@ function AdminView({ user }) {
                         }
                         if (row.clock_out) {
                           return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f1f5f9', color: '#64748b' }}>Done</span>;
-                        }
-                        if (row.active_idle_id) {
-                          return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#fef2f2', color: '#dc2626' }}>Idle</span>;
                         }
                         if (row.active_break_type) {
                           const bm = { tea_1: 'Tea 1', tea_2: 'Tea 2', lunch: 'Lunch' };
@@ -183,7 +180,6 @@ function AdminView({ user }) {
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.tea_1_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.tea_2_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.lunch_minutes)}</td>
-                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.idle_minutes)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '11px' }}>{row.location_name || (row.latitude ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}` : '—')}</td>
                   </tr>
                 ))}
@@ -315,23 +311,20 @@ function EmployeeView() {
   const isClockedOut = status?.attendance?.clock_out;
   const activeBreak = status?.activeBreak;
   const completedBreaks = status?.completedBreaks || [];
-  // If Tea 1 is expired and not done, skip it so lunch becomes available
   const tea1ExpiredGlobal = !completedBreaks.includes('tea_1') && isTea1WindowClosed();
   const nextAvailableBreak = BREAK_ORDER.find(b => {
-    if (b === 'tea_1' && tea1ExpiredGlobal) return false; // skip expired tea_1
+    if (b === 'tea_1' && tea1ExpiredGlobal) return false;
     return !completedBreaks.includes(b);
   });
   const completedBreakMinutes = 
     (status?.attendance?.tea_1_minutes || 0) + 
     (status?.attendance?.tea_2_minutes || 0) + 
     (status?.attendance?.lunch_minutes || 0);
-  const completedIdleMinutes = status?.totalIdleMinutes || 0;
   
   const displayWorkSeconds = Math.max(0, 
     liveSeconds - 
     (activeBreak ? displayBreakSeconds : 0) - 
-    (completedBreakMinutes * 60) - 
-    (completedIdleMinutes * 60)
+    (completedBreakMinutes * 60)
   );
   const todayStr = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -368,7 +361,6 @@ function EmployeeView() {
               <StatusRow label="Tea 1" value={fmtDuration(status?.attendance?.tea_1_minutes)} />
               <StatusRow label="Tea 2" value={fmtDuration(status?.attendance?.tea_2_minutes)} />
               <StatusRow label="Lunch" value={fmtDuration(status?.attendance?.lunch_minutes)} />
-              <StatusRow label="Idle" value={fmtDuration(status?.attendance?.idle_minutes)} />
             </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -391,7 +383,6 @@ function EmployeeView() {
           <p style={{ margin: '0 0 4px' }}><strong>3.</strong> Take <strong>Lunch</strong> (30 min, or 60 min on Fridays).</p>
           <p style={{ margin: '0 0 4px' }}><strong>4.</strong> Take <strong>Tea 2</strong> after Lunch.</p>
           <p style={{ margin: '0 0 4px' }}><strong>5.</strong> Click <strong>Clock Out</strong> when you're done for the day.</p>
-          <p style={{ margin: 0, color: '#94a3b8', fontStyle: 'italic' }}>If you forget to clock out, you'll be automatically clocked out at 17:10.</p>
         </div>
       </div>
       {!isClockedOut && <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
@@ -430,8 +421,6 @@ function EmployeeView() {
           <StatBox label="Tea 1" value={fmtDuration(status.attendance.tea_1_minutes)} color="#8b5cf6" />
           <StatBox label="Tea 2" value={fmtDuration(status.attendance.tea_2_minutes)} color="#8b5cf6" />
           <StatBox label="Lunch" value={fmtDuration(status.attendance.lunch_minutes)} color="#f59e0b" />
-          <StatBox label="Idle" value={fmtDuration(status.attendance.idle_minutes)} color="#ef4444" />
-          <StatBox label="Total Day" value={fmtDuration((status.attendance.total_work_minutes||0)+(status.attendance.tea_1_minutes||0)+(status.attendance.tea_2_minutes||0)+(status.attendance.lunch_minutes||0)+(status.attendance.idle_minutes||0))} color="#0f172a" />
         </div>
       </div>}
       {!status && !loading && <div style={{ padding: '14px 16px', borderRadius: '8px', background: '#fffbeb', border: '1px solid #fde68a', marginTop: '16px' }}><p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>Your user account is not linked to an active employee record. Contact an Admin to link your account.</p></div>}
@@ -478,7 +467,7 @@ function MyHistory({ refreshKey = 0 }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  {['Date','Status','Clock In','Clock Out','Work','Tea 1','Tea 2','Lunch','Idle'].map(h => <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                  {['Date','Status','Clock In','Clock Out','Work','Tea 1','Tea 2','Lunch'].map(h => <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -498,7 +487,6 @@ function MyHistory({ refreshKey = 0 }) {
                     <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.tea_1_minutes)}</td>
                     <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.tea_2_minutes)}</td>
                     <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.lunch_minutes)}</td>
-                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.idle_minutes)}</td>
                   </tr>
                 ))}
               </tbody>
