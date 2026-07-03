@@ -13,6 +13,7 @@ const LATE_CLOCK_IN_HOUR = 8; // 8:00 AM threshold for late marking
 const TEA1_WINDOW_CLOSE_HOUR = 10; // Tea 1 only available 10:00-10:30 SA time
 const TEA1_WINDOW_CLOSE_MIN = 30;
 const SA_TIMEZONE_OFFSET = 2; // SAST = UTC+2
+const GRACE_MINUTES = 6; // 6-minute padding: clock-in recorded 6 min earlier, timer starts at 00:06:00
 
 function getLunchDuration(date) {
   // Friday (5 in JavaScript getDay()) = 60 min, else 30 min
@@ -80,7 +81,8 @@ router.post('/clock-in', blockMonitoringAdmin, async (req, res) => {
 
     const { latitude, longitude } = req.body;
     const now = new Date();
-    const clockInStatus = isLateClockIn(now) ? 'late' : 'present';
+    const paddedTime = new Date(now.getTime() - GRACE_MINUTES * 60 * 1000); // 6 min earlier
+    const clockInStatus = isLateClockIn(paddedTime) ? 'late' : 'present';
     const result = await pool.query(
       `INSERT INTO attendance (employee_id, date, status, clock_in, latitude, longitude)
        VALUES ($1, $2, $6, $3, $4, $5)
@@ -88,13 +90,13 @@ router.post('/clock-in', blockMonitoringAdmin, async (req, res) => {
        SET status = $6, clock_in = $3, clock_out = NULL, total_work_minutes = NULL,
            latitude = COALESCE($4, attendance.latitude), longitude = COALESCE($5, attendance.longitude)
        RETURNING *`,
-      [employeeId, today, now, latitude || null, longitude || null, clockInStatus]
+      [employeeId, today, paddedTime, latitude || null, longitude || null, clockInStatus]
     );
 
     await pool.query(
       `INSERT INTO time_logs (employee_id, type, timestamp, date)
        VALUES ($1, 'clock_in', $2, $3)`,
-      [employeeId, now, today]
+      [employeeId, paddedTime, today]
     );
 
     res.json(result.rows[0]);
