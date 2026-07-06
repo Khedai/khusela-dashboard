@@ -359,16 +359,14 @@ export default function Leave() {
       <div style={S.pageHeader(isMobile)}>
         <div>
           <h2 style={S.pageTitle}>Leave Management</h2>
-          {pendingCount > 0 && isAdmin && <p style={{ color: '#d97706', fontSize: '13px', margin: '4px 0 0', fontWeight: '500' }}>{pendingCount} pending request{pendingCount > 1 ? 's' : ''} awaiting action</p>}
         </div>
-        {myEmployee && <button onClick={() => { setShowForm(!showForm); setError(''); setWarning(''); }} className="btn-primary" style={S.primaryBtn}>{showForm ? 'Cancel' : '+ Apply for Leave'}</button>}
       </div>
 
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13.5px', marginBottom: '16px' }}>{error}</div>}
       {warning && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', fontSize: '13.5px', marginBottom: '16px' }}>{warning}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13.5px', marginBottom: '16px' }}>{success}</div>}
 
-      {!loading && !myEmployee && (
+      {!loading && !isAdmin && !myEmployee && (
         <div style={{ padding: '14px 16px', borderRadius: '10px', background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <span style={{ fontSize: '18px', lineHeight: 1 }}>ℹ️</span>
           <div><p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: '#1e40af' }}>No employee record linked</p><p style={{ margin: 0, fontSize: '12.5px', color: '#3b82f6' }}>Your account isn't linked to an employee profile yet. Ask an Admin to link your user account to your employee record so you can apply for leave and view your balance.</p></div>
