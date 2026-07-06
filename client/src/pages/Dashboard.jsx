@@ -4,16 +4,42 @@ import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import { can } from '../utils/access';
+import { C } from '../utils/styles';
 import Spinner from '../components/Spinner';
 import { SkeletonStatCard, SkeletonTable } from '../components/Skeleton';
 
-const STATUS_STYLES = {
-  Draft: { background: 'rgba(241,245,249,0.65)', color: '#64748b', border: '1px solid rgba(148,163,184,0.25)' },
-  Submitted: { background: 'rgba(239,246,255,0.65)', color: '#2563eb', border: '1px solid rgba(37,99,235,0.2)' },
-  'Pending Docs': { background: 'rgba(255,251,235,0.65)', color: '#d97706', border: '1px solid rgba(217,119,6,0.25)' },
-  Approved: { background: 'rgba(240,253,244,0.65)', color: '#16a34a', border: '1px solid rgba(22,163,74,0.2)' },
-  Rejected: { background: 'rgba(254,242,242,0.65)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.25)' },
+const AVATAR_PALETTE = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2', '#ca8a04', '#dc2626'];
+
+const getInitials = (firstName, lastName) => {
+  return `${firstName?.charAt(0) || ''}${lastName?.charAt(0) || ''}`.toUpperCase() || '?';
 };
+
+const avatarColor = (name) => {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+};
+
+const formatDays = (val) => {
+  const num = parseFloat(val);
+  if (isNaN(num)) return '0';
+  return num % 1 === 0 ? Math.round(num).toString() : num.toFixed(1);
+};
+
+const safeNum = (val) => {
+  const n = parseFloat(val);
+  return isNaN(n) ? 0 : n;
+};
+
+const STATUS_STYLES = {
+  Draft: { background: '#f8fafc', color: '#475569', border: '1px solid rgba(148,163,184,0.25)' },
+  Submitted: { background: '#eff6ff', color: '#1d4ed8', border: '1px solid rgba(37,99,235,0.2)' },
+  'Pending Docs': { background: '#fffbeb', color: '#b45309', border: '1px solid rgba(217,119,6,0.25)' },
+  Approved: { background: '#f0fdf4', color: '#15803d', border: '1px solid rgba(22,163,74,0.2)' },
+  Rejected: { background: '#fef2f2', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.25)' },
+};
+
+const CARD_SHADOW = C.cardShadow;
 
 const CARDS = [
   { key: 'total', label: 'Total', color: '#3b82f6' },
@@ -93,13 +119,46 @@ export default function Dashboard() {
 
   const today = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const cols = isMobile ? '1fr 1fr' : 'repeat(4, 1fr)';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const pendingLeaveCount = stats?.pendingLeave || 0;
+
+  const [widgetCollapsed, setWidgetCollapsed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dashWidgets') || '{}'); } catch { return {}; }
+  });
+
+  const toggleWidget = (key) => {
+    setWidgetCollapsed(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem('dashWidgets', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const WidgetSection = ({ title, visible, children, style = {} }) => {
+    if (!visible) return null;
+    const isCollapsed = widgetCollapsed[title];
+    return (
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{title}</p>
+          <button onClick={() => toggleWidget(title)} style={{ background: 'none', border: 'none', color: '#475569', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: '2px 8px', borderRadius: '6px' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            {isCollapsed ? 'Show' : 'Hide'}
+          </button>
+        </div>
+        {!isCollapsed && <div style={style}>{children}</div>}
+      </div>
+    );
+  };
 
   return (
     <div style={{ maxWidth: '1100px' }}>
       <div style={{ marginBottom: '24px' }}>
         <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{today}</p>
         <h2 style={{ fontFamily: 'Sora', fontSize: isMobile ? '20px' : '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
-          Welcome back, <span style={{ color: '#2563eb' }}>{user?.username}</span>
+          {greeting}, <span style={{ color: '#2563eb' }}>{user?.username}</span>
+          {pendingLeaveCount > 0 && <span style={{ color: '#475569', fontSize: '14px', fontWeight: '400', fontFamily: 'DM Sans', display: 'block', marginTop: '4px' }}>You have {pendingLeaveCount} pending leave request{pendingLeaveCount !== 1 ? 's' : ''} waiting for your review.</span>}
         </h2>
       </div>
 
@@ -141,14 +200,15 @@ export default function Dashboard() {
       )}
 
       {/* Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '10px', marginBottom: '20px' }}>
+      <WidgetSection title="Overview" visible={true}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '10px' }}>
         {CARDS.map(card => (
           <div
             key={card.key}
             onClick={() => card.key !== 'total' && navigate(`/applications?status=${encodeURIComponent(card.label)}`)}
             style={{
               background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '16px 18px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+              boxShadow: CARD_SHADOW,
               border: '1px solid #f1f5f9',
               cursor: card.key !== 'total' ? 'pointer' : 'default',
               transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s',
@@ -162,11 +222,11 @@ export default function Dashboard() {
             }}
             onMouseLeave={e => {
               e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)';
+                e.currentTarget.style.boxShadow = CARD_SHADOW;
               e.currentTarget.style.borderColor = '#f1f5f9';
             }}
           >
-            <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
+            <p style={{ color: '#475569', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
               {card.label}
             </p>
             <p style={{ color: '#0f172a', fontSize: isMobile ? '22px' : '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
@@ -177,10 +237,10 @@ export default function Dashboard() {
         {user?.role !== 'Consultant' && (
           <div style={{
             background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '16px 18px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+            boxShadow: CARD_SHADOW,
             border: '1px solid #f1f5f9',
           }}>
-            <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
+            <p style={{ color: '#475569', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
               Employees
             </p>
             <p style={{ color: '#0f172a', fontSize: isMobile ? '22px' : '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
@@ -188,47 +248,50 @@ export default function Dashboard() {
             </p>
           </div>
         )}
-      </div>
+        </div>
+      </WidgetSection>
 
       {user?.role === 'Consultant' && leaveBalance && (
-        <div style={{ marginBottom: '20px' }}>
-          <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '10px' }}>
-            My Leave Balance — {new Date().getFullYear()}
-          </p>
+        <WidgetSection title={`My Leave Balance — ${new Date().getFullYear()}`} visible={true}>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '10px' }}>
             {[
               { label: 'Annual Leave', total: leaveBalance.annual_total, used: leaveBalance.annual_used, color: '#2563eb' },
               { label: 'Sick Leave', total: leaveBalance.sick_total, used: leaveBalance.sick_used, color: '#d97706' },
               { label: 'Family Responsibility', total: leaveBalance.family_total, used: leaveBalance.family_used, color: '#16a34a' },
             ].map(b => {
-              const remaining = b.total - b.used;
+              const remaining = safeNum(b.total) - safeNum(b.used);
+              const pct = safeNum(b.total) > 0 ? Math.min((safeNum(b.used) / safeNum(b.total)) * 100, 100) : 0;
               return (
                 <div key={b.label} style={{
                   background: 'white', borderRadius: '12px', padding: '14px 16px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+                  boxShadow: CARD_SHADOW,
                   border: '1px solid #f1f5f9',
                 }}>
-                  <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
+                  <p style={{ color: '#475569', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
                     {b.label}
                   </p>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
                     <span style={{ fontFamily: 'Sora', fontSize: '22px', fontWeight: '700', color: remaining <= 0 ? '#dc2626' : '#0f172a', lineHeight: 1 }}>
-                      {remaining}
+                      {formatDays(remaining)}
                     </span>
-                    <span style={{ color: '#94a3b8', fontSize: '11px' }}>/ {b.total} days</span>
+                    <span style={{ color: '#475569', fontSize: '11px' }}>/ {formatDays(safeNum(b.total))} days</span>
                   </div>
+                  <div style={{ height: '5px', borderRadius: '3px', background: '#f1f5f9', overflow: 'hidden', marginTop: '6px' }}>
+                    <div style={{ height: '100%', borderRadius: '3px', background: remaining <= 0 ? '#dc2626' : b.color, width: `${pct}%`, transition: 'width 0.4s ease' }} />
+                  </div>
+                  <p style={{ color: '#475569', fontSize: '10px', margin: '4px 0 0' }}>{formatDays(safeNum(b.used))} used</p>
                 </div>
               );
             })}
           </div>
-        </div>
+        </WidgetSection>
       )}
 
       {/* Recent Applications */}
-      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: CARD_SHADOW, overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Recent Applications</h3>
-          <span style={{ color: '#94a3b8', fontSize: '12px' }}>Latest {recent.length}</span>
+          <span style={{ color: '#475569', fontSize: '12px' }}>Latest {recent.length}</span>
         </div>
 
         {recent.length === 0 ? (
@@ -243,7 +306,12 @@ export default function Dashboard() {
                 background: 'white',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: avatarColor(`${app.first_name} ${app.last_name}`), color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                    {getInitials(app.first_name, app.last_name)}
+                  </div>
                   <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', fontFamily: 'Sora' }}>{app.first_name} {app.last_name}</span>
+                </div>
                   <span style={{
                     ...STATUS_STYLES[app.status],
                     padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
@@ -282,8 +350,15 @@ export default function Dashboard() {
                   <tr key={app.id} style={{ borderTop: '1px solid #f1f5f9' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>{app.first_name} {app.last_name}</td>
-                    <td style={{ padding: '12px 22px', color: '#64748b' }}>{app.date?.split('T')[0]?.replace(/-/g, '/')}</td>
+                  <td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: avatarColor(`${app.first_name} ${app.last_name}`), color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '700', flexShrink: 0 }}>
+                        {getInitials(app.first_name, app.last_name)}
+                      </div>
+                      {app.first_name} {app.last_name}
+                    </div>
+                  </td>
+                  <td style={{ padding: '12px 22px', color: '#475569' }}>{app.date?.split('T')[0]?.replace(/-/g, '/')}</td>
                     <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.nett_salary ? `R ${parseFloat(app.nett_salary).toLocaleString()}` : '—'}</td>
                     <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}</td>
                     <td style={{ padding: '12px 22px' }}>

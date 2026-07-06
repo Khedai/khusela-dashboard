@@ -21,9 +21,9 @@ const fmtDate = (dateStr) => {
 };
 
 const STATUS_STYLES = {
-  Pending: { background: '#fffbeb', color: '#d97706' },
-  Approved: { background: '#f0fdf4', color: '#16a34a' },
-  Rejected: { background: '#fef2f2', color: '#dc2626' },
+  Pending: { background: '#fffbeb', color: '#b45309' },
+  Approved: { background: '#f0fdf4', color: '#15803d' },
+  Rejected: { background: '#fef2f2', color: '#b91c1c' },
 };
 
 function workingDays(start, end) {
@@ -37,6 +37,18 @@ function workingDays(start, end) {
   }
   return count;
 }
+
+const formatDays = (val) => {
+  const num = parseFloat(val);
+  if (isNaN(num)) return '0';
+  // Show 1 decimal if fraction exists, otherwise round to whole
+  return num % 1 === 0 ? Math.round(num).toString() : num.toFixed(1);
+};
+
+const safeNum = (val) => {
+  const n = parseFloat(val);
+  return isNaN(n) ? 0 : n;
+};
 
 export default function Leave() {
   const { user } = useAuth();
@@ -221,23 +233,23 @@ export default function Leave() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
               {[
-                { label: 'Annual', total: Math.round(reqBalance.annual_total), used: Math.round(reqBalance.annual_used), color: '#2563eb' },
-                { label: 'Sick', total: Math.round(reqBalance.sick_total), used: Math.round(reqBalance.sick_used), color: '#0891b2' },
-                { label: 'Family Resp.', total: Math.round(reqBalance.family_total), used: Math.round(reqBalance.family_used), color: '#16a34a' },
+                { label: 'Annual', total: safeNum(reqBalance?.annual_total), used: safeNum(reqBalance?.annual_used), color: '#2563eb' },
+                { label: 'Sick', total: safeNum(reqBalance?.sick_total), used: safeNum(reqBalance?.sick_used), color: '#0891b2' },
+                { label: 'Family Resp.', total: safeNum(reqBalance?.family_total), used: safeNum(reqBalance?.family_used), color: '#16a34a' },
               ].map((b, i) => {
-                const remaining = Math.round((b.total || 0) - (b.used || 0));
-                const pct = b.total ? Math.min(((b.used || 0) / b.total) * 100, 100) : 0;
+                const remaining = b.total - b.used;
+                const pct = b.total > 0 ? Math.min((b.used / b.total) * 100, 100) : 0;
                 return (
                   <div key={b.label} style={{ padding: '14px 16px', borderRight: i < 2 ? '1px solid #f1f5f9' : 'none' }}>
                     <p style={{ margin: '0 0 6px', fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{b.label}</p>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', marginBottom: '8px' }}>
-                      <span style={{ fontFamily: 'Sora', fontSize: '22px', fontWeight: '700', color: remaining <= 0 ? '#dc2626' : '#0f172a', lineHeight: 1 }}>{remaining}</span>
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>/ {b.total}</span>
+                    <span style={{ fontFamily: 'Sora', fontSize: '22px', fontWeight: '700', color: remaining <= 0 ? '#dc2626' : '#0f172a', lineHeight: 1 }}>{formatDays(remaining)}</span>
+                    <span style={{ fontSize: '11px', color: '#475569' }}>/ {formatDays(b.total)}</span>
                     </div>
                     <div style={{ height: '4px', borderRadius: '3px', background: '#f1f5f9', overflow: 'hidden' }}>
                       <div style={{ height: '100%', borderRadius: '3px', background: remaining <= 0 ? '#dc2626' : b.color, width: `${pct}%`, transition: 'width 0.4s ease' }} />
                     </div>
-                    <p style={{ margin: '5px 0 0', fontSize: '10px', color: '#94a3b8' }}>{b.used} used</p>
+                    <p style={{ margin: '5px 0 0', fontSize: '10px', color: '#475569' }}>{formatDays(b.used)} used</p>
                   </div>
                 );
               })}
@@ -377,23 +389,23 @@ export default function Leave() {
       {balance && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
           {[
-            { label: 'Annual Leave', total: Math.round(balance.annual_total), used: Math.round(balance.annual_used), color: '#2563eb' },
-            { label: 'Sick Leave', total: Math.round(balance.sick_total), used: Math.round(balance.sick_used), color: '#d97706' },
-            { label: 'Family Responsibility', total: Math.round(balance.family_total), used: Math.round(balance.family_used), color: '#16a34a' },
+            { label: 'Annual Leave', total: safeNum(balance?.annual_total), used: safeNum(balance?.annual_used), color: '#2563eb' },
+            { label: 'Sick Leave', total: safeNum(balance?.sick_total), used: safeNum(balance?.sick_used), color: '#d97706' },
+            { label: 'Family Responsibility', total: safeNum(balance?.family_total), used: safeNum(balance?.family_used), color: '#16a34a' },
           ].map(b => {
-            const remaining = Math.round(b.total - b.used);
-            const pct = b.total ? Math.min(((b.used || 0) / b.total) * 100, 100) : 0;
+            const remaining = b.total - b.used;
+            const pct = b.total > 0 ? Math.min((b.used / b.total) * 100, 100) : 0;
             return (
               <div key={b.label} style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9' }}>
                 <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>{b.label}</p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '8px' }}>
-                  <span style={{ fontFamily: 'Sora', fontSize: '28px', fontWeight: '700', color: remaining <= 0 ? '#dc2626' : '#0f172a', lineHeight: 1 }}>{remaining}</span>
-                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>/ {b.total} days</span>
+              <span style={{ fontFamily: 'Sora', fontSize: '28px', fontWeight: '700', color: remaining <= 0 ? '#dc2626' : '#0f172a', lineHeight: 1 }}>{formatDays(remaining)}</span>
+                <span style={{ color: '#475569', fontSize: '12px' }}>/ {formatDays(b.total)} days</span>
                 </div>
                 <div style={{ height: '5px', borderRadius: '3px', background: '#f1f5f9', overflow: 'hidden', marginBottom: '4px' }}>
                   <div style={{ height: '100%', borderRadius: '3px', background: remaining <= 0 ? '#dc2626' : b.color, width: `${pct}%`, transition: 'width 0.4s ease' }} />
                 </div>
-                <p style={{ color: '#94a3b8', fontSize: '11px', margin: '4px 0 0' }}>{b.used} days used</p>
+                <p style={{ color: '#475569', fontSize: '11px', margin: '4px 0 0' }}>{formatDays(b.used)} days used</p>
               </div>
             );
           })}
@@ -442,11 +454,11 @@ export default function Leave() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
                 <thead><tr>{['Employee', 'Franchise', 'Annual', 'Sick', 'Family Resp.'].map(h => <th key={h} style={S.tableHeader}>{h}</th>)}</tr></thead>
                 <tbody>{allBalances.filter(e => { if (!balanceSearch.trim()) return true; const s = balanceSearch.toLowerCase(); return `${e.first_name} ${e.last_name}`.toLowerCase().includes(s) || (e.franchise_name || '').toLowerCase().includes(s); }).map(e => {
-                  const annualLeft = (e.annual_total || 0) - (e.annual_used || 0);
-                  const sickLeft = (e.sick_total || 0) - (e.sick_used || 0);
-                  const familyLeft = (e.family_total || 0) - (e.family_used || 0);
+                  const annualLeft = safeNum(e.annual_total) - safeNum(e.annual_used);
+                  const sickLeft = safeNum(e.sick_total) - safeNum(e.sick_used);
+                  const familyLeft = safeNum(e.family_total) - safeNum(e.family_used);
                   const balCell = (left, total, color) => (
-                    <td style={S.tableCell}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ fontWeight: '700', fontSize: '14px', color: left <= 0 ? '#dc2626' : '#0f172a', fontFamily: 'Sora', minWidth: '28px' }}>{left}</span><div style={{ flex: 1, maxWidth: '80px' }}><div style={{ height: '4px', borderRadius: '2px', background: '#f1f5f9', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: '2px', background: left <= 0 ? '#dc2626' : color, width: `${total ? Math.min(((total - left) / total) * 100, 100) : 0}%`, transition: 'width 0.3s' }} /></div></div><span style={{ fontSize: '11px', color: '#94a3b8' }}>/ {total}</span></div></td>
+                    <td style={S.tableCell}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ fontWeight: '700', fontSize: '14px', color: left <= 0 ? '#dc2626' : '#0f172a', fontFamily: 'Sora', minWidth: '28px' }}>{formatDays(left)}</span><div style={{ flex: 1, maxWidth: '80px' }}><div style={{ height: '4px', borderRadius: '2px', background: '#f1f5f9', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: '2px', background: left <= 0 ? '#dc2626' : color, width: `${total > 0 ? Math.min(((total - left) / total) * 100, 100) : 0}%`, transition: 'width 0.3s' }} /></div></div><span style={{ fontSize: '11px', color: '#475569' }}>/ {formatDays(total)}</span></div></td>
                   );
                   return <tr key={e.employee_id} className="table-row"><td style={{ ...S.tableCell, fontWeight: '500' }}>{e.first_name} {e.last_name}</td><td style={{ ...S.tableCell, color: '#64748b' }}>{e.franchise_name || '—'}</td>{balCell(annualLeft, e.annual_total, '#2563eb')}{balCell(sickLeft, e.sick_total, '#0891b2')}{balCell(familyLeft, e.family_total, '#16a34a')}</tr>;
                 })}</tbody>

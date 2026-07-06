@@ -7,6 +7,18 @@ import * as S from '../utils/styles';
 import { generateApplicationForm } from '../utils/pdfGenerator';
 import Spinner from '../components/Spinner';
 
+const AVATAR_PALETTE = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2', '#ca8a04', '#dc2626'];
+
+const getInitials = (username) => {
+  return (username || '?').charAt(0).toUpperCase();
+};
+
+const avatarColor = (name) => {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+};
+
 export default function Inbox() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -171,7 +183,7 @@ export default function Inbox() {
 
       {/* ── NOTIFICATIONS ── */}
       {tab === 'notifications' && (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: S.C.cardShadow, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>
               {unreadNotifs > 0 ? `${unreadNotifs} unread` : 'All caught up'}
@@ -214,15 +226,19 @@ export default function Inbox() {
                 borderLeft: !n.is_read ? '3px solid #4f46e5' : '3px solid transparent',
                 transition: 'background 0.15s',
               }}>
+              {/* Avatar */}
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: avatarColor(n.title), color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', flexShrink: 0, marginTop: '2px' }}>
+                {getInitials(n.title?.replace(/:/g, '').trim().split(' ')[0] || 'N')}
+              </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                   <p style={{ margin: 0, fontSize: '13.5px', fontWeight: n.is_read ? '500' : '700', color: '#0f172a' }}>{n.title}</p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: '#94a3b8', fontSize: '11px' }}>{timeAgo(n.created_at)}</span>
+                    <span style={{ color: '#475569', fontSize: '11px' }}>{timeAgo(n.created_at)}</span>
                     {!n.is_read && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4f46e5' }} />}
                   </div>
                 </div>
-                <p style={{ margin: '5px 0 0', fontSize: '12.5px', color: '#64748b', lineHeight: '1.5' }}>{n.message}</p>
+                <p style={{ margin: '5px 0 0', fontSize: '12.5px', color: '#475569', lineHeight: '1.5' }}>{n.message}</p>
                 {(() => {
                   const txt = (n.title + ' ' + (n.message || '')).toLowerCase();
                   const isLeave = /leave/i.test(n.title) || /leave/i.test(n.message || '');
@@ -230,10 +246,23 @@ export default function Inbox() {
                   if (!isLeave && !isApp) return null;
                   let leaveStatus = '';
                   if (isLeave) { const statusMatch = (n.title || '').match(/—\s*(\w+)/); if (statusMatch) leaveStatus = statusMatch[1]; }
-                  const statusColors = { Pending: { bg: '#fffbeb', color: '#d97706' }, Approved: { bg: '#f0fdf4', color: '#16a34a' }, Rejected: { bg: '#fef2f2', color: '#dc2626' } };
+                  const statusColors = { Pending: { bg: '#fffbeb', color: '#b45309' }, Approved: { bg: '#f0fdf4', color: '#15803d' }, Rejected: { bg: '#fef2f2', color: '#b91c1c' } };
                   const sc = statusColors[leaveStatus] || (isLeave ? statusColors.Approved : { bg: '#eff6ff', color: '#2563eb' });
                   const label = isLeave ? (leaveStatus ? `LEAVE · ${leaveStatus}` : 'LEAVE') : 'APPLICATION';
                   return <span style={{ display: 'inline-block', marginTop: '5px', fontSize: '10px', fontWeight: '700', letterSpacing: '0.04em', padding: '2px 7px', borderRadius: '4px', background: sc.bg, color: sc.color }}>{label}</span>;
+                })()}
+                {/* Quick-action buttons for leave notifications */}
+                {(() => {
+                  const isLeavePending = /leave/i.test(n.title) && /pending|submitted/i.test(n.title);
+                  const requestIdMatch = (n.link || '').match(/request=(\d+)/);
+                  const requestId = requestIdMatch ? requestIdMatch[1] : null;
+                  if (!isLeavePending || !requestId || !isManager) return null;
+                  return (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                      <QuickActionBtn requestId={requestId} status="Approved" color="#16a34a" icon="✓" fetchAll={fetchAll} />
+                      <QuickRejectBtn requestId={requestId} fetchAll={fetchAll} />
+                    </div>
+                  );
                 })()}
               </div>
             </div>
@@ -243,7 +272,7 @@ export default function Inbox() {
 
       {/* ── MESSAGES INBOX ── */}
       {tab === 'inbox' && isManager && (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: S.C.cardShadow, overflow: 'hidden' }}>
           {selectedMessage ? (
             <MessageDetail message={selectedMessage} onBack={() => setSelectedMessage(null)} onDelete={deleteMessage} timeAgo={timeAgo} isSent={false} applications={applications} />
           ) : loading ? <Spinner dark label="Loading messages..." />
@@ -259,11 +288,14 @@ export default function Inbox() {
               }}
               onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
               onMouseLeave={e => e.currentTarget.style.background = !m.is_read ? '#f8faff' : 'white'}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: avatarColor(m.sender_username), color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', flexShrink: 0, marginTop: '2px' }}>
+                {getInitials(m.sender_username)}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
                   <span style={{ fontWeight: !m.is_read ? '700' : '500', fontSize: '13.5px', color: '#0f172a' }}>
                     @{m.sender_username}
-                    {m.sender_franchise && <span style={{ color: '#94a3b8', fontWeight: '400', fontSize: '12px', marginLeft: '6px' }}>({m.sender_franchise})</span>}
+                    {m.sender_franchise && <span style={{ color: '#475569', fontWeight: '400', fontSize: '12px', marginLeft: '6px' }}>({m.sender_franchise})</span>}
                     {m.sender_role && (
                       <span style={{
                         background: m.sender_role === 'Admin' ? '#f5f3ff' : m.sender_role === 'HR' ? '#eff6ff' : '#f0fdf4',
@@ -276,12 +308,12 @@ export default function Inbox() {
                     )}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeAgo(m.created_at)}</span>
+                    <span style={{ color: '#475569', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeAgo(m.created_at)}</span>
                     {!m.is_read && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4f46e5', flexShrink: 0 }} />}
                   </div>
                 </div>
                 {m.subject && <p style={{ margin: '0 0 2px', fontSize: '12.5px', fontWeight: '600', color: '#334155' }}>{m.subject}</p>}
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.body}</p>
+                <p style={{ margin: 0, fontSize: '12.5px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.body}</p>
                 {m.app_client_first && <span style={{ display: 'inline-block', marginTop: '4px', background: '#eff6ff', color: '#2563eb', fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px' }}>Attached: {m.app_client_first} {m.app_client_last}</span>}
               </div>
             </div>
@@ -291,7 +323,7 @@ export default function Inbox() {
 
       {/* ── SENT ── */}
       {tab === 'sent' && isManager && (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: S.C.cardShadow, overflow: 'hidden' }}>
           {selectedMessage ? (
             <MessageDetail message={selectedMessage} onBack={() => setSelectedMessage(null)} onDelete={deleteMessage} timeAgo={timeAgo} isSent={true} applications={applications} />
           ) : sentMessages.length === 0 ? <EmptyState icon="blank" title="No sent messages" subtitle="Messages you send will appear here." />
@@ -304,16 +336,19 @@ export default function Inbox() {
               }}
               onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
               onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: avatarColor(m.recipient_username), color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', flexShrink: 0, marginTop: '2px' }}>
+                {getInitials(m.recipient_username)}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
                   <span style={{ fontWeight: '500', fontSize: '13.5px', color: '#0f172a' }}>
                     To: @{m.recipient_username}
-                    {m.recipient_franchise && <span style={{ color: '#94a3b8', fontWeight: '400', fontSize: '12px', marginLeft: '6px' }}>({m.recipient_franchise})</span>}
+                    {m.recipient_franchise && <span style={{ color: '#475569', fontWeight: '400', fontSize: '12px', marginLeft: '6px' }}>({m.recipient_franchise})</span>}
                   </span>
-                  <span style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeAgo(m.created_at)}</span>
+                  <span style={{ color: '#475569', fontSize: '11px', whiteSpace: 'nowrap' }}>{timeAgo(m.created_at)}</span>
                 </div>
                 {m.subject && <p style={{ margin: '0 0 2px', fontSize: '12.5px', fontWeight: '600', color: '#334155' }}>{m.subject}</p>}
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.body}</p>
+                <p style={{ margin: 0, fontSize: '12.5px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.body}</p>
                 {m.app_client_first && <span style={{ display: 'inline-block', marginTop: '4px', background: '#eff6ff', color: '#2563eb', fontSize: '11px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px' }}>Attached: {m.app_client_first} {m.app_client_last}</span>}
               </div>
             </div>
@@ -323,7 +358,7 @@ export default function Inbox() {
 
       {/* ── COMPOSE ── */}
       {tab === 'compose' && isManager && (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: S.C.cardShadow, overflow: 'hidden' }}>
           <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9' }}>
             <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>New Message</h3>
             <p style={{ color: '#94a3b8', fontSize: '12px', margin: '4px 0 0' }}>Send to any staff member using @username</p>
@@ -449,5 +484,117 @@ function EmptyState({ icon, title, subtitle }) {
       <p style={{ color: '#0f172a', fontSize: '15px', fontWeight: '600', fontFamily: 'Sora', margin: '0 0 6px' }}>{title}</p>
       <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>{subtitle}</p>
     </div>
+  );
+}
+
+// ── Quick-action inline buttons for leave notifications ──
+function QuickActionBtn({ requestId, status, color, icon, fetchAll }) {
+  const [acting, setActing] = useState(false);
+  const handle = async (e) => {
+    e.stopPropagation();
+    if (acting) return;
+    setActing(true);
+    try {
+      await api.patch(`/leave/request/${requestId}`, { status });
+      window.dispatchEvent(new Event('refreshNotifications'));
+      window.dispatchEvent(new Event('refreshPendingCount'));
+      fetchAll?.();
+    } catch { /* ignore */ }
+    finally { setActing(false); }
+  };
+  return (
+    <button onClick={handle} disabled={acting}
+      style={{
+        background: color, border: 'none', borderRadius: '6px',
+        color: 'white', fontSize: '11px', fontWeight: '700',
+        padding: '5px 12px', cursor: acting ? 'default' : 'pointer',
+        fontFamily: 'DM Sans', opacity: acting ? 0.6 : 1,
+        display: 'flex', alignItems: 'center', gap: '4px',
+      }}>
+      {icon} {acting ? '...' : status === 'Approved' ? 'Approve' : 'Reject'}
+    </button>
+  );
+}
+
+function QuickRejectBtn({ requestId, fetchAll }) {
+  const [acting, setActing] = useState(false);
+  const [showReason, setShowReason] = useState(false);
+  const [reason, setReason] = useState('');
+
+  const handleReject = async (e) => {
+    e.stopPropagation();
+    if (acting) return;
+    setActing(true);
+    try {
+      await api.patch(`/leave/request/${requestId}`, { status: 'Rejected', rejection_reason: reason });
+      setShowReason(false); setReason('');
+      window.dispatchEvent(new Event('refreshNotifications'));
+      window.dispatchEvent(new Event('refreshPendingCount'));
+      fetchAll?.();
+    } catch { /* ignore */ }
+    finally { setActing(false); }
+  };
+
+  const handleClick = (e) => {
+    e.stopPropagation();
+    setShowReason(true);
+  };
+
+  const handleCancel = (e) => {
+    e.stopPropagation();
+    setShowReason(false);
+    setReason('');
+  };
+
+  if (showReason) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <input
+          placeholder="Reason (optional)..."
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0',
+            fontSize: '11px', fontFamily: 'DM Sans', outline: 'none',
+            width: '160px',
+          }}
+          autoFocus
+        />
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button onClick={handleReject} disabled={acting}
+            style={{
+              background: '#dc2626', border: 'none', borderRadius: '6px',
+              color: 'white', fontSize: '11px', fontWeight: '700',
+              padding: '5px 12px', cursor: acting ? 'default' : 'pointer',
+              fontFamily: 'DM Sans',
+            }}>
+            ✓ Confirm
+          </button>
+          <button onClick={handleCancel}
+            style={{
+              background: '#f1f5f9', border: 'none', borderRadius: '6px',
+              color: '#475569', fontSize: '11px', fontWeight: '600',
+              padding: '5px 12px', cursor: 'pointer',
+              fontFamily: 'DM Sans',
+            }}>
+            ✕ Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={handleClick}
+      style={{
+        background: '#dc2626', border: 'none', borderRadius: '6px',
+        color: 'white', fontSize: '11px', fontWeight: '700',
+        padding: '5px 12px', cursor: 'pointer',
+        fontFamily: 'DM Sans',
+        display: 'flex', alignItems: 'center', gap: '4px',
+      }}>
+      ✕ Reject
+    </button>
   );
 }

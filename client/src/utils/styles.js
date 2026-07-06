@@ -9,19 +9,21 @@ export const C = {
   sidebar:      '#0c1220',
   text:         '#0f172a',
   textSub:      '#64748b',
-  textMuted:    '#94a3b8',
+  textMuted:    '#475569',
   border:       '#e4e8f0',
   borderLight:  'rgba(0,0,0,0.05)',
   success:      '#10b981',
   warning:      '#f59e0b',
   danger:       '#ef4444',
+  // Soft dual-layered shadow for cards
+  cardShadow:   '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02)',
 };
 
 export const card = {
   background: C.card,
   borderRadius: '16px',
   border: `1px solid ${C.border}`,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.05)',
+  boxShadow: C.cardShadow,
   overflow: 'hidden',
 };
 
@@ -107,12 +109,12 @@ export const badge = (type) => {
     Consultant:      { background: '#d1fae5', color: '#065f46' },
     Active:          { background: '#d1fae5', color: '#065f46' },
     Inactive:        { background: '#fee2e2', color: '#991b1b' },
-    Draft:           { background: '#f1f5f9', color: '#475569' },
-    Submitted:       { background: '#e0e7ff', color: '#4338ca' },
-    'Pending Docs':  { background: '#fef3c7', color: '#92400e' },
-    Approved:        { background: '#d1fae5', color: '#065f46' },
-    Rejected:        { background: '#fee2e2', color: '#991b1b' },
-    Pending:         { background: '#fef3c7', color: '#92400e' },
+    Draft:           { background: '#f8fafc', color: '#475569' },
+    Submitted:       { background: '#eff6ff', color: '#1d4ed8' },
+    'Pending Docs':  { background: '#fffbeb', color: '#b45309' },
+    Approved:        { background: '#f0fdf4', color: '#15803d' },
+    Rejected:        { background: '#fef2f2', color: '#b91c1c' },
+    Pending:         { background: '#fffbeb', color: '#b45309' },
   };
   return {
     ...(map[type] || { background: '#f1f5f9', color: '#475569' }),

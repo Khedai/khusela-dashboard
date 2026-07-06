@@ -187,7 +187,7 @@ h3,
 }
 
 .card-hover:hover {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.09), 0 4px 8px rgba(0, 0, 0, 0.04) !important;
   transform: translateY(-2px);
 }
 
