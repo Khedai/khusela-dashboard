@@ -459,7 +459,7 @@ export default function Leave() {
         ) : viewTab === 'calendar' ? (
           <LeaveCalendar requests={allRequests} year={calYear} month={calMonth} onPrev={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }} onNext={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }} isAdmin={isAdmin} onSelect={openLeaveDetail} />
         ) : allRequests.length === 0 ? (
-          <EmptyState icon="blank" title="No leave requests yet" subtitle={isAdmin ? 'Leave requests from your team will appear here.' : 'Submit your first leave request using the button above.'} />
+          <EmptyState icon="—" title="No leave requests yet" subtitle={isAdmin ? 'Leave requests from your team will appear here.' : 'Submit your first leave request using the button above.'} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>

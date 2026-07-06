@@ -103,6 +103,7 @@ export default function Employees() {
   const [pastEmployees, setPastEmployees] = useState([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [showPast, setShowPast] = useState(false);
+  const [detailTab, setDetailTab] = useState('overview');
 
   useEffect(() => {
     fetchFranchises();
@@ -365,16 +366,42 @@ export default function Employees() {
         </div>
         {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
         {linkModalOpen && (<div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', marginBottom: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}><p style={{ margin: '0 0 8px', fontWeight: '700' }}>Link user account</p>{linkError && <p style={{ color: '#dc2626', margin: '6px 0' }}>{linkError}</p>}<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}><select value={selectedLinkUserId} onChange={e => setSelectedLinkUserId(e.target.value)} style={{ ...S.input, flex: 1 }}><option value="">— Select user —</option>{linkUsers.map(u => (<option key={u.id} value={u.id}>@{u.username} {u.role ? `(${u.role})` : ''}</option>))}</select><button onClick={handleLinkUser} disabled={linkingUser} style={{ ...S.primaryBtn, opacity: linkingUser ? 0.7 : 1 }}>{linkingUser ? 'Linking...' : 'Link'}</button><button onClick={() => { setLinkModalOpen(false); setSelectedLinkUserId(''); }} style={S.ghostBtn}>Cancel</button></div></div>)}
+
+        {/* Tab bar */}
+        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '10px', padding: '3px', gap: '2px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {['overview', 'financial', 'vault', 'leave'].map(tab => (
+            <button key={tab} onClick={() => setDetailTab(tab)}
+              style={{
+                padding: '7px 16px', borderRadius: '8px', border: 'none', fontSize: '12px', fontWeight: '600',
+                fontFamily: 'DM Sans', cursor: 'pointer', textTransform: 'capitalize',
+                background: detailTab === tab ? 'white' : 'transparent',
+                color: detailTab === tab ? '#0f172a' : '#64748b',
+                boxShadow: detailTab === tab ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                minHeight: '38px',
+              }}>
+              {tab === 'overview' ? 'Overview & Contact' : tab === 'financial' ? 'Financial & Banking' : tab === 'vault' ? 'HR Vault' : 'Leave & History'}
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Overview & Contact */}
+          {detailTab === 'overview' && <>
           <DetailSection title="Personal Details" data={[{ label: 'Title', value: selected.title }, { label: 'Full Name', value: `${selected.first_name || ''} ${selected.last_name || ''}`.trim() }, { label: 'ID Number', value: selected.id_number }, { label: 'Tax Number', value: selected.tax_number }, { label: 'Date of Birth', value: fmtDate(selected.birth_date) }, { label: 'Marital Status', value: selected.marital_status }, { label: 'Position', value: selected.job_title }, { label: 'Employment Date', value: fmtDate(selected.employment_date) }, { label: 'Franchise', value: selected.franchise_name }]} />
           <DetailSection title="Contact" data={[{ label: 'Email', value: selected.email }, { label: 'Cell', value: selected.cell }, { label: 'WhatsApp', value: selected.whatsapp }, { label: 'Home Phone', value: selected.home_phone }, { label: 'Alternate Phone', value: selected.alternate_phone }]} />
           <DetailSection title="Address" data={[{ label: 'Street', value: selected.address_street }, { label: 'City', value: selected.address_city }, { label: 'Postal Code', value: selected.postal_code }]} />
           <DetailSection title="Emergency Contact" data={[{ label: 'Name', value: `${selected.ec_title || ''} ${selected.ec_first_name || ''} ${selected.ec_last_name || ''}`.trim() }, { label: 'Relationship', value: selected.ec_relationship }, { label: 'Primary Phone', value: selected.ec_primary_phone }, { label: 'Alternate Phone', value: selected.ec_alternate_phone }, { label: 'Address', value: selected.ec_address }]} />
           <DetailSection title="Secondary Emergency Contact" data={[{ label: 'Name', value: `${selected.sec_title || ''} ${selected.sec_first_name || ''} ${selected.sec_last_name || ''}`.trim() }, { label: 'Relationship', value: selected.sec_relationship }, { label: 'Primary Phone', value: selected.sec_primary_phone }, { label: 'Alternate Phone', value: selected.sec_alternate_phone }, { label: 'Address', value: selected.sec_address }]} />
           <DetailSection title="Health" data={[{ label: 'Allergies / Health Concerns', value: selected.allergies_health_concerns || 'None' }]} />
-          <DetailSection title="Banking & Payment" data={[{ label: 'Bank', value: selected.bank_name }, { label: 'Account Name', value: selected.account_name }, { label: 'Account Number', value: selected.account_number }, { label: 'Account Type', value: selected.account_type }, { label: 'Branch Name', value: selected.branch_name }, { label: 'Branch Code', value: selected.branch_code }]} />
+          </>}
 
-          {/* Leave Overview */}
+          {/* Financial & Banking */}
+          {detailTab === 'financial' && <>
+          <DetailSection title="Banking & Payment" data={[{ label: 'Bank', value: selected.bank_name }, { label: 'Account Name', value: selected.account_name }, { label: 'Account Number', value: selected.account_number }, { label: 'Account Type', value: selected.account_type }, { label: 'Branch Name', value: selected.branch_name }, { label: 'Branch Code', value: selected.branch_code }]} />
+          </>}
+
+          {/* Leave & History */}
+          {detailTab === 'leave' && <>
           {can(user, 'leave.viewAll') && (
             <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
               <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Leave Overview</p><span style={{ color: '#94a3b8', fontSize: '11px' }}>{new Date().getFullYear()}</span></div>
@@ -382,7 +409,6 @@ export default function Employees() {
             </div>
           )}
 
-          {/* Past Leave Records */}
           {user?.role === 'Admin' && (
             <div style={{ marginTop: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}><div><h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 2px' }}>Past Leave Records</h3><p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Manual adjustments — deducted from current year balance</p></div><button onClick={() => setAddingManualLeave(v => !v)} style={{ background: addingManualLeave ? '#f1f5f9' : 'linear-gradient(135deg,#6366f1,#4f46e5)', border: 'none', borderRadius: '8px', padding: '7px 14px', color: addingManualLeave ? '#64748b' : 'white', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>{addingManualLeave ? 'Cancel' : '+ Add Entry'}</button></div>
@@ -391,7 +417,10 @@ export default function Employees() {
             </div>
           )}
 
-          {/* Document Vault */}
+          </>}
+
+          {/* HR Vault */}
+          {detailTab === 'vault' && <>
           {(user?.role === 'Admin' || selected?.user_id === user?.id) && (
             <div style={{ marginTop: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}><div><h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 2px' }}>Document Vault</h3><p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Private — visible to HR and Admin only</p></div><span style={{ background: '#fef2f2', color: '#dc2626', borderRadius: '6px', padding: '3px 10px', fontSize: '11px', fontWeight: '600' }}>Confidential</span></div>
@@ -399,7 +428,6 @@ export default function Employees() {
             </div>
           )}
 
-          {/* Written Warnings */}
           {(user?.role === 'Admin' || user?.role === 'HR') && (
             <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
               <div style={{ padding: '13px 20px', borderBottom: '1px solid #f1f5f9', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#92400e' }}>Disciplinary Records</p><p style={{ margin: '2px 0 0', fontSize: '11px', color: '#b45309' }}>Written warnings and formal notices</p></div><button onClick={() => setShowWarnForm(p => !p)} style={{ padding: '5px 14px', borderRadius: '8px', border: 'none', background: showWarnForm ? '#f1f5f9' : '#d97706', color: showWarnForm ? '#64748b' : 'white', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>{showWarnForm ? 'Cancel' : '+ Add Record'}</button></div>
@@ -408,7 +436,6 @@ export default function Employees() {
             </div>
           )}
 
-          {/* Employee Comments */}
           {(user?.role === 'Admin' || user?.role === 'HR') && (
             <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
               <div style={{ padding: '13px 20px', borderBottom: '1px solid #f1f5f9' }}><p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Comments</p><p style={{ margin: '2px 0 0', fontSize: '11px', color: '#94a3b8' }}>Internal notes visible to HR and Admin only</p></div>
@@ -416,6 +443,7 @@ export default function Employees() {
               {empNotesLoading ? <p style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading...</p> : empNotes.length === 0 ? <p style={{ padding: '14px 20px', color: '#94a3b8', fontSize: '13px', margin: 0, fontStyle: 'italic' }}>No notes yet. Add one above.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>{empNotes.map((n, i) => (<div key={n.id} style={{ padding: '12px 20px', borderTop: i > 0 ? '1px solid #f8fafc' : 'none' }}><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#e0e7ff', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>{(n.username || '?')[0].toUpperCase()}</div><span style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{n.username || 'Unknown'}</span><span style={{ padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', border: '1px solid', background: n.role === 'Admin' ? '#e0e7ff' : '#f0fdf4', color: n.role === 'Admin' ? '#6366f1' : '#16a34a', borderColor: n.role === 'Admin' ? '#c7d2fe' : '#bbf7d0' }}>{n.role}</span>{n.franchise_name && <span style={{ fontSize: '11px', color: '#94a3b8' }}>{n.franchise_name}</span>}</div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(n.created_at).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })} {new Date(n.created_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}</span>{(user?.role === 'Admin' || n.username === user?.username) && <button onClick={() => handleDeleteEmpNote(n.id)} style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }} onMouseEnter={e => e.target.style.color = '#dc2626'} onMouseLeave={e => e.target.style.color = '#cbd5e1'}>×</button>}</div></div><p style={{ margin: 0, paddingLeft: '36px', fontSize: '13.5px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{n.note}</p></div>))}</div>}
             </div>
           )}
+          </>}
         </div>
       </div>
     );
