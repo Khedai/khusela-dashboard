@@ -74,21 +74,30 @@ export default function Franchises() {
               {editing ? 'Edit Franchise' : 'New Franchise'}
             </h3>
           </div>
-          <form onSubmit={handleSubmit} style={{ padding: '20px 22px', ...S.responsiveGrid(isMobile) }}>
-            <div>
-              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Franchise Name *</label>
-              <input value={form.franchise_name} onChange={e => setForm(p => ({ ...p, franchise_name: e.target.value }))}
-                required style={S.input} />
+          <form onSubmit={handleSubmit} style={{ padding: '20px 22px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Franchise Name *</label>
+                <input value={form.franchise_name} onChange={e => setForm(p => ({ ...p, franchise_name: e.target.value }))}
+                  required style={S.input} />
+              </div>
+              <div>
+                <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Location</label>
+                <input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} style={S.input} />
+              </div>
             </div>
-            <div>
-              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>Location</label>
-              <input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} style={S.input} />
-            </div>
-            <div style={{ gridColumn: 'span 2', display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
               <button type="submit" disabled={submitting} style={S.primaryBtn}>
                 {submitting ? 'Saving...' : editing ? 'Update' : 'Create Franchise'}
               </button>
-              <button type="button" onClick={() => { setShowForm(false); setEditing(null); }} style={S.ghostBtn}>Cancel</button>
+              <button type="button" onClick={() => { setShowForm(false); setEditing(null); }} style={{
+                padding: '10px 18px', borderRadius: '8px', border: '1.5px solid #e2e8f0',
+                background: 'white', color: '#64748b', fontSize: '13.5px',
+                fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer',
+                transition: 'border-color 0.15s, color 0.15s',
+              }}>
+                Cancel
+              </button>
             </div>
           </form>
         </div>
@@ -101,27 +110,56 @@ export default function Franchises() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '14px' }}>
           {franchises.map(f => (
-            <div key={f.id} style={{ background: 'white', borderRadius: '12px', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div key={f.id} style={{
+              background: 'white', borderRadius: '14px', padding: '20px 22px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+              border: '1px solid #f1f5f9',
+              transition: 'transform 0.18s, box-shadow 0.18s',
+            }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 12px 28px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.04)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)';
+              }}>
               <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px' }}>{f.franchise_name}</h3>
               <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>{f.location || 'No location set'}</p>
-              <div style={{ display: 'flex', gap: '20px', marginBottom: '18px' }}>
-                <div>
-                  <p style={{ color: '#2563eb', fontSize: '13px', fontWeight: '600', margin: '4px 0' }}>
-                    {f.user_count} employee{f.user_count !== 1 ? 's' : ''}
+
+              {/* Stat badges */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
+                <div style={{
+                  padding: '7px 14px', borderRadius: '10px',
+                  background: '#eff6ff', border: '1px solid #bfdbfe',
+                }}>
+                  <p style={{ margin: 0, color: '#1d4ed8', fontSize: '12px', fontWeight: '700' }}>
+                    Staff: {f.user_count}
                   </p>
                 </div>
-                <div>
-                  <p style={{ color: '#16a34a', fontSize: '13px', fontWeight: '600', margin: '4px 0' }}>
-                    {f.application_count} application{f.application_count !== 1 ? 's' : ''}
+                <div style={{
+                  padding: '7px 14px', borderRadius: '10px',
+                  background: '#f0fdf4', border: '1px solid #bbf7d0',
+                }}>
+                  <p style={{ margin: 0, color: '#15803d', fontSize: '12px', fontWeight: '700' }}>
+                    Apps: {f.application_count}
                   </p>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
+
+              {/* Action buttons with horizontal divider */}
+              <div style={{ paddingTop: '14px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '14px' }}>
                 {user?.role === 'Admin' && (
-                  <button onClick={() => handleEdit(f)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>Edit</button>
+                  <button onClick={() => handleEdit(f)}
+                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>
+                    Edit
+                  </button>
                 )}
                 {user?.role === 'Admin' && (
-                  <button onClick={() => handleDelete(f.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>Delete</button>
+                  <button onClick={() => handleDelete(f.id)}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '600', padding: 0 }}>
+                    Delete
+                  </button>
                 )}
               </div>
             </div>

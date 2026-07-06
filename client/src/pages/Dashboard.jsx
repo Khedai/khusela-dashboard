@@ -7,11 +7,11 @@ import { can } from '../utils/access';
 import Spinner from '../components/Spinner';
 
 const STATUS_STYLES = {
-  Draft: { background: '#f1f5f9', color: '#64748b' },
-  Submitted: { background: '#eff6ff', color: '#2563eb' },
-  'Pending Docs': { background: '#fffbeb', color: '#d97706' },
-  Approved: { background: '#f0fdf4', color: '#16a34a' },
-  Rejected: { background: '#fef2f2', color: '#dc2626' },
+  Draft: { background: 'rgba(241,245,249,0.65)', color: '#64748b', border: '1px solid rgba(148,163,184,0.25)' },
+  Submitted: { background: 'rgba(239,246,255,0.65)', color: '#2563eb', border: '1px solid rgba(37,99,235,0.2)' },
+  'Pending Docs': { background: 'rgba(255,251,235,0.65)', color: '#d97706', border: '1px solid rgba(217,119,6,0.25)' },
+  Approved: { background: 'rgba(240,253,244,0.65)', color: '#16a34a', border: '1px solid rgba(22,163,74,0.2)' },
+  Rejected: { background: 'rgba(254,242,242,0.65)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.25)' },
 };
 
 const CARDS = [
@@ -38,10 +38,8 @@ export default function Dashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Consultants always see their franchise only — no showAll for them
       const useFilter = !can(user, 'dashboard.viewAll') || !showAll;
 
-      // Build URL — always fetch all records for dashboard stats (no pagination)
       const appsUrl  = useFilter && user?.franchise_id
         ? `/applications?franchise_id=${user.franchise_id}&limit=1000`
         : '/applications?limit=1000';
@@ -53,7 +51,6 @@ export default function Dashboard() {
         api.get(appsUrl),
         can(user, 'dashboard.employeeCount') ? api.get(empsUrl) : Promise.resolve({ data: { data: [] } })
       ]);
-      // Both endpoints now return { data: [...], pagination: {...} }
       const apps = Array.isArray(appsRes.data) ? appsRes.data : (appsRes.data.data ?? []);
       const emps = Array.isArray(empsRes.data) ? empsRes.data : (empsRes.data.data ?? []);
       setStats({
@@ -135,13 +132,24 @@ export default function Dashboard() {
             key={card.key}
             onClick={() => card.key !== 'total' && navigate(`/applications?status=${encodeURIComponent(card.label)}`)}
             style={{
-              background: 'white', borderRadius: '10px', padding: isMobile ? '14px' : '16px 18px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: `3px solid ${card.color}`,
+              background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '16px 18px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+              border: '1px solid #f1f5f9',
               cursor: card.key !== 'total' ? 'pointer' : 'default',
-              transition: 'transform 0.12s, box-shadow 0.12s',
+              transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s',
             }}
-            onMouseEnter={e => { if (card.key !== 'total') { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; } }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)'; }}
+            onMouseEnter={e => {
+              if (card.key !== 'total') {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = '0 12px 28px rgba(0,0,0,0.09), 0 4px 8px rgba(0,0,0,0.04)';
+                e.currentTarget.style.borderColor = card.color + '30';
+              }
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)';
+              e.currentTarget.style.borderColor = '#f1f5f9';
+            }}
           >
             <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
               {card.label}
@@ -153,8 +161,9 @@ export default function Dashboard() {
         ))}
         {user?.role !== 'Consultant' && (
           <div style={{
-            background: 'white', borderRadius: '10px', padding: isMobile ? '14px' : '16px 18px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: '3px solid #0891b2',
+            background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '16px 18px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+            border: '1px solid #f1f5f9',
           }}>
             <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
               Employees
@@ -180,8 +189,9 @@ export default function Dashboard() {
               const remaining = b.total - b.used;
               return (
                 <div key={b.label} style={{
-                  background: 'white', borderRadius: '10px', padding: '14px 16px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderTop: `3px solid ${b.color}`,
+                  background: 'white', borderRadius: '12px', padding: '14px 16px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+                  border: '1px solid #f1f5f9',
                 }}>
                   <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
                     {b.label}
@@ -200,7 +210,7 @@ export default function Dashboard() {
       )}
 
       {/* Recent Applications */}
-      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Recent Applications</h3>
           <span style={{ color: '#94a3b8', fontSize: '12px' }}>Latest {recent.length}</span>
@@ -211,17 +221,29 @@ export default function Dashboard() {
         ) : isMobile ? (
           // Mobile: stacked cards instead of table
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {recent.map(app => (
-              <div key={app.id} style={{ padding: '14px 18px', borderTop: '1px solid #f1f5f9' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: '600', color: '#0f172a', fontSize: '14px' }}>{app.first_name} {app.last_name}</span>
-                  <span style={{ ...STATUS_STYLES[app.status], padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>
+            {recent.map((app, idx) => (
+              <div key={app.id} style={{
+                padding: '16px 18px',
+                borderBottom: idx < recent.length - 1 ? '1px solid #f1f5f9' : 'none',
+                background: 'white',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', fontFamily: 'Sora' }}>{app.first_name} {app.last_name}</span>
+                  <span style={{
+                    ...STATUS_STYLES[app.status],
+                    padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700',
+                    border: STATUS_STYLES[app.status].border,
+                  }}>
                     {app.status}
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#64748b' }}>
+                <div style={{ display: 'flex', gap: '20px', fontSize: '12px', color: '#64748b', alignItems: 'center' }}>
                   <span>{app.date?.split('T')[0]?.replace(/-/g, '/')}</span>
-                  {app.nett_salary && <span>R {parseFloat(app.nett_salary).toLocaleString()}</span>}
+                  {app.nett_salary && (
+                    <span style={{ fontWeight: '600', color: '#0f172a' }}>
+                      R {parseFloat(app.nett_salary).toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -250,7 +272,12 @@ export default function Dashboard() {
                     <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.nett_salary ? `R ${parseFloat(app.nett_salary).toLocaleString()}` : '—'}</td>
                     <td style={{ padding: '12px 22px', textAlign: 'right' }}>{app.total_expenses ? `R ${parseFloat(app.total_expenses).toLocaleString()}` : '—'}</td>
                     <td style={{ padding: '12px 22px' }}>
-                      <span style={{ ...STATUS_STYLES[app.status], padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>
+                      <span style={{
+                        ...STATUS_STYLES[app.status],
+                        background: STATUS_STYLES[app.status].background,
+                        padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
+                        border: STATUS_STYLES[app.status].border,
+                      }}>
                         {app.status}
                       </span>
                     </td>
@@ -286,24 +313,29 @@ function UnassignedWarning() {
 
   return (
     <div style={{
-      padding: '12px 16px', borderRadius: '10px', marginBottom: '16px',
-      background: '#fffbeb', border: '1px solid #fde68a',
+      padding: '14px 18px', borderRadius: '12px', marginBottom: '16px',
+      background: '#fff9db', border: '1px solid #ffe066',
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      flexWrap: 'wrap', gap: '8px',
+      flexWrap: 'wrap', gap: '10px', boxShadow: '0 1px 6px rgba(255,224,102,0.18)',
     }}>
       <div>
-        <p style={{ color: '#d97706', fontSize: '13px', fontWeight: '600', margin: '0 0 2px' }}>
+        <p style={{ color: '#b45309', fontSize: '13px', fontWeight: '700', margin: '0 0 3px' }}>
           Unassigned Records
         </p>
-        <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>
+        <p style={{ color: '#92400e', fontSize: '12px', margin: 0, lineHeight: '1.5' }}>
           {counts.employees > 0 && `${counts.employees} employee${counts.employees > 1 ? 's' : ''}`}
           {counts.employees > 0 && counts.applications > 0 && ' · '}
           {counts.applications > 0 && `${counts.applications} application${counts.applications > 1 ? 's' : ''}`}
           {' '}not assigned to any franchise.
         </p>
       </div>
-      <a href="/employees" style={{ color: '#d97706', fontSize: '12px', fontWeight: '600', textDecoration: 'none' }}>
-        Fix in Employees →
+      <a href="/employees" style={{
+        color: '#b45309', fontSize: '12px', fontWeight: '700', textDecoration: 'none',
+        padding: '7px 16px', borderRadius: '8px', background: 'white',
+        border: '1px solid #fcd34d', transition: 'background 0.15s',
+        whiteSpace: 'nowrap',
+      }}>
+        Fix in Employees &rarr;
       </a>
     </div>
   );

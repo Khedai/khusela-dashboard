@@ -35,7 +35,6 @@ const getSteps = (f) => {
   return s;
 };
 
-// ── Validation rules ──────────────────────────────────────
 const SA_ID_REGEX = /^\d{13}$/;
 const PHONE_REGEX = /^(\+27|0)[6-8][0-9]{8}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -82,8 +81,6 @@ function validateStep(step, form, creditors) {
   }
 
   if (step === 3) {
-    // Step 3 is either Banking (MED/DRR) or Creditors (Debt Review).
-    // Only validate creditors when we actually show the creditors UI.
     if (!(form.is_med || form.is_drr)) {
       creditors.forEach((c, i) => {
         if (!c.creditor_name.trim()) errs[`creditor_name_${i}`] = 'Creditor name is required.';
@@ -98,6 +95,13 @@ function validateStep(step, form, creditors) {
   return errs;
 }
 
+// ── Wizard step color constants (Neutral Gray → Indigo Blue → Emerald Green) ──
+const STEP_COLORS = {
+  inactive: '#cbd5e1',
+  active: '#4f46e5',
+  completed: '#10b981',
+};
+
 export default function Applications() {
   const { user, employeeId, franchise } = useAuth();
   const location = useLocation();
@@ -107,12 +111,12 @@ export default function Applications() {
   const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter]   = useState(() => new URLSearchParams(location.search).get('status') || '');
-  const [typeFilter, setTypeFilter]       = useState('');   // '' | 'med' | 'dreview' | 'drr'
+  const [typeFilter, setTypeFilter]       = useState('');
   const [dateFrom, setDateFrom]           = useState('');
   const [dateTo, setDateTo]               = useState('');
   const [consultantFilter, setConsultantFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('list'); // 'list' | 'form' | 'detail'
+  const [view, setView] = useState('list');
   const [selectedApp, setSelectedApp] = useState(null);
   const [step, setStep] = useState(0);
   const [page, setPage] = useState(1);
@@ -130,10 +134,9 @@ export default function Applications() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState('');
-  const [viewingId, setViewingId] = useState(null);       // which row's View btn is loading
+  const [viewingId, setViewingId] = useState(null);
   const [isFormDirty, setIsFormDirty] = useState(false);
 
-  // ── Bulk selection ────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkUpdating, setBulkUpdating] = useState(false);
@@ -162,8 +165,7 @@ export default function Applications() {
     } finally { setBulkUpdating(false); }
   };
 
-  // ── Inline notes panel (list view) ────────────────────────
-  const [notesPanel, setNotesPanel] = useState(null);   // { appId, appName }
+  const [notesPanel, setNotesPanel] = useState(null);
   const [panelNotes, setPanelNotes] = useState([]);
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelNote, setPanelNote] = useState('');
@@ -205,7 +207,6 @@ export default function Applications() {
   useEffect(() => { fetchFranchises(); fetchEmployees(); }, [user]);
   useEffect(() => { setShowAll(can(user, 'applications.viewAll')); }, [user]);
 
-  // Reset to page 1 when filter changes
   useEffect(() => {
     setPage(1);
     fetchApplications(1);
@@ -223,7 +224,7 @@ export default function Applications() {
   const fetchEmployees = async () => {
     if (user?.role === 'Admin') {
       try {
-        const res = await api.get('/employees?limit=1000'); // get all employees for dropdown
+        const res = await api.get('/employees?limit=1000');
         setEmployees(res.data.data ? res.data.data : res.data);
       } catch {}
     }
@@ -286,7 +287,6 @@ export default function Applications() {
     setEditSaving(true); setError('');
     try {
       await api.patch(`/applications/${selectedApp.application.id}`, editApp);
-      // Refresh the detail view
       const res = await api.get(`/applications/${selectedApp.application.id}`);
       setSelectedApp(res.data.application ? res.data : { application: res.data, creditors: selectedApp.creditors });
       fetchApplications(page);
@@ -373,7 +373,6 @@ export default function Applications() {
     try {
       await api.post('/applications', {
         ...form,
-        // Only persist creditors when Debt Review step is active.
         creditors: (form.is_med || form.is_drr) ? [] : creditors,
         consultant_id: employeeId || undefined,
       });
@@ -426,8 +425,7 @@ export default function Applications() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-          {/* Client Details */}
-          <EditSection title="Client Details">
+          <EditSection title="Client Personal Profile">
             <EditGrid>
               <EditField label="First Name" value={editApp.first_name} onChange={v => setEditApp(p => ({ ...p, first_name: v }))} />
               <EditField label="Last Name" value={editApp.last_name} onChange={v => setEditApp(p => ({ ...p, last_name: v }))} />
@@ -441,8 +439,7 @@ export default function Applications() {
             </EditGrid>
           </EditSection>
 
-          {/* Income */}
-          <EditSection title="Income">
+          <EditSection title="Monthly Income Statement">
             <EditGrid>
               <EditField label="Total Monthly Salary (Before Deductions)" value={editApp.gross_salary} onChange={v => setEditApp(p => ({ ...p, gross_salary: v }))} type="number" />
               <EditField label="Take-Home Pay (After Deductions)" value={editApp.nett_salary} onChange={v => setEditApp(p => ({ ...p, nett_salary: v }))} type="number" />
@@ -450,7 +447,6 @@ export default function Applications() {
             </EditGrid>
           </EditSection>
 
-          {/* Expenses */}
           <EditSection title="Monthly Expenses">
             <EditGrid>
               {[
@@ -463,7 +459,6 @@ export default function Applications() {
             </EditGrid>
           </EditSection>
 
-          {/* Application Type */}
           <EditSection title="Application Type">
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', padding: '4px 0' }}>
               {[['is_med', 'MED (Debt Mediation)'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR (Debt Removal)']].map(([key, label]) => (
@@ -475,8 +470,7 @@ export default function Applications() {
             </div>
           </EditSection>
 
-          {/* Banking */}
-          <EditSection title="Banking & Debit Order">
+          <EditSection title="Assigned Bank Details">
             <EditGrid>
               <EditField label="Bank" value={editApp.bank} onChange={v => setEditApp(p => ({ ...p, bank: v }))} />
               <EditField label="Account Number" value={editApp.account_no} onChange={v => setEditApp(p => ({ ...p, account_no: v }))} />
@@ -514,7 +508,7 @@ export default function Applications() {
       <div style={{ maxWidth: '800px' }}>
         <BackBtn onClick={() => setView('list')} />
         <div style={S.card}>
-              <div style={{ padding: '22px 26px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '22px 26px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2 style={{ ...S.pageTitle, fontSize: '18px' }}>{a.first_name} {a.last_name}</h2>
               <p style={{ color: '#64748b', fontSize: '13px', margin: '3px 0 0' }}>
@@ -538,45 +532,53 @@ export default function Applications() {
           </div>
           <div style={{ padding: '24px 26px' }}>
 
-            <DetailSection title="Application Type">
+            <DetailSectionCard title="Application Type">
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', gridColumn: 'span 2' }}>
                 {[['is_med', 'MED (Debt Mediation)'], ['is_dreview', 'Debt Review'], ['is_drr', 'DRR (Debt Removal)']].filter(([k]) => a[k]).map(([k, label]) => (
                   <span key={k} style={{ ...S.badge('Submitted'), background: '#eff6ff', color: '#2563eb' }}>{label}</span>
                 ))}
                 {a.other_type && <span style={S.badge('Submitted')}>{a.other_type}</span>}
               </div>
-            </DetailSection>
+            </DetailSectionCard>
 
-            <DetailSection title="Client Details">
-              <DR label="ID Number" value={a.client_id_number} />
-              <DR label="Cell" value={a.cell} />
-              <DR label="WhatsApp" value={a.client_whatsapp} />
-              <DR label="Email" value={a.client_email} />
-              <DR label="Employer" value={a.employer} />
-              <DR label="Marital Status" value={a.client_marital_status} />
-            </DetailSection>
+            <DetailSectionCard title="Client Personal Profile">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
+                <DR label="ID Number" value={a.client_id_number} />
+                <DR label="Cell" value={a.cell} />
+                <DR label="WhatsApp" value={a.client_whatsapp} />
+                <DR label="Email" value={a.client_email} />
+                <DR label="Employer" value={a.employer} />
+                <DR label="Marital Status" value={a.client_marital_status} />
+              </div>
+            </DetailSectionCard>
 
-            <DetailSection title="Financials">
-              <DR label="Total Monthly Salary" value={a.gross_salary && `R ${parseFloat(a.gross_salary).toLocaleString()}`} />
-              <DR label="Take-Home Pay" value={a.nett_salary && `R ${parseFloat(a.nett_salary).toLocaleString()}`} />
-              <DR label="Spouse / Partner Income" value={a.spouse_salary && `R ${parseFloat(a.spouse_salary).toLocaleString()}`} />
-              <DR label="Total Expenses" value={a.total_expenses && `R ${parseFloat(a.total_expenses).toLocaleString()}`} />
-              <DR label="Debit Order Amount" value={a.debit_order_amount && `R ${parseFloat(a.debit_order_amount).toLocaleString()}`} />
-              <DR label="Debit Order Date" value={a.debit_order_date} />
-            </DetailSection>
+            <DetailSectionCard title="Monthly Income Statement">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
+                <DR label="Total Monthly Salary" value={a.gross_salary && `R ${parseFloat(a.gross_salary).toLocaleString()}`} />
+                <DR label="Take-Home Pay" value={a.nett_salary && `R ${parseFloat(a.nett_salary).toLocaleString()}`} />
+                <DR label="Spouse / Partner Income" value={a.spouse_salary && `R ${parseFloat(a.spouse_salary).toLocaleString()}`} />
+                <DR label="Total Expenses" value={a.total_expenses && `R ${parseFloat(a.total_expenses).toLocaleString()}`} />
+                <DR label="Debit Order Amount" value={a.debit_order_amount && `R ${parseFloat(a.debit_order_amount).toLocaleString()}`} />
+                <DR label="Debit Order Date" value={a.debit_order_date} />
+              </div>
+            </DetailSectionCard>
 
-            <DetailSection title="Banking">
-              <DR label="Bank" value={a.bank} />
-              <DR label="Account No" value={a.account_no} />
-              <DR label="Account Type" value={a.account_type} />
-              <DR label="Debt Review Status" value={a.debt_review_status} />
-            </DetailSection>
+            <DetailSectionCard title="Assigned Bank Details">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
+                <DR label="Bank" value={a.bank} />
+                <DR label="Account No" value={a.account_no} />
+                <DR label="Account Type" value={a.account_type} />
+                <DR label="Debt Review Status" value={a.debt_review_status} />
+              </div>
+            </DetailSectionCard>
 
-            <DetailSection title="Documents Received">
-              <DR label="ID Copy" value={a.has_id_copy ? 'Yes' : 'No'} highlight={a.has_id_copy} />
-              <DR label="Payslip" value={a.has_payslip ? 'Yes' : 'No'} highlight={a.has_payslip} />
-              <DR label="Proof of Address" value={a.has_proof_of_address ? 'Yes' : 'No'} highlight={a.has_proof_of_address} />
-            </DetailSection>
+            <DetailSectionCard title="Supporting Documents Checklist">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
+                <DR label="ID Copy" value={a.has_id_copy ? 'Yes' : 'No'} highlight={a.has_id_copy} />
+                <DR label="Payslip" value={a.has_payslip ? 'Yes' : 'No'} highlight={a.has_payslip} />
+                <DR label="Proof of Address" value={a.has_proof_of_address ? 'Yes' : 'No'} highlight={a.has_proof_of_address} />
+              </div>
+            </DetailSectionCard>
 
             <div style={{ marginTop: '8px' }}>
               <DocumentUpload applicationId={a.id} onUploadComplete={() => {
@@ -586,7 +588,7 @@ export default function Applications() {
               }} />
             </div>
 
-            {/* ── NOTES / COMMENTS ── */}
+            {/* ── INTERNAL CONSULTATION FEED ── */}
             <div style={{
               background: 'white', borderRadius: '12px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
@@ -595,10 +597,10 @@ export default function Applications() {
               <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px' }}>
-                    Notes
+                    Consultation Feed
                   </h3>
                   <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>
-                    Internal notes visible to HR and Admin only
+                    Internal team discussion — visible to Admin, HR & Consultants
                   </p>
                 </div>
                 {notes.length > 0 && (
@@ -612,7 +614,6 @@ export default function Applications() {
                 )}
               </div>
 
-              {/* Compose new note */}
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #f8fafc' }}>
                 <textarea
                   value={newNote}
@@ -620,7 +621,7 @@ export default function Applications() {
                   onKeyDown={e => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handlePostNote();
                   }}
-                  placeholder="Add a note... (Ctrl+Enter to post)"
+                  placeholder="Type a consultation note... (Ctrl+Enter to send)"
                   rows={3}
                   style={{
                     width: '100%', padding: '10px 12px',
@@ -633,29 +634,28 @@ export default function Applications() {
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
                   <span style={{ color: '#94a3b8', fontSize: '11px' }}>
-                    Ctrl+Enter to post quickly
+                    Ctrl+Enter to send
                   </span>
                   <button
                     onClick={handlePostNote}
                     disabled={postingNote || !newNote.trim()}
                     style={{
                       padding: '7px 18px', borderRadius: '8px', border: 'none',
-                      background: newNote.trim() ? '#0f172a' : '#f1f5f9',
+                      background: newNote.trim() ? '#4f46e5' : '#f1f5f9',
                       color: newNote.trim() ? 'white' : '#94a3b8',
                       fontSize: '12px', fontWeight: '600',
                       fontFamily: 'DM Sans', cursor: newNote.trim() ? 'pointer' : 'default',
                       opacity: postingNote ? 0.7 : 1,
                     }}
                   >
-                    {postingNote ? 'Posting...' : 'Post Note'}
+                    {postingNote ? 'Sending...' : 'Send'}
                   </button>
                 </div>
               </div>
 
-              {/* Notes list */}
               {notes.length === 0 ? (
                 <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                  No notes yet. Add one above.
+                  No consultation notes yet. Start the conversation.
                 </div>
               ) : (
                 <div>
@@ -676,12 +676,12 @@ export default function Applications() {
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {/* Avatar */}
                             <div style={{
-                              width: '28px', height: '28px', borderRadius: '50%',
+                              width: '30px', height: '30px', borderRadius: '50%',
                               background: rc.bg, color: rc.color,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '11px', fontWeight: '700', flexShrink: 0,
+                              fontSize: '12px', fontWeight: '700', flexShrink: 0,
+                              border: `2px solid ${rc.color}30`,
                             }}>
                               {note.username?.charAt(0).toUpperCase()}
                             </div>
@@ -690,8 +690,9 @@ export default function Applications() {
                                 @{note.username}
                               </span>
                               <span style={{
-                                ...rc, padding: '1px 7px', borderRadius: '4px',
-                                fontSize: '10px', fontWeight: '600', marginLeft: '6px',
+                                background: rc.bg, color: rc.color, padding: '2px 8px', borderRadius: '10px',
+                                fontSize: '10px', fontWeight: '700', marginLeft: '6px',
+                                border: `1px solid ${rc.color}30`,
                               }}>
                                 {note.role}
                               </span>
@@ -729,7 +730,7 @@ export default function Applications() {
                         <p style={{
                           margin: 0, fontSize: '13.5px', color: '#334155',
                           lineHeight: '1.6', whiteSpace: 'pre-wrap',
-                          paddingLeft: '36px',
+                          paddingLeft: '38px',
                         }}>
                           {note.note}
                         </p>
@@ -855,7 +856,6 @@ export default function Applications() {
           </div>
         )}
 
-        {/* Delete Application */}
         {can(user, 'applications.delete') && (
           <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #fee2e2' }}>
             <button
@@ -885,25 +885,50 @@ export default function Applications() {
       <div style={{ maxWidth: '800px' }}>
         <BackBtn onClick={handleCancelForm} />
 
-        {/* Step indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', gap: '4px' }}>
-          {STEPS.map((s, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <div style={{
-                width: '26px', height: '26px', borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '11px', fontWeight: '700',
-                background: i === step ? '#2563eb' : i < step ? '#16a34a' : '#f1f5f9',
-                color: i <= step ? 'white' : '#94a3b8',
-              }}>
-                {i < step ? '✓' : i + 1}
+        {/* Circular progress step indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', gap: 0, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {STEPS.map((s, i) => {
+            const isActive = i === step;
+            const isCompleted = i < step;
+            const circleColor = isCompleted ? STEP_COLORS.completed : isActive ? STEP_COLORS.active : STEP_COLORS.inactive;
+            const bgColor = isCompleted ? '#ecfdf5' : isActive ? '#eef2ff' : '#f8fafc';
+
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
+                {/* Connector line */}
+                {i > 0 && (
+                  <div style={{
+                    width: '32px', height: '2px',
+                    background: i <= step ? '#4f46e5' : '#e2e8f0',
+                    margin: '0 2px', borderRadius: '1px',
+                    transition: 'background 0.3s',
+                  }} />
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '13px', fontWeight: '700',
+                    background: bgColor,
+                    color: circleColor,
+                    border: `2px solid ${circleColor}`,
+                    transition: 'all 0.25s',
+                    boxShadow: isActive ? `0 0 0 4px ${circleColor}20` : 'none',
+                  }}>
+                    {isCompleted ? '✓' : i + 1}
+                  </div>
+                  <span style={{
+                    fontSize: '11px', fontWeight: isActive ? '700' : '500',
+                    color: isActive ? '#4f46e5' : isCompleted ? '#10b981' : '#94a3b8',
+                    textAlign: 'center', maxWidth: '70px', lineHeight: '1.3',
+                    transition: 'color 0.25s',
+                  }}>
+                    {s}
+                  </span>
+                </div>
               </div>
-              <span style={{ fontSize: '12px', fontWeight: i === step ? '600' : '400', color: i === step ? '#2563eb' : '#94a3b8', marginRight: '4px' }}>
-                {s}
-              </span>
-              {i < STEPS.length - 1 && <div style={{ width: '20px', height: '1px', background: '#e2e8f0', marginRight: '4px' }} />}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {error && (
@@ -921,11 +946,10 @@ export default function Applications() {
 
           <div style={{ padding: '24px 26px' }}>
 
-            {/* Step 1 — Call Info */}
+            {/* Step 0 — Call Info */}
             {step === 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
-                  {/* Consultant field */}
                   <div>
                     <label style={{ display: 'block', color: fieldErrors.consultant_id ? '#dc2626' : '#64748b', fontSize: '12px', marginBottom: '5px' }}>
                       Consultant
@@ -951,7 +975,6 @@ export default function Applications() {
                     )}
                   </div>
 
-                  {/* Franchise field */}
                   <div>
                     <label style={{ display: 'block', color: fieldErrors.franchise_id ? '#dc2626' : '#64748b', fontSize: '12px', marginBottom: '5px' }}>
                       Franchise / Office
@@ -1005,7 +1028,7 @@ export default function Applications() {
               </div>
             )}
 
-            {/* Step 2 — Applicant */}
+            {/* Step 1 — Applicant */}
             {step === 1 && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <WField label="First Name *" name="client_first_name" value={form.client_first_name} onChange={handleChange} error={fieldErrors.client_first_name} />
@@ -1023,7 +1046,7 @@ export default function Applications() {
               </div>
             )}
 
-            {/* Step 3 — Financials */}
+            {/* Step 2 — Financials */}
             {step === 2 && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <WField label="Total Monthly Salary (Before Deductions) *" name="gross_salary" value={form.gross_salary} onChange={handleChange} type="number" error={fieldErrors.gross_salary} placeholder="0.00" />
@@ -1065,11 +1088,10 @@ export default function Applications() {
               </div>
             )}
 
-            {/* Step 4 — Creditors / Banking */}
+            {/* Step 3 — Creditors / Banking */}
             {step === 3 && (
               <div>
                 {(form.is_med || form.is_drr) ? (
-                  /* MED / DRR — banking details only */
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                     <div style={{ gridColumn: 'span 2', padding: '10px 14px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
                       <p style={{ margin: 0, color: '#1d4ed8', fontSize: '12.5px', fontWeight: '600' }}>
@@ -1099,7 +1121,6 @@ export default function Applications() {
                     <WField label="Debit Order Amount" name="debit_order_amount" value={form.debit_order_amount} onChange={handleChange} type="number" placeholder="0.00" />
                   </div>
                 ) : (
-                  /* Debt Review — full creditors list */
                   <>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {creditors.map((c, i) => (
@@ -1139,7 +1160,7 @@ export default function Applications() {
               </div>
             )}
 
-            {/* Step 5 — Documents */}
+            {/* Step 4 — Documents */}
             {step === 4 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <p style={{ color: '#64748b', fontSize: '13.5px', marginBottom: '8px' }}>
@@ -1170,17 +1191,16 @@ export default function Applications() {
             )}
           </div>
 
-          {/* Navigation */}
           <div style={{ padding: '16px 26px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between' }}>
             <button onClick={() => { setStep(s => s - 1); setFieldErrors({}); setError(''); }} disabled={step === 0}
               style={{ ...S.ghostBtn, opacity: step === 0 ? 0.4 : 1 }}>
               ← Previous
             </button>
             {step < STEPS.length - 1 ? (
-              <button onClick={handleNext} style={S.primaryBtn}>Next →</button>
+              <button onClick={handleNext} style={{ ...S.primaryBtn, background: 'linear-gradient(135deg, #4f46e5, #4338ca)' }}>Next →</button>
             ) : (
               <button onClick={handleSubmit} disabled={submitting}
-                style={{ ...S.primaryBtn, background: 'linear-gradient(135deg, #16a34a, #15803d)', boxShadow: '0 2px 8px rgba(22,163,74,0.25)', opacity: submitting ? 0.7 : 1 }}>
+                style={{ ...S.primaryBtn, background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 2px 8px rgba(16,185,129,0.25)', opacity: submitting ? 0.7 : 1 }}>
                 {submitting ? 'Submitting...' : 'Submit Application'}
               </button>
             )}
@@ -1248,7 +1268,6 @@ export default function Applications() {
 
       <div style={S.card}>
         <div style={{ padding: '12px 26px 0 26px' }}>
-          {/* Row 1: search + status pills */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
             <input
               type="text"
@@ -1272,9 +1291,7 @@ export default function Applications() {
             </div>
           </div>
 
-          {/* Row 2: type + date range + consultant + clear */}
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', paddingBottom: '12px' }}>
-            {/* Type filter */}
             <select
               value={typeFilter}
               onChange={e => setTypeFilter(e.target.value)}
@@ -1286,7 +1303,6 @@ export default function Applications() {
               <option value="drr">DRR</option>
             </select>
 
-            {/* Date range */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <div style={{ width: '148px' }}>
                 <DatePicker value={dateFrom} onChange={setDateFrom} placeholder="From" compact />
@@ -1297,7 +1313,6 @@ export default function Applications() {
               </div>
             </div>
 
-            {/* Consultant filter — Admin / HR only */}
             {can(user, 'applications.viewAll') && employees.length > 0 && (
               <select
                 value={consultantFilter}
@@ -1311,7 +1326,6 @@ export default function Applications() {
               </select>
             )}
 
-            {/* Clear all filters */}
             {activeFilterCount > 0 && (
               <button
                 onClick={() => { setTypeFilter(''); setDateFrom(''); setDateTo(''); setConsultantFilter(''); }}
@@ -1322,7 +1336,6 @@ export default function Applications() {
             )}
           </div>
         </div>
-        {/* ── Bulk action bar ── */}
         {can(user, 'applications.viewAll') && selectedIds.size > 0 && (
           <div style={{ margin: '0 26px 12px', padding: '10px 16px', background: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '13px', fontWeight: '600', color: '#1d4ed8' }}>
@@ -1355,7 +1368,7 @@ export default function Applications() {
           <Spinner size="lg" dark label="Loading applications..." />
         ) : applications.length === 0 ? (
           <EmptyState
-            icon="📋"
+            icon="blank"
             title="No applications yet"
             subtitle="Start by creating your first client application."
             action="+ New Application"
@@ -1415,7 +1428,6 @@ export default function Applications() {
                         style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: viewingId === app.id ? 'default' : 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                         {viewingId === app.id ? <><Spinner size="sm" dark inline /> Opening...</> : 'View'}
                       </button>
-                      {/* Notes badge */}
                       <div style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
                         <button
                           onClick={() => openNotesPanel(app)}
@@ -1449,17 +1461,15 @@ export default function Applications() {
         )}
       </div>
 
-      {/* ── NOTES PANEL MODAL ── */}
       {notesPanel && (
         <div
           onClick={() => setNotesPanel(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(3px)' }}
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ background: 'white', borderRadius: '14px', width: '100%', maxWidth: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}
+            style={{ background: 'white', borderRadius: '14px', width: '100%', maxWidth: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}
           >
-            {/* Header */}
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <div>
                 <h3 style={{ fontFamily: 'Sora', fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Notes</h3>
@@ -1468,7 +1478,6 @@ export default function Applications() {
               <button onClick={() => setNotesPanel(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px', fontFamily: 'DM Sans' }}>×</button>
             </div>
 
-            {/* Notes list */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {panelLoading ? (
                 <p style={{ padding: '32px', color: '#94a3b8', fontSize: '13px', textAlign: 'center', margin: 0 }}>Loading...</p>
@@ -1479,17 +1488,17 @@ export default function Applications() {
                 return (
                   <div key={note.id} style={{ padding: '14px 20px', borderTop: i > 0 ? '1px solid #f8fafc' : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '7px', flexWrap: 'wrap' }}>
-                      <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: rc.bg, color: rc.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0, border: `2px solid ${rc.color}30` }}>
                         {note.username?.charAt(0).toUpperCase()}
                       </div>
                       <span style={{ fontWeight: '600', fontSize: '12.5px', color: '#0f172a' }}>@{note.username}</span>
-                      <span style={{ background: rc.bg, color: rc.color, padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>{note.role}</span>
+                      <span style={{ background: rc.bg, color: rc.color, padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', border: `1px solid ${rc.color}30` }}>{note.role}</span>
                       {note.franchise_name && <span style={{ color: '#94a3b8', fontSize: '11px' }}>· {note.franchise_name}</span>}
                       <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: 'auto' }}>
                         {new Date(note.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6', paddingLeft: '34px', whiteSpace: 'pre-wrap' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6', paddingLeft: '36px', whiteSpace: 'pre-wrap' }}>
                       {note.note}
                     </p>
                   </div>
@@ -1497,7 +1506,6 @@ export default function Applications() {
               })}
             </div>
 
-            {/* Add note */}
             <div style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', background: '#fafafa', flexShrink: 0 }}>
               <textarea
                 value={panelNote}
@@ -1512,7 +1520,7 @@ export default function Applications() {
                 <button
                   onClick={postPanelNote}
                   disabled={panelPosting || !panelNote.trim()}
-                  style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: panelNote.trim() ? '#0f172a' : '#f1f5f9', color: panelNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: panelNote.trim() ? 'pointer' : 'default', opacity: panelPosting ? 0.7 : 1 }}
+                  style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: panelNote.trim() ? '#4f46e5' : '#f1f5f9', color: panelNote.trim() ? 'white' : '#94a3b8', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: panelNote.trim() ? 'pointer' : 'default', opacity: panelPosting ? 0.7 : 1 }}
                 >
                   {panelPosting ? 'Posting...' : 'Post Note'}
                 </button>
@@ -1551,17 +1559,30 @@ function ErrText({ msg }) {
 
 function BackBtn({ onClick }) {
   return (
-    <button onClick={onClick} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', marginBottom: '16px', padding: 0, fontWeight: '500' }}>
+    <button onClick={onClick} style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', marginBottom: '16px', padding: 0, fontWeight: '500' }}>
       ← Back
     </button>
   );
 }
 
-function DetailSection({ title, children }) {
+function DetailSectionCard({ title, children }) {
   return (
-    <div style={S.formSection}>
-      <p style={S.formSectionTitle}>{title}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>{children}</div>
+    <div style={{
+      background: '#fafcff', borderRadius: '12px',
+      border: '1px solid #eef2f7', overflow: 'hidden',
+      marginBottom: '12px',
+    }}>
+      <div style={{
+        padding: '10px 18px', borderBottom: '1px solid #eef2f7',
+        background: '#f8fafc',
+      }}>
+        <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '12px', fontWeight: '700', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          {title}
+        </p>
+      </div>
+      <div style={{ padding: '16px 18px' }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -1569,14 +1590,13 @@ function DetailSection({ title, children }) {
 function DR({ label, value, highlight }) {
   return (
     <div>
-      <span style={{ color: '#94a3b8', fontSize: '12px' }}>{label}</span>
+      <span style={{ color: '#94a3b8', fontSize: '11px' }}>{label}</span>
       <p style={{ color: highlight ? '#16a34a' : '#0f172a', fontSize: '13.5px', margin: '2px 0 0', fontWeight: highlight ? '600' : '500' }}>
         {value || '—'}
       </p>
     </div>
   );
 }
-
 
 function EditSection({ title, children }) {
   return (
@@ -1620,7 +1640,7 @@ function EditField({ label, value, onChange, type = 'text', options, span }) {
   );
 }
 
-// ── Custom DatePicker (always YYYY/MM/DD, escapes overflow via position:fixed) ──
+// ── Custom DatePicker (always YYYY/MM/DD, position:fixed with smart overflow) ──
 const DP_MONTHS   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DP_WEEKDAYS = ['Mo','Tu','We','Th','Fr','Sa','Su'];
 const dpNavBtn = {
@@ -1652,6 +1672,7 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', compact = fal
       const top  = (spaceBelow < POPUP_H && r.top > POPUP_H) ? r.top - POPUP_H - 4 : r.bottom + 4;
       let   left = r.left;
       if (left + POPUP_W > window.innerWidth - 8) left = window.innerWidth - POPUP_W - 8;
+      if (left < 8) left = 8;
       setPos({ top, left });
     }
     setOpen(o => !o);
@@ -1705,7 +1726,7 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', compact = fal
         </svg>
       </div>
       {open && (
-        <div style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 1000, background: 'white', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '12px', width: '252px' }}>
+        <div style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 1000, background: 'white', borderRadius: '12px', boxShadow: '0 12px 32px rgba(0,0,0,0.18)', border: '1px solid #e2e8f0', padding: '12px', width: '252px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <button type="button" onClick={() => shift(-1)} style={dpNavBtn}>‹</button>
             <div style={{ display: 'flex', gap: '6px' }}>
@@ -1730,7 +1751,7 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', compact = fal
                 <button type="button" key={day} onClick={() => pick(day)}
                   onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = '#eef2ff'; }}
                   onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
-                  style={{ border: 'none', borderRadius: '6px', padding: '6px 0', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', background: isSel ? '#6366f1' : 'transparent', color: isSel ? 'white' : '#0f172a', fontWeight: isSel ? '700' : '500' }}>
+                  style={{ border: 'none', borderRadius: '6px', padding: '6px 0', fontSize: '12px', cursor: 'pointer', fontFamily: 'DM Sans', background: isSel ? '#4f46e5' : 'transparent', color: isSel ? 'white' : '#0f172a', fontWeight: isSel ? '700' : '500' }}>
                   {day}
                 </button>
               );
@@ -1743,7 +1764,7 @@ function DatePicker({ value, onChange, placeholder = 'YYYY/MM/DD', compact = fal
               const t = new Date();
               onChange(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`);
               setOpen(false);
-            }} style={{ background: 'none', border: 'none', color: '#6366f1', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>Today</button>
+            }} style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>Today</button>
           </div>
         </div>
       )}

@@ -15,7 +15,7 @@ export default function Users() {
   const [users, setUsers] = useState([]);
   const [franchises, setFranchises] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('list'); // list | create
+  const [view, setView] = useState('list');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [togglingId, setTogglingId] = useState(null);
@@ -34,47 +34,25 @@ export default function Users() {
   const isSuperuser = user?.username === 'Ayabonga';
   const [showPassword, setShowPassword] = useState(false);
 
-  const [form, setForm] = useState({
-    username: '',
-    password: '',
-    role: 'Consultant',
-    franchise_id: '',
-  });
+  const [form, setForm] = useState({ username: '', password: '', role: 'Consultant', franchise_id: '' });
 
-  useEffect(() => {
-    fetchUsers();
-    fetchFranchises();
-  }, []);
+  useEffect(() => { fetchUsers(); fetchFranchises(); }, []);
 
   const fetchUsers = async () => {
     setLoading(true);
-    try {
-      const res = await api.get('/users');
-      setUsers(res.data);
-    } catch { setError('Failed to load users.'); }
+    try { const res = await api.get('/users'); setUsers(res.data); }
+    catch { setError('Failed to load users.'); }
     finally { setLoading(false); }
   };
 
   const fetchFranchises = async () => {
-    try {
-      const res = await api.get('/franchises');
-      setFranchises(res.data);
-    } catch { }
+    try { const res = await api.get('/franchises'); setFranchises(res.data); } catch { }
   };
 
   const handleCreate = async () => {
-    if (!form.username || !form.password || !form.role) {
-      setError('Username, password and role are required.');
-      return;
-    }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-    if (!form.franchise_id && form.role !== 'Admin') {
-      setError('Please assign a franchise.');
-      return;
-    }
+    if (!form.username || !form.password || !form.role) { setError('Username, password and role are required.'); return; }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (!form.franchise_id && form.role !== 'Admin') { setError('Please assign a franchise.'); return; }
     setCreating(true); setError(''); setSuccess('');
     try {
       await api.post('/auth/signup', form);
@@ -82,9 +60,8 @@ export default function Users() {
       setForm({ username: '', password: '', role: 'Consultant', franchise_id: '' });
       setView('list');
       fetchUsers();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create account.');
-    } finally { setCreating(false); }
+    } catch (err) { setError(err.response?.data?.error || 'Failed to create account.'); }
+    finally { setCreating(false); }
   };
 
   const handleToggle = async (u) => {
@@ -94,107 +71,70 @@ export default function Users() {
       await api.patch(`/users/${u.id}/toggle`);
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: !x.is_active } : x));
       setSuccess(`@${u.username} ${u.is_active ? 'deactivated' : 'activated'}.`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update user.');
-    } finally { setTogglingId(null); }
+    } catch (err) { setError(err.response?.data?.error || 'Failed to update user.'); }
+    finally { setTogglingId(null); }
   };
 
   const handleDeleteUser = async (u) => {
     setDeletingId(u.id); setError(''); setSuccess('');
-    try {
-      await api.delete(`/users/${u.id}`);
-      setUsers(prev => prev.filter(x => x.id !== u.id));
-      setSuccess(`@${u.username} has been deleted.`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete user.');
-    } finally { setDeletingId(null); setConfirmDeleteId(null); }
+    try { await api.delete(`/users/${u.id}`); setUsers(prev => prev.filter(x => x.id !== u.id)); setSuccess(`@${u.username} has been deleted.`); }
+    catch (err) { setError(err.response?.data?.error || 'Failed to delete user.'); }
+    finally { setDeletingId(null); setConfirmDeleteId(null); }
   };
 
   const handlePromote = async (u) => {
     if (!window.confirm(`Promote @${u.username} to Admin? This gives them full management access.`)) return;
     setPromotingId(u.id); setError(''); setSuccess('');
-    try {
-      await api.patch(`/users/${u.id}/promote`);
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: 'Admin' } : x));
-      setSuccess(`@${u.username} has been promoted to Admin.`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to promote user.');
-    } finally { setPromotingId(null); }
+    try { await api.patch(`/users/${u.id}/promote`); setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: 'Admin' } : x)); setSuccess(`@${u.username} has been promoted to Admin.`); }
+    catch (err) { setError(err.response?.data?.error || 'Failed to promote user.'); }
+    finally { setPromotingId(null); }
   };
 
   const handleDemote = async (u) => {
     if (!window.confirm(`Demote @${u.username} from Admin to HR? They will lose full management access.`)) return;
     setDemotingId(u.id); setError(''); setSuccess('');
-    try {
-      await api.patch(`/users/${u.id}/demote`);
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: 'HR' } : x));
-      setSuccess(`@${u.username} has been demoted to HR.`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to demote user.');
-    } finally { setDemotingId(null); }
+    try { await api.patch(`/users/${u.id}/demote`); setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: 'HR' } : x)); setSuccess(`@${u.username} has been demoted to HR.`); }
+    catch (err) { setError(err.response?.data?.error || 'Failed to demote user.'); }
+    finally { setDemotingId(null); }
   };
 
   const handleResetPassword = async (u) => {
     const newPassword = window.prompt(`Set new password for @${u.username}:`);
     if (!newPassword) return;
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
+    if (newPassword.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setResettingId(u.id); setError(''); setSuccess('');
-    try {
-      await api.patch(`/users/${u.id}/reset-password`, { password: newPassword });
-      setSuccess(`Password updated for @${u.username}.`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to reset password.');
-    } finally { setResettingId(null); }
+    try { await api.patch(`/users/${u.id}/reset-password`, { password: newPassword }); setSuccess(`Password updated for @${u.username}.`); }
+    catch (err) { setError(err.response?.data?.error || 'Failed to reset password.'); }
+    finally { setResettingId(null); }
   };
 
   const fetchUnlinkedEmployees = async () => {
-    try {
-      const res = await api.get('/employees?limit=200');
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
-      setUnlinkedEmployees(data.filter(e => !e.user_id));
-    } catch { }
+    try { const res = await api.get('/employees?limit=200'); const data = Array.isArray(res.data) ? res.data : res.data?.data || []; setUnlinkedEmployees(data.filter(e => !e.user_id)); }
+    catch { }
   };
 
-  const openLinkModal = async (u) => {
-    setLinkTargetUser(u);
-    setSelectedEmpId('');
-    await fetchUnlinkedEmployees();
-    setLinkModalOpen(true);
-  };
+  const openLinkModal = async (u) => { setLinkTargetUser(u); setSelectedEmpId(''); await fetchUnlinkedEmployees(); setLinkModalOpen(true); };
 
   const handleLinkEmployee = async () => {
     if (!selectedEmpId || !linkTargetUser) return;
     setLinkingId(linkTargetUser.id); setError(''); setSuccess('');
-    try {
-      await api.patch(`/employees/${selectedEmpId}/link-user`, { user_id: linkTargetUser.id });
-      setSuccess(`@${linkTargetUser.username} linked to employee successfully.`);
-      setLinkModalOpen(false);
-      setLinkTargetUser(null);
-      fetchUsers();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to link account to employee.');
-    } finally { setLinkingId(null); }
+    try { await api.patch(`/employees/${selectedEmpId}/link-user`, { user_id: linkTargetUser.id }); setSuccess(`@${linkTargetUser.username} linked to employee successfully.`); setLinkModalOpen(false); setLinkTargetUser(null); fetchUsers(); }
+    catch (err) { setError(err.response?.data?.error || 'Failed to link account to employee.'); }
+    finally { setLinkingId(null); }
   };
 
   const handleUnlinkEmployee = async (u) => {
     if (!window.confirm(`Unlink @${u.username} from employee ${u.linked_employee_first} ${u.linked_employee_last}?`)) return;
     setUnlinkingId(u.id); setError(''); setSuccess('');
-    try {
-      await api.patch(`/employees/${u.linked_employee_id}/link-user`, { user_id: null });
-      setSuccess(`@${u.username} has been unlinked.`);
-      fetchUsers();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to unlink.');
-    } finally { setUnlinkingId(null); }
+    try { await api.patch(`/employees/${u.linked_employee_id}/link-user`, { user_id: null }); setSuccess(`@${u.username} has been unlinked.`); fetchUsers(); }
+    catch (err) { setError(err.response?.data?.error || 'Failed to unlink.'); }
+    finally { setUnlinkingId(null); }
   };
 
-  const roleColor = (role) => {
-    if (role === 'Admin') return { background: '#f5f3ff', color: '#7c3aed' };
-    if (role === 'HR') return { background: '#eff6ff', color: '#2563eb' };
-    return { background: '#f0fdf4', color: '#16a34a' };
+  const roleBadge = (role) => {
+    if (role === 'Admin') return { background: '#f5f3ff', color: '#7c3aed', border: '1px solid #d5c8f9', label: 'Admin' };
+    if (role === 'HR') return { background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', label: 'HR' };
+    return { background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', label: 'Consultant' };
   };
 
   const passwordStrength = (p) => {
@@ -218,103 +158,83 @@ export default function Users() {
     return (
       <div style={{ maxWidth: '520px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <button onClick={() => { setView('list'); setError(''); }}
-            style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>
-            ← Back
-          </button>
+          <button onClick={() => { setView('list'); setError(''); }} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans', fontWeight: '500', padding: 0 }}>← Back</button>
           <h2 style={{ ...S.pageTitle, margin: 0 }}>Create Account</h2>
         </div>
 
-        {error && (
-          <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>
-            {error}
-          </div>
-        )}
+        {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
 
-        <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', padding: '24px' }}>
+        <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)', padding: '24px' }}>
 
-          {/* Username */}
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>
-              Username *
-            </label>
-            <input
-              value={form.username}
-              onChange={e => {
-                const v = e.target.value.replace(/\s/g, '');
-                setForm(p => ({ ...p, username: v.charAt(0).toUpperCase() + v.slice(1) }));
-              }}
-              placeholder="e.g. JohnSmith"
-              style={S.input}
-              autoComplete="off"
-            />
+            <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>Username *</label>
+            <input value={form.username} onChange={e => { const v = e.target.value.replace(/\s/g, ''); setForm(p => ({ ...p, username: v.charAt(0).toUpperCase() + v.slice(1) })); }} placeholder="e.g. JohnSmith" style={S.input} autoComplete="off" />
           </div>
 
-          {/* Role */}
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>
-              Role *
-            </label>
+            <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>Role *</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               {ROLES.filter(r => r !== 'Admin' || isSuperuser).map(r => (
                 <button key={r} onClick={() => setForm(p => ({ ...p, role: r }))}
-                  style={{
-                    flex: 1, padding: '10px', borderRadius: '8px',
-                    border: `2px solid ${form.role === r ? '#2563eb' : '#e2e8f0'}`,
-                    background: form.role === r ? '#eff6ff' : 'white',
-                    color: form.role === r ? '#2563eb' : '#64748b',
-                    fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer',
-                  }}>
+                  style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `2px solid ${form.role === r ? '#4f46e5' : '#e2e8f0'}`, background: form.role === r ? '#eef2ff' : 'white', color: form.role === r ? '#4f46e5' : '#64748b', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', transition: 'all 0.15s' }}>
                   {r}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Franchise */}
           {form.role !== 'Admin' && (
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>
-                Franchise *
-              </label>
-              <select
-                value={form.franchise_id}
-                onChange={e => setForm(p => ({ ...p, franchise_id: e.target.value }))}
-                style={S.input}
-              >
+              <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>Franchise *</label>
+              <select value={form.franchise_id} onChange={e => setForm(p => ({ ...p, franchise_id: e.target.value }))} style={S.input}>
                 <option value="">— Select Franchise —</option>
-                {franchises.map(f => (
-                  <option key={f.id} value={f.id}>{f.franchise_name}</option>
-                ))}
+                {franchises.map(f => (<option key={f.id} value={f.id}>{f.franchise_name}</option>))}
               </select>
             </div>
           )}
 
-          {/* Password */}
+          {/* Password with integrated visibility toggle */}
           <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>
-              Password *
-            </label>
-            <div style={{ position: 'relative' }}>
+            <label style={{ display: 'block', color: '#64748b', fontSize: '12px', fontWeight: '500', marginBottom: '5px' }}>Password *</label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={form.password}
                 onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
                 placeholder="Min. 6 chars, 1 number, 1 symbol"
-                style={{ ...S.input, paddingRight: '44px' }}
+                style={{ ...S.input, paddingRight: '50px' }}
                 autoComplete="new-password"
               />
-              <button onClick={() => setShowPassword(p => !p)}
+              <button
+                onClick={() => setShowPassword(p => !p)}
+                type="button"
                 style={{
-                  position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px',
-                }}>
-                {showPassword ? '🙈' : '👁️'}
+                  position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', color: '#64748b',
+                  fontSize: '16px', padding: '6px 10px', borderRadius: '6px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Password requirements */}
           {form.password && (
             <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {[
@@ -323,30 +243,20 @@ export default function Users() {
                 { label: 'Contains a symbol',      met: /[^A-Za-z0-9]/.test(form.password) },
               ].map(r => (
                 <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: r.met ? '#16a34a' : '#dc2626' }}>
-                    {r.met ? '✓' : '✗'}
-                  </span>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: r.met ? '#16a34a' : '#dc2626' }}>{r.met ? '✓' : '✗'}</span>
                   <span style={{ fontSize: '11px', color: r.met ? '#16a34a' : '#94a3b8' }}>{r.label}</span>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Info box */}
           <div style={{ padding: '12px 14px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-            <p style={{ margin: 0, color: '#64748b', fontSize: '12px', lineHeight: '1.6' }}>
-              The employee record will be created automatically. HR and Consultants can log in immediately after account creation. Share the username and password with the employee directly.
-            </p>
+            <p style={{ margin: 0, color: '#64748b', fontSize: '12px', lineHeight: '1.6' }}>The employee record will be created automatically. HR and Consultants can log in immediately after account creation. Share the username and password with the employee directly.</p>
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => { setView('list'); setError(''); }} style={S.ghostBtn}>
-              Cancel
-            </button>
-            <button onClick={handleCreate} disabled={creating}
-              style={{ ...S.primaryBtn, flex: 1, opacity: creating ? 0.7 : 1 }}>
-              {creating ? 'Creating...' : 'Create Account'}
-            </button>
+            <button onClick={() => { setView('list'); setError(''); }} style={S.ghostBtn}>Cancel</button>
+            <button onClick={handleCreate} disabled={creating} style={{ ...S.primaryBtn, flex: 1, opacity: creating ? 0.7 : 1, background: creating ? '#94a3b8' : undefined }}>{creating ? 'Creating...' : 'Create Account'}</button>
           </div>
         </div>
       </div>
@@ -359,274 +269,160 @@ export default function Users() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h2 style={S.pageTitle}>User Management</h2>
-          <p style={{ color: '#64748b', fontSize: '13px', margin: '-8px 0 0' }}>
-            {users.length} account{users.length !== 1 ? 's' : ''} total
-          </p>
+          <p style={{ color: '#64748b', fontSize: '13px', margin: '-8px 0 0' }}>{users.length} account{users.length !== 1 ? 's' : ''} total</p>
         </div>
-        <button onClick={() => { setView('create'); setError(''); setSuccess(''); }} style={S.primaryBtn}>
-          + Create Account
-        </button>
+        <button onClick={() => { setView('create'); setError(''); setSuccess(''); }} style={S.primaryBtn}>+ Create Account</button>
       </div>
 
-      {error && (
-        <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>
-          {error}
-        </div>
-      )}
-      {success && (
-        <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>
-          {success}
-        </div>
-      )}
+      {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+      {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
-      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-        {loading ? (
-          <Spinner size="lg" dark label="Loading users..." />
-        ) : users.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>No users found.</div>
-        ) : isMobile ? (
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
+        {loading ? <Spinner size="lg" dark label="Loading users..." />
+        : users.length === 0 ? <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>No users found.</div>
+        : isMobile ? (
           <div>
-            {users.map((u, i) => (
-              <div key={u.id} style={{ padding: '14px 18px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                  <div>
-                    <span style={{ fontWeight: '600', fontSize: '14px', color: '#0f172a' }}>@{u.username}</span>
-                    <span style={{ ...roleColor(u.role), padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', marginLeft: '8px' }}>
-                      {u.role}
-                    </span>
-                  </div>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
-                    background: u.is_active ? '#f0fdf4' : '#fef2f2',
-                    color: u.is_active ? '#16a34a' : '#dc2626',
-                  }}>
-                    {u.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#64748b' }}>
-                  {u.franchise_name || 'No franchise'}
-                </p>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  {!PROTECTED.includes(u.username) && (
-                    <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id}
-                      style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                      {resettingId === u.id ? 'Saving...' : 'Reset Password'}
-                    </button>
-                  )}
-                  {!PROTECTED.includes(u.username) && (
-                    u.linked_employee_id ? (
-                      <>
-                        <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
-                          Linked: {u.linked_employee_first} {u.linked_employee_last}
-                        </span>
-                        <button onClick={() => handleUnlinkEmployee(u)} disabled={unlinkingId === u.id}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {unlinkingId === u.id ? '...' : 'Unlink'}
-                        </button>
-                      </>
-                    ) : (
-                      <button onClick={() => openLinkModal(u)}
-                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                        Link to Employee
-                      </button>
-                    )
-                  )}
-                  {u.id !== user?.id && (
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      {isSuperuser && u.role !== 'Admin' && (
-                        <button onClick={() => handlePromote(u)} disabled={promotingId === u.id}
-                          style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {promotingId === u.id ? '...' : '↑ Make Admin'}
-                        </button>
-                      )}
-                      {isSuperuser && u.role === 'Admin' && !PROTECTED.includes(u.username) && (
-                        <button onClick={() => handleDemote(u)} disabled={demotingId === u.id}
-                          style={{ background: 'none', border: 'none', color: '#d97706', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {demotingId === u.id ? '...' : '↓ Demote to HR'}
-                        </button>
-                      )}
-                      {!PROTECTED.includes(u.username) && (
-                        <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
-                          style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                      )}
-                      {!PROTECTED.includes(u.username) && (
-                        confirmDeleteId === u.id ? (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
-                              style={{ background: '#ef4444', border: 'none', borderRadius: '5px', padding: '3px 8px', color: 'white', fontSize: '11px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>
-                              {deletingId === u.id ? '...' : 'Confirm'}
-                            </button>
-                            <button onClick={() => setConfirmDeleteId(null)}
-                              style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '11px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setConfirmDeleteId(u.id)}
-                            style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                            Delete
-                          </button>
-                        )
-                      )}
+            {users.map((u, i) => {
+              const rb = roleBadge(u.role);
+              return (
+                <div key={u.id} style={{ padding: '14px 18px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                    <div>
+                      <span style={{ fontWeight: '600', fontSize: '14px', color: '#0f172a' }}>@{u.username}</span>
+                      <span style={{ background: rb.background, color: rb.color, border: rb.border, padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', marginLeft: '8px' }}>
+                        {rb.label}
+                      </span>
                     </div>
-                  )}
+                    <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: u.is_active ? '#f0fdf4' : '#fef2f2', color: u.is_active ? '#16a34a' : '#dc2626', border: u.is_active ? '1px solid #bbf7d0' : '1px solid #fecaca' }}>{u.is_active ? 'Active' : 'Inactive'}</span>
+                  </div>
+                  <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#64748b' }}>{u.franchise_name || 'No franchise'}</p>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    {!PROTECTED.includes(u.username) && <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id} style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{resettingId === u.id ? 'Saving...' : 'Reset Password'}</button>}
+                    {!PROTECTED.includes(u.username) && (
+                      u.linked_employee_id ? (
+                        <>
+                          <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>Linked: {u.linked_employee_first} {u.linked_employee_last}</span>
+                          <button onClick={() => handleUnlinkEmployee(u)} disabled={unlinkingId === u.id} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{unlinkingId === u.id ? '...' : 'Unlink'}</button>
+                        </>
+                      ) : <button onClick={() => openLinkModal(u)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Link to Employee</button>
+                    )}
+                    {u.id !== user?.id && (
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {isSuperuser && u.role !== 'Admin' && <button onClick={() => handlePromote(u)} disabled={promotingId === u.id} style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{promotingId === u.id ? '...' : '↑ Make Admin'}</button>}
+                        {isSuperuser && u.role === 'Admin' && !PROTECTED.includes(u.username) && <button onClick={() => handleDemote(u)} disabled={demotingId === u.id} style={{ background: 'none', border: 'none', color: '#d97706', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{demotingId === u.id ? '...' : '↓ Demote to HR'}</button>}
+                        {!PROTECTED.includes(u.username) && <button onClick={() => handleToggle(u)} disabled={togglingId === u.id} style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}</button>}
+                        {!PROTECTED.includes(u.username) && (
+                          confirmDeleteId === u.id ? (
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id} style={{ background: '#ef4444', border: 'none', borderRadius: '5px', padding: '3px 8px', color: 'white', fontSize: '11px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>{deletingId === u.id ? '...' : 'Confirm'}</button>
+                              <button onClick={() => setConfirmDeleteId(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '11px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Cancel</button>
+                            </div>
+                          ) : <button onClick={() => setConfirmDeleteId(u.id)} style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Delete</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
                 {['Username', 'Role', 'Franchise', 'Status', 'Actions'].map(h => (
-                  <th key={h} style={{
-                    padding: '10px 22px', textAlign: 'left',
-                    color: '#94a3b8', fontSize: '11px', fontWeight: '600',
-                    textTransform: 'uppercase', letterSpacing: '0.06em',
-                  }}>{h}</th>
+                  <th key={h} style={{ padding: '10px 22px', textAlign: 'left', color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {users.map(u => (
-                <tr key={u.id} className="table-row" style={{ borderTop: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '12px 22px', fontWeight: '600', color: '#0f172a' }}>
-                    @{u.username}
-                    {u.id === user?.id && (
-                      <span style={{ color: '#94a3b8', fontWeight: '400', fontSize: '12px', marginLeft: '6px' }}>(you)</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '12px 22px' }}>
-                    <span style={{ ...roleColor(u.role), padding: '3px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 22px', color: '#64748b' }}>
-                    {u.franchise_name || '—'}
-                  </td>
-                  <td style={{ padding: '12px 22px' }}>
-                    <span style={{
-                      padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
-                      background: u.is_active ? '#f0fdf4' : '#fef2f2',
-                      color: u.is_active ? '#16a34a' : '#dc2626',
-                    }}>
-                      {u.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 22px' }}>
-                    <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                      {!PROTECTED.includes(u.username) && (
-                        <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id}
-                          style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                          {resettingId === u.id ? 'Saving...' : 'Reset Password'}
-                        </button>
-                      )}
-                      {!PROTECTED.includes(u.username) && (
-                        u.linked_employee_id ? (
-                          <>
-                            <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600' }}>
-                              Linked: {u.linked_employee_first} {u.linked_employee_last}
-                            </span>
-                            <button onClick={() => handleUnlinkEmployee(u)} disabled={unlinkingId === u.id}
-                              style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                              {unlinkingId === u.id ? '...' : 'Unlink'}
-                            </button>
-                          </>
-                        ) : (
-                          <button onClick={() => openLinkModal(u)}
-                            style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                            Link to Employee
-                          </button>
-                        )
-                      )}
-                      {u.id !== user?.id && (
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                          {isSuperuser && u.role !== 'Admin' && (
-                            <button onClick={() => handlePromote(u)} disabled={promotingId === u.id}
-                              style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                              {promotingId === u.id ? '...' : '↑ Make Admin'}
-                            </button>
-                          )}
-                          {isSuperuser && u.role === 'Admin' && !PROTECTED.includes(u.username) && (
-                            <button onClick={() => handleDemote(u)} disabled={demotingId === u.id}
-                              style={{ background: 'none', border: 'none', color: '#d97706', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                              {demotingId === u.id ? '...' : '↓ Demote to HR'}
-                            </button>
-                          )}
-                          {!PROTECTED.includes(u.username) && (
-                            <button onClick={() => handleToggle(u)} disabled={togglingId === u.id}
-                              style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                              {togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}
-                            </button>
-                          )}
-                          {!PROTECTED.includes(u.username) && (
-                            confirmDeleteId === u.id ? (
-                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id}
-                                  style={{ background: '#ef4444', border: 'none', borderRadius: '5px', padding: '4px 10px', color: 'white', fontSize: '12px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>
-                                  {deletingId === u.id ? '...' : 'Confirm Delete'}
-                                </button>
-                                <button onClick={() => setConfirmDeleteId(null)}
-                                  style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button onClick={() => setConfirmDeleteId(u.id)}
-                                style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>
-                                Delete
-                              </button>
-                            )
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {users.map(u => {
+                const rb = roleBadge(u.role);
+                return (
+                  <tr key={u.id} className="table-row" style={{ borderTop: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px 22px', fontWeight: '600', color: '#0f172a' }}>
+                      @{u.username}
+                      {u.id === user?.id && <span style={{ color: '#94a3b8', fontWeight: '400', fontSize: '12px', marginLeft: '6px' }}>(you)</span>}
+                    </td>
+                    <td style={{ padding: '12px 22px' }}>
+                      <span style={{ background: rb.background, color: rb.color, border: rb.border, padding: '3px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: '700' }}>
+                        {rb.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 22px', color: '#64748b' }}>{u.franchise_name || '—'}</td>
+                    <td style={{ padding: '12px 22px' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: u.is_active ? '#f0fdf4' : '#fef2f2', color: u.is_active ? '#16a34a' : '#dc2626', border: u.is_active ? '1px solid #bbf7d0' : '1px solid #fecaca' }}>{u.is_active ? 'Active' : 'Inactive'}</span>
+                    </td>
+                    <td style={{ padding: '12px 22px' }}>
+                      <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                        {!PROTECTED.includes(u.username) && <button onClick={() => handleResetPassword(u)} disabled={resettingId === u.id} style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{resettingId === u.id ? 'Saving...' : 'Reset Password'}</button>}
+                        {!PROTECTED.includes(u.username) && (
+                          u.linked_employee_id ? (
+                            <>
+                              <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600' }}>Linked: {u.linked_employee_first} {u.linked_employee_last}</span>
+                              <button onClick={() => handleUnlinkEmployee(u)} disabled={unlinkingId === u.id} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{unlinkingId === u.id ? '...' : 'Unlink'}</button>
+                            </>
+                          ) : <button onClick={() => openLinkModal(u)} style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Link to Employee</button>
+                        )}
+                        {u.id !== user?.id && (
+                          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                            {isSuperuser && u.role !== 'Admin' && <button onClick={() => handlePromote(u)} disabled={promotingId === u.id} style={{ background: 'none', border: 'none', color: '#0891b2', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{promotingId === u.id ? '...' : '↑ Make Admin'}</button>}
+                            {isSuperuser && u.role === 'Admin' && !PROTECTED.includes(u.username) && <button onClick={() => handleDemote(u)} disabled={demotingId === u.id} style={{ background: 'none', border: 'none', color: '#d97706', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{demotingId === u.id ? '...' : '↓ Demote to HR'}</button>}
+                            {!PROTECTED.includes(u.username) && <button onClick={() => handleToggle(u)} disabled={togglingId === u.id} style={{ background: 'none', border: 'none', color: u.is_active ? '#dc2626' : '#16a34a', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>{togglingId === u.id ? '...' : u.is_active ? 'Deactivate' : 'Activate'}</button>}
+                            {!PROTECTED.includes(u.username) && (
+                              confirmDeleteId === u.id ? (
+                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                  <button onClick={() => handleDeleteUser(u)} disabled={deletingId === u.id} style={{ background: '#ef4444', border: 'none', borderRadius: '5px', padding: '4px 10px', color: 'white', fontSize: '12px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>{deletingId === u.id ? '...' : 'Confirm Delete'}</button>
+                                  <button onClick={() => setConfirmDeleteId(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Cancel</button>
+                                </div>
+                              ) : <button onClick={() => setConfirmDeleteId(u.id)} style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Delete</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* ── LINK EMPLOYEE MODAL ── */}
+      {/* ── LINK EMPLOYEE MODAL — Drop-shadow overlay with backdrop blur ── */}
       {linkModalOpen && linkTargetUser && (
         <>
           <div onClick={() => { setLinkModalOpen(false); setLinkTargetUser(null); }}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400, backdropFilter: 'blur(2px)' }} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 401, background: 'white', borderRadius: '14px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', padding: '24px', width: '400px', maxWidth: '90vw' }}>
-            <h3 style={{ fontFamily: 'Sora', fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, backdropFilter: 'blur(4px)' }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            zIndex: 1001, background: 'white', borderRadius: '16px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.25), 0 8px 20px rgba(0,0,0,0.1)',
+            padding: '28px', width: '420px', maxWidth: '92vw',
+          }}>
+            <h3 style={{ fontFamily: 'Sora', fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 6px' }}>
               Link @{linkTargetUser.username} to Employee
             </h3>
-            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 16px' }}>
+            <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px', lineHeight: '1.5' }}>
               Select an unlinked employee record to associate with this user account.
             </p>
             {unlinkedEmployees.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-                No unlinked employee records available. Create one first.
-              </p>
+              <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>No unlinked employee records available. Create one first.</p>
             ) : (
-              <select
-                value={selectedEmpId}
-                onChange={e => setSelectedEmpId(e.target.value)}
-                style={{ ...S.input, marginBottom: '16px' }}
-              >
+              <select value={selectedEmpId} onChange={e => setSelectedEmpId(e.target.value)} style={{ ...S.input, marginBottom: '18px' }}>
                 <option value="">— Select employee —</option>
                 {unlinkedEmployees.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.first_name} {emp.last_name} {emp.franchise_name ? `(${emp.franchise_name})` : ''} — {emp.job_title || 'No title'}
-                  </option>
+                  <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name} {emp.franchise_name ? `(${emp.franchise_name})` : ''} — {emp.job_title || 'No title'}</option>
                 ))}
               </select>
             )}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setLinkModalOpen(false); setLinkTargetUser(null); }} style={S.ghostBtn}>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setLinkModalOpen(false); setLinkTargetUser(null); }}
+                style={{ padding: '10px 18px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: 'white', color: '#64748b', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer', transition: 'border-color 0.15s' }}>
                 Cancel
               </button>
               <button onClick={handleLinkEmployee} disabled={!selectedEmpId || linkingId}
-                style={{ ...S.primaryBtn, opacity: (!selectedEmpId || linkingId) ? 0.6 : 1, cursor: (!selectedEmpId || linkingId) ? 'not-allowed' : 'pointer' }}>
+                style={{ ...S.primaryBtn, opacity: (!selectedEmpId || linkingId) ? 0.6 : 1, cursor: (!selectedEmpId || linkingId) ? 'not-allowed' : 'pointer', boxShadow: '0 3px 12px rgba(79,70,229,0.25)' }}>
                 {linkingId ? 'Linking...' : 'Link Employee'}
               </button>
             </div>
