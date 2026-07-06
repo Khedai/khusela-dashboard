@@ -40,9 +40,12 @@ router.post('/login', async (req, res) => {
     );
 
     const isProd = process.env.NODE_ENV === 'production';
+    // Use 'lax' by default for better mobile/Safari compatibility.
+    // Only use 'none' if explicitly configured (cross-origin deployments).
+    const sameSite = process.env.COOKIE_SAMESITE || (isProd ? 'lax' : 'lax');
     const cookieBase = {
       secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
+      sameSite,
       maxAge: 8 * 60 * 60 * 1000,
       path: '/',
       // Optional: set this to the parent domain (e.g. ".example.com")

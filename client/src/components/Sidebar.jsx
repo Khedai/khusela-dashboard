@@ -57,6 +57,7 @@ function NavItem({ to, label, end, onNavigate, badge }) {
         alignItems: 'center',
         gap: '10px',
         padding: '9px 12px',
+        minHeight: '44px',
         borderRadius: '10px',
         marginBottom: '2px',
         textDecoration: 'none',

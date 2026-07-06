@@ -9,7 +9,7 @@ export default function Pagination({ page, totalPages, total, limit, onPageChang
   for (let i = left; i <= right; i++) pages.push(i);
 
   const btnStyle = (active) => ({
-    padding: '6px 11px', borderRadius: '7px', border: 'none',
+    padding: '6px 11px', minWidth: '44px', minHeight: '44px', borderRadius: '7px', border: 'none',
     fontSize: '12px', fontWeight: active ? '700' : '500',
     fontFamily: 'DM Sans', cursor: active ? 'default' : 'pointer',
     background: active ? '#0f172a' : 'white',

@@ -320,21 +320,49 @@ function EmployeeView() {
           {isClockedIn ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <StatusRow label="Clocked In" value={fmtTime(status?.attendance?.clock_in)} />
-              {/* Digital monospace clock face */}
+              {/* Digital monospace clock face with ambient glow */}
+              <style>{`
+                @keyframes glowPulse {
+                  0%, 100% { opacity: 0.4; }
+                  50% { opacity: 0.7; }
+                }
+              `}</style>
               <div style={{
-                background: '#0f172a', borderRadius: '12px', padding: '18px 24px',
+                background: '#0f172a', borderRadius: '14px', padding: '18px 24px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 gap: '12px', margin: '4px 0',
+                position: 'relative', overflow: 'hidden',
+                boxShadow: activeBreak
+                  ? '0 0 40px rgba(245,158,11,0.25), 0 0 80px rgba(245,158,11,0.08)'
+                  : '0 0 40px rgba(74,222,128,0.25), 0 0 80px rgba(74,222,128,0.08)',
+                transition: 'box-shadow 0.6s ease',
               }}>
+                {/* Ambient glow layer */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: activeBreak
+                    ? 'radial-gradient(ellipse at center, rgba(245,158,11,0.12) 0%, transparent 70%)'
+                    : 'radial-gradient(ellipse at center, rgba(74,222,128,0.12) 0%, transparent 70%)',
+                  animation: 'glowPulse 2.5s ease-in-out infinite',
+                  pointerEvents: 'none',
+                  transition: 'background 0.6s ease',
+                }} />
                 <div style={{
                   fontFamily: '"Courier New", monospace', fontSize: '36px', fontWeight: '700',
-                  color: '#4ade80', letterSpacing: '3px', lineHeight: 1,
+                  color: activeBreak ? '#fbbf24' : '#4ade80',
+                  letterSpacing: '3px', lineHeight: 1,
+                  position: 'relative', zIndex: 1,
+                  transition: 'color 0.6s ease',
                 }}>
                   {formatLiveTime(displayWorkSeconds)}
                 </div>
-                <div style={{ color: '#64748b', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  <div>work</div>
-                  <div>time</div>
+                <div style={{
+                  color: '#64748b', fontSize: '11px', fontWeight: '600',
+                  textTransform: 'uppercase', letterSpacing: '0.1em',
+                  position: 'relative', zIndex: 1,
+                }}>
+                  <div>{activeBreak ? 'break' : 'work'}</div>
+                  <div>{activeBreak ? 'time' : 'time'}</div>
                 </div>
               </div>
               {activeBreak && (

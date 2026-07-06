@@ -5,6 +5,7 @@ import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
 import { can } from '../utils/access';
 import Spinner from '../components/Spinner';
+import { SkeletonStatCard, SkeletonTable } from '../components/Skeleton';
 
 const STATUS_STYLES = {
   Draft: { background: 'rgba(241,245,249,0.65)', color: '#64748b', border: '1px solid rgba(148,163,184,0.25)' },
@@ -73,7 +74,21 @@ export default function Dashboard() {
     finally { setLoading(false); }
   };
 
-  if (loading) return <Spinner size="lg" dark label="Loading dashboard..." />;
+  if (loading) return (
+    <div style={{ maxWidth: '1100px' }}>
+      <div style={{ marginBottom: '24px' }}>
+        <SkeletonStatCard style={{ width: '180px', display: 'inline-block' }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+        {Array.from({ length: 7 }).map((_, i) => (
+          <SkeletonStatCard key={i} lines={1} />
+        ))}
+      </div>
+      <div style={{ background: 'white', borderRadius: '12px', overflow: 'hidden' }}>
+        <SkeletonTable rows={5} cols={5} />
+      </div>
+    </div>
+  );
   if (!stats) return <p style={{ color: '#94a3b8', fontSize: '14px' }}>Unable to load dash</p>;
 
   const today = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
