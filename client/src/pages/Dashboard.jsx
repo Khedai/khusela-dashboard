@@ -100,6 +100,18 @@ export default function Dashboard() {
     finally { setLoading(false); }
   };
 
+  const [widgetCollapsed, setWidgetCollapsed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dashWidgets') || '{}'); } catch { return {}; }
+  });
+
+  const toggleWidget = (key) => {
+    setWidgetCollapsed(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem('dashWidgets', JSON.stringify(next));
+      return next;
+    });
+  };
+
   if (loading) return (
     <div style={{ maxWidth: '1100px' }}>
       <div style={{ marginBottom: '24px' }}>
@@ -122,18 +134,6 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const pendingLeaveCount = stats?.pendingLeave || 0;
-
-  const [widgetCollapsed, setWidgetCollapsed] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('dashWidgets') || '{}'); } catch { return {}; }
-  });
-
-  const toggleWidget = (key) => {
-    setWidgetCollapsed(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      localStorage.setItem('dashWidgets', JSON.stringify(next));
-      return next;
-    });
-  };
 
   const WidgetSection = ({ title, visible, children, style = {} }) => {
     if (!visible) return null;
