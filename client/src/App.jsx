@@ -54,7 +54,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-      <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
+      <Route path="/" element={<ProtectedLayout>{user?.role === 'Admin' ? <Dashboard /> : <Navigate to="/time" replace />}</ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />
       <Route path="/leave" element={<ProtectedLayout><Leave /></ProtectedLayout>} />

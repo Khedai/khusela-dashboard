@@ -58,7 +58,6 @@ function AdminView({ user }) {
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState('');
   const [absentLoading, setAbsentLoading] = useState(false);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
   const LIMIT = 25;
 
   const fetchData = async (p = page) => {
@@ -83,17 +82,6 @@ function AdminView({ user }) {
     try { const res = await api.post('/time/absent/run', { date: dateFilter }); setSuccess(res.data.message); fetchData(page); }
     catch { setError('Failed to mark absent.'); }
     finally { setAbsentLoading(false); }
-  };
-
-  const handleCleanup = async () => {
-    if (!window.confirm('Auto-clock-out ALL past open shifts at 17:00? This will close every forgotten shift across all dates before today.')) return;
-    setCleanupLoading(true); setError(''); setSuccess('');
-    try {
-      const res = await api.post('/time/cleanup');
-      setSuccess(res.data.message + (res.data.details?.length ? `\n${res.data.details.map(d => `${d.employee} (${d.date}): ${d.workMinutes}min`).join('\n')}` : ''));
-      fetchData(page);
-    } catch { setError('Failed to clean up past shifts.'); }
-    finally { setCleanupLoading(false); }
   };
 
   const presentCount = data.filter(d => (d.status === 'present' || d.status === 'late') && !d.clock_out).length;
@@ -121,7 +109,6 @@ function AdminView({ user }) {
         <div><label style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</label><input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }} /></div>
         <div><label style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}><option value="">All</option><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option></select></div>
         <div style={{ flex: 1 }} />
-        <button onClick={handleCleanup} disabled={cleanupLoading} style={{ padding: '10px 16px', background: '#d97706', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: cleanupLoading ? 'not-allowed' : 'pointer', opacity: cleanupLoading ? 0.7 : 1, marginRight: '8px' }}>{cleanupLoading ? 'Cleaning...' : 'Clean Up Past Shifts'}</button>
         <button onClick={handleMarkAbsent} disabled={absentLoading} style={{ padding: '10px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: absentLoading ? 'not-allowed' : 'pointer', opacity: absentLoading ? 0.7 : 1 }}>{absentLoading ? 'Marking...' : 'Mark All Absent'}</button>
       </div>
       {loading ? <Spinner size="lg" dark label="Loading attendance..." />
@@ -185,6 +172,49 @@ function isSmallScreen() {
   return window.innerWidth < 768;
 }
 
+// ── Browser notification helpers ────────────────────
+function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function sendNotification(title, body) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico', badge: '/favicon.ico' });
+  }
+}
+
+function getBreakReminder(completedBreaks) {
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const day = now.getDay();
+
+  // Tea 1: remind from 9:30–10:00 and during window 10:00–10:30
+  if (!completedBreaks.includes('tea_1')) {
+    if (h === 9 && m >= 30) return { title: '⏰ Tea 1 Coming Up', body: 'Tea 1 is from 10:00–10:30. Remember to clock your break!' };
+    if (h === 10 && m <= 30) return { title: '☕ Tea 1 Now!', body: 'Tea 1 window is open (10:00–10:30). Tap to start your 15-min break.' };
+  }
+
+  // Lunch: remind from 11:30–13:30 (earlier window since lunch can be taken after tea 1)
+  if (!completedBreaks.includes('lunch') && completedBreaks.includes('tea_1')) {
+    if (h === 11 && m >= 30) return { title: '🍽️ Lunch Break', body: `Time for lunch! Remember to clock out for ${day === 5 ? '60' : '30'} min.` };
+    if (h === 12 && m <= 30) return { title: '🍽️ Lunch Break', body: `Lunch time — don't forget to clock your ${day === 5 ? '60' : '30'}-min break.` };
+    if (h === 13 && m <= 30) return { title: '🍽️ Lunch Reminder', body: `Still haven't taken lunch? Clock out for ${day === 5 ? '60' : '30'} min now.` };
+  }
+
+  // Tea 2: remind from 14:30–15:30 (after lunch)
+  if (!completedBreaks.includes('tea_2') && completedBreaks.includes('lunch')) {
+    if (h === 14 && m >= 30) return { title: '☕ Tea 2 Ahead', body: 'Tea 2 break coming up. 15 min to recharge!' };
+    if (h === 15 && m <= 30) return { title: '☕ Tea 2 Time!', body: 'Time for your afternoon tea break. 15 min — clock it!' };
+  }
+
+  return null;
+}
+
 function EmployeeView() {
   const { user } = useAuth();
 
@@ -200,6 +230,8 @@ function EmployeeView() {
   const activeBreakTypeRef = useRef(null);
   const [actionLoading, setActionLoading] = useState('');
   const [displayBreakSeconds, setDisplayBreakSeconds] = useState(0);
+  const notifSentRef = useRef({});
+  const notifIntervalRef = useRef(null);
 
   const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   const startTimer = () => {
@@ -234,7 +266,33 @@ function EmployeeView() {
   }, []);
 
   useEffect(() => { setIsMobile(isSmallScreen()); const r = () => setIsMobile(isSmallScreen()); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
-  useEffect(() => { fetchStatus(); return () => { stopTimer(); }; }, [fetchStatus]);
+  useEffect(() => { fetchStatus(); return () => { stopTimer(); if (notifIntervalRef.current) clearInterval(notifIntervalRef.current); }; }, [fetchStatus]);
+
+  // Request notification permission on mount
+  useEffect(() => { requestNotificationPermission(); }, []);
+
+  // Send break reminder notifications every 15 min while clocked in and not on break
+  useEffect(() => {
+    if (!isClockedIn || activeBreak) {
+      if (notifIntervalRef.current) { clearInterval(notifIntervalRef.current); notifIntervalRef.current = null; }
+      return;
+    }
+    const checkAndNotify = () => {
+      const reminder = getBreakReminder(completedBreaks);
+      if (reminder) {
+        const key = `${reminder.title}`;
+        const now = Date.now();
+        // Only send each reminder type max once every 20 minutes
+        if (!notifSentRef.current[key] || (now - notifSentRef.current[key] > 20 * 60 * 1000)) {
+          notifSentRef.current[key] = now;
+          sendNotification(reminder.title, reminder.body);
+        }
+      }
+    };
+    checkAndNotify(); // immediate check
+    notifIntervalRef.current = setInterval(checkAndNotify, 15 * 60 * 1000); // every 15 min
+    return () => { if (notifIntervalRef.current) { clearInterval(notifIntervalRef.current); notifIntervalRef.current = null; } };
+  }, [isClockedIn, activeBreak, completedBreaks]);
 
   const handleClockIn = async () => {
     setError(''); setSuccess(''); setActionLoading('clock-in');
@@ -257,6 +315,7 @@ function EmployeeView() {
       const res = await api.post('/time/clock-out');
       setSuccess(`Clocked out at ${fmtTime(res.data.clock_out)}. Total work: ${fmtDuration(res.data.total_work_minutes)}`);
       stopTimer(); breakStartRef.current = null; setLiveSeconds(0); setDisplayBreakSeconds(0);
+      if (notifIntervalRef.current) { clearInterval(notifIntervalRef.current); notifIntervalRef.current = null; }
       await fetchStatus();
     } catch (err) { setError(err.response?.data?.error || 'Failed to clock out.'); }
     finally { setActionLoading(''); }
@@ -299,6 +358,8 @@ function EmployeeView() {
   );
   const todayStr = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
 
+  const activeReminder = isClockedIn && !activeBreak ? getBreakReminder(completedBreaks) : null;
+
   if (loading) return <Spinner size="lg" dark label="Loading time tracker..." />;
 
   return (
@@ -309,6 +370,17 @@ function EmployeeView() {
       </div>
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
+
+      {/* Break reminder banner */}
+      {activeReminder && (
+        <div style={{ padding: '14px 18px', borderRadius: '12px', background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '1px solid #93c5fd', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '28px', flexShrink: 0 }}>{activeReminder.title.match(/^[^\s]+/)?.[0] || '⏰'}</span>
+          <div>
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: '700', color: '#1e40af' }}>{activeReminder.title.replace(/^[^\s]+\s/, '')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#3b82f6' }}>{activeReminder.body}</p>
+          </div>
+        </div>
+      )}
 
       {/* Status card with digital live clock */}
       <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden', marginBottom: '16px' }}>
@@ -395,11 +467,11 @@ function EmployeeView() {
       <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden', marginBottom: '16px' }}>
         <div style={{ padding: '14px 22px', borderBottom: '1px solid #f1f5f9', background: '#f0f9ff' }}><p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>How it works</p></div>
         <div style={{ padding: '14px 22px', fontSize: '12px', color: '#475569', lineHeight: '1.6' }}>
-          <p style={{ margin: '0 0 4px' }}><strong>1.</strong> Click <strong>Clock In</strong> when you start work.</p>
+          <p style={{ margin: '0 0 4px' }}><strong>1.</strong> Click <strong>Clock In</strong> when you start work. Clock-in after <strong>08:30</strong> is marked as late.</p>
           <p style={{ margin: '0 0 4px' }}><strong>2.</strong> Take <strong>Tea 1</strong> between <strong>10:00 – 10:30</strong>. After 10:30, Tea 1 is unavailable — go straight to Lunch.</p>
           <p style={{ margin: '0 0 4px' }}><strong>3.</strong> Take <strong>Lunch</strong> (30 min, or 60 min on Fridays).</p>
           <p style={{ margin: '0 0 4px' }}><strong>4.</strong> Take <strong>Tea 2</strong> after Lunch.</p>
-          <p style={{ margin: '0 0 4px' }}><strong>5.</strong> Click <strong>Clock Out</strong> when you're done for the day.</p>
+          <p style={{ margin: '0 0 4px' }}><strong>5.</strong> Click <strong>Clock Out</strong> when you're done for the day. If you forget, the system auto-clocks you out at 17:10.</p>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ const TEA_DURATION = 15;
 const LUNCH_DURATION_WEEKDAY = 30;
 const LUNCH_DURATION_FRIDAY = 60;
 const LATE_CLOCK_IN_HOUR = 8; // 8:00 AM threshold for late marking
+const LATE_CLOCK_IN_MIN = 30; // Clock-in after 08:30 = late
 const TEA1_WINDOW_CLOSE_HOUR = 10; // Tea 1 only available 10:00-10:30 SA time
 const TEA1_WINDOW_CLOSE_MIN = 30;
 const SA_TIMEZONE_OFFSET = 2; // SAST = UTC+2
@@ -24,7 +25,7 @@ function getLunchDuration(date) {
 function isLateClockIn(date) {
   const h = date.getHours();
   const m = date.getMinutes();
-  return (h > LATE_CLOCK_IN_HOUR) || (h === LATE_CLOCK_IN_HOUR && m > 0);
+  return (h > LATE_CLOCK_IN_HOUR) || (h === LATE_CLOCK_IN_HOUR && m >= LATE_CLOCK_IN_MIN);
 }
 
 function isTea1WindowClosed() {
