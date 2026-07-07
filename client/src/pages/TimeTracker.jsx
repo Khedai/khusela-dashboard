@@ -265,6 +265,17 @@ function EmployeeView() {
     finally { setLoading(false); }
   }, []);
 
+  // Derived status values — must be above useEffects that reference them
+  const isClockedIn = status?.attendance?.clock_in && !status?.attendance?.clock_out;
+  const isClockedOut = status?.attendance?.clock_out;
+  const activeBreak = status?.activeBreak;
+  const completedBreaks = status?.completedBreaks || [];
+  const tea1ExpiredGlobal = !completedBreaks.includes('tea_1') && isTea1WindowClosed();
+  const nextAvailableBreak = BREAK_ORDER.find(b => {
+    if (b === 'tea_1' && tea1ExpiredGlobal) return false;
+    return !completedBreaks.includes(b);
+  });
+
   useEffect(() => { setIsMobile(isSmallScreen()); const r = () => setIsMobile(isSmallScreen()); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
   useEffect(() => { fetchStatus(); return () => { stopTimer(); if (notifIntervalRef.current) clearInterval(notifIntervalRef.current); }; }, [fetchStatus]);
 
@@ -337,15 +348,6 @@ function EmployeeView() {
     finally { setActionLoading(''); }
   };
 
-  const isClockedIn = status?.attendance?.clock_in && !status?.attendance?.clock_out;
-  const isClockedOut = status?.attendance?.clock_out;
-  const activeBreak = status?.activeBreak;
-  const completedBreaks = status?.completedBreaks || [];
-  const tea1ExpiredGlobal = !completedBreaks.includes('tea_1') && isTea1WindowClosed();
-  const nextAvailableBreak = BREAK_ORDER.find(b => {
-    if (b === 'tea_1' && tea1ExpiredGlobal) return false;
-    return !completedBreaks.includes(b);
-  });
   const completedBreakMinutes = 
     (status?.attendance?.tea_1_minutes || 0) + 
     (status?.attendance?.tea_2_minutes || 0) + 
