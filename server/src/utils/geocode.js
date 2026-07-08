@@ -28,7 +28,7 @@ async function reverseGeocode(lat, lng) {
   lastRequestTime = Date.now();
 
   try {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&accept-language=en`;
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1&accept-language=en`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -45,20 +45,32 @@ async function reverseGeocode(lat, lng) {
 
     if (data?.address) {
       const a = data.address;
-      // Prefer suburb, then town, then city, then village, then county
-      name = a.suburb || a.town || a.city || a.village || a.county || a.state_district || a.state || null;
-    }
+      // Prefer suburb, then town, then city, then village
+      name = a.suburb || a.town || a.city || a.village || null;
 
-    // For Cape Town area, if we got a generic "City of Cape Town", try to be more specific
-    if (name === 'City of Cape Town' && data?.display_name) {
-      const parts = data.display_name.split(',');
-      if (parts.length >= 2) {
-        // Take the second-to-last meaningful part
-        const candidate = parts[parts.length - 3]?.trim() || parts[parts.length - 4]?.trim();
-        if (candidate && !candidate.includes('Cape Town') && !candidate.includes('Western Cape')) {
-          name = candidate;
+      // Filter out municipal ward/administrative names
+      if (name && /\b(Ward|Ward \d+|City of Cape Town|Cape Town Ward|Suburb \d+)\b/i.test(name)) {
+        name = null;
+        // Try fallback to display_name parsing
+        const parts = (data.display_name || '').split(',');
+        for (const part of parts) {
+          const t = part.trim();
+          if (!/\b(ward|south africa|western cape|city of cape town)\b/i.test(t) && t.length > 2 && !/^\d+$/.test(t)) {
+            name = t;
+            break;
+          }
         }
       }
+
+      // Fallback: try county/state_district if we got nothing useful
+      if (!name || /\bward\b/i.test(name)) {
+        name = a.county || a.state_district || a.state || null;
+      }
+    }
+
+    // Strip any trailing " Ward NN" suffix
+    if (name) {
+      name = name.replace(/\s*Ward\s*\d+/gi, '').trim();
     }
 
     cache.set(key, name || 'Unknown');

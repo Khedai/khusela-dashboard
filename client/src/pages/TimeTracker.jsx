@@ -179,7 +179,7 @@ function AdminView({ user }) {
           <div style={{ overflowX: 'auto', position: 'relative' }}>
             <table style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Employee','Branch','Date','Status','Clock In','Live Work','Clock Out','Work','Tea 1','Tea 2','Lunch','Location'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', background: '#f8fafc' }}>{h}</th>)}
+                {['Employee','Branch','Date','Status','Clock In','Live Work','Clock Out','Work','Tea 1','Tea 2','Lunch','Location',''].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', background: '#f8fafc' }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {data.map(row => {
@@ -233,8 +233,8 @@ function AdminView({ user }) {
                       ) : fmtDuration(row.lunch_minutes)}
                     </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '11px' }}>{row.location_name || (row.latitude ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}` : '—')}</td>
-                    {isEditing && (
-                      <td style={{ padding: '4px 6px' }}>
+                    <td style={{ padding: '4px 6px', whiteSpace: 'nowrap' }}>
+                      {isEditing ? (
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button onClick={() => saveEdit(row)} disabled={savingId === row.id}
                             style={{ padding: '4px 10px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '5px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', opacity: savingId === row.id ? 0.6 : 1 }}>
@@ -245,8 +245,13 @@ function AdminView({ user }) {
                             Cancel
                           </button>
                         </div>
-                      </td>
-                    )}
+                      ) : (
+                        <button onClick={() => startEdit(row)}
+                          style={{ padding: '4px 8px', background: 'none', border: '1px solid #e2e8f0', borderRadius: '5px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#6366f1' }}>
+                          Edit
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )})}
               </tbody>
