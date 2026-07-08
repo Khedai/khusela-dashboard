@@ -48,6 +48,13 @@ export default function TimeTracker() {
 // ════════════════════════════════════════════════════
 //  ADMIN VIEW
 // ════════════════════════════════════════════════════
+function toTimeInput(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toTimeString().slice(0, 5); // HH:MM
+}
+
 function AdminView({ user }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +65,9 @@ function AdminView({ user }) {
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState('');
   const [absentLoading, setAbsentLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editValues, setEditValues] = useState({});
+  const [savingId, setSavingId] = useState(null);
   const LIMIT = 25;
 
   const fetchData = async (p = page) => {
@@ -75,6 +85,55 @@ function AdminView({ user }) {
 
   useEffect(() => { setPage(1); fetchData(1); }, [dateFilter, statusFilter]);
   useEffect(() => { fetchData(page); }, [page]);
+
+  const startEdit = (row) => {
+    setEditingId(row.id);
+    setEditValues({
+      clock_in: toTimeInput(row.clock_in),
+      tea_1_minutes: row.tea_1_minutes != null ? String(Math.round(row.tea_1_minutes)) : '',
+      tea_2_minutes: row.tea_2_minutes != null ? String(Math.round(row.tea_2_minutes)) : '',
+      lunch_minutes: row.lunch_minutes != null ? String(Math.round(row.lunch_minutes)) : '',
+    });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setEditValues({}); };
+
+  const saveEdit = async (row) => {
+    setSavingId(row.id); setError(''); setSuccess('');
+    try {
+      const payload = {};
+      if (editValues.clock_in && editValues.clock_in !== toTimeInput(row.clock_in)) {
+        // Reconstruct ISO datetime from the existing date + new time
+        const dateStr = new Date(row.date).toISOString().split('T')[0];
+        payload.clock_in = new Date(`${dateStr}T${editValues.clock_in}:00`).toISOString();
+      }
+      if (editValues.tea_1_minutes !== '' && Number(editValues.tea_1_minutes) !== Math.round(row.tea_1_minutes || 0)) {
+        payload.tea_1_minutes = Number(editValues.tea_1_minutes);
+      }
+      if (editValues.tea_2_minutes !== '' && Number(editValues.tea_2_minutes) !== Math.round(row.tea_2_minutes || 0)) {
+        payload.tea_2_minutes = Number(editValues.tea_2_minutes);
+      }
+      if (editValues.lunch_minutes !== '' && Number(editValues.lunch_minutes) !== Math.round(row.lunch_minutes || 0)) {
+        payload.lunch_minutes = Number(editValues.lunch_minutes);
+      }
+
+      if (Object.keys(payload).length === 0) { cancelEdit(); return; }
+
+      await api.patch(`/time/attendance/${row.id}`, payload);
+      setSuccess('Attendance updated.');
+      setEditingId(null); setEditValues({});
+      fetchData(page);
+    } catch (err) { setError(err.response?.data?.error || 'Failed to update.'); }
+    finally { setSavingId(null); }
+  };
+
+  const editableStyle = (isEditing) => ({
+    padding: '10px 12px',
+    color: '#334155',
+    fontSize: '13px',
+    cursor: isEditing ? 'default' : 'pointer',
+    background: isEditing ? '#eff6ff' : undefined,
+  });
 
   const handleMarkAbsent = async () => {
     if (!window.confirm(`Mark all unclocked employees as absent for ${dateFilter}?`)) return;
@@ -95,6 +154,9 @@ function AdminView({ user }) {
       <div style={{ marginBottom: '24px' }}>
         <h2 style={{ fontFamily: 'Sora', fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>Time Tracker — Monitoring</h2>
         <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>{todayStr}</p>
+        <p style={{ color: '#6366f1', fontSize: '11px', margin: '4px 0 0', fontStyle: 'italic' }}>
+          Click on Clock In, Tea 1, Tea 2, or Lunch to edit manually.
+        </p>
       </div>
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
@@ -120,7 +182,9 @@ function AdminView({ user }) {
                 {['Employee','Branch','Date','Status','Clock In','Live Work','Clock Out','Work','Tea 1','Tea 2','Lunch','Location'].map(h => <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', background: '#f8fafc' }}>{h}</th>)}
               </tr></thead>
               <tbody>
-                {data.map(row => (
+                {data.map(row => {
+                  const isEditing = editingId === row.id;
+                  return (
                   <tr key={row.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap', position: 'sticky', left: 0, background: 'white' }}>{row.first_name} {row.last_name}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{row.franchise_name || '—'}</td>
@@ -137,7 +201,12 @@ function AdminView({ user }) {
                         return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: '700', background: '#f0fdf4', color: '#16a34a' }}>Working</span>;
                       })()}
                     </td>
-                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtTime(row.clock_in)}</td>
+                    <td style={editableStyle(isEditing)} onClick={() => row.clock_in && !isEditing && startEdit(row)} title={row.clock_in ? 'Click to edit clock-in time' : ''}>
+                      {isEditing ? (
+                        <input type="time" value={editValues.clock_in} onChange={e => setEditValues(v => ({ ...v, clock_in: e.target.value }))}
+                          style={{ width: '100px', padding: '4px 6px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '12px', fontFamily: 'DM Sans' }} />
+                      ) : fmtTime(row.clock_in)}
+                    </td>
                     <td style={{ padding: '10px 12px', color: '#0f172a', fontSize: '14px', fontWeight: '700', fontFamily: '"Courier New", monospace' }}>
                       {!row.clock_out && row.clock_in
                         ? formatLiveTime(Math.floor((Date.now() - new Date(row.clock_in).getTime()) / 1000))
@@ -145,12 +214,41 @@ function AdminView({ user }) {
                     </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtTime(row.clock_out)}</td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.total_work_minutes)}</td>
-                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.tea_1_minutes)}</td>
-                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.tea_2_minutes)}</td>
-                    <td style={{ padding: '10px 12px', color: '#334155', fontSize: '13px' }}>{fmtDuration(row.lunch_minutes)}</td>
+                    <td style={editableStyle(isEditing)} onClick={() => !isEditing && startEdit(row)} title="Click to edit Tea 1 minutes">
+                      {isEditing ? (
+                        <input type="number" min="0" value={editValues.tea_1_minutes} onChange={e => setEditValues(v => ({ ...v, tea_1_minutes: e.target.value }))}
+                          style={{ width: '56px', padding: '4px 6px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '12px', fontFamily: 'DM Sans' }} />
+                      ) : fmtDuration(row.tea_1_minutes)}
+                    </td>
+                    <td style={editableStyle(isEditing)} onClick={() => !isEditing && startEdit(row)} title="Click to edit Tea 2 minutes">
+                      {isEditing ? (
+                        <input type="number" min="0" value={editValues.tea_2_minutes} onChange={e => setEditValues(v => ({ ...v, tea_2_minutes: e.target.value }))}
+                          style={{ width: '56px', padding: '4px 6px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '12px', fontFamily: 'DM Sans' }} />
+                      ) : fmtDuration(row.tea_2_minutes)}
+                    </td>
+                    <td style={editableStyle(isEditing)} onClick={() => !isEditing && startEdit(row)} title="Click to edit Lunch minutes">
+                      {isEditing ? (
+                        <input type="number" min="0" value={editValues.lunch_minutes} onChange={e => setEditValues(v => ({ ...v, lunch_minutes: e.target.value }))}
+                          style={{ width: '56px', padding: '4px 6px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '12px', fontFamily: 'DM Sans' }} />
+                      ) : fmtDuration(row.lunch_minutes)}
+                    </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontSize: '11px' }}>{row.location_name || (row.latitude ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}` : '—')}</td>
+                    {isEditing && (
+                      <td style={{ padding: '4px 6px' }}>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button onClick={() => saveEdit(row)} disabled={savingId === row.id}
+                            style={{ padding: '4px 10px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '5px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', opacity: savingId === row.id ? 0.6 : 1 }}>
+                            {savingId === row.id ? '...' : 'Save'}
+                          </button>
+                          <button onClick={cancelEdit}
+                            style={{ padding: '4px 10px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '5px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

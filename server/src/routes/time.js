@@ -657,7 +657,7 @@ router.get('/attendance', requireRole('Admin', 'HR'), async (req, res) => {
       listParams
     );
 
-    // Reverse geocode unique locations in parallel (fire-and-forget, non-blocking)
+    // Reverse geocode unique locations — wait up to 3s for results
     const rows = result.rows;
     const seen = new Set();
     const geocodeTasks = [];
@@ -681,12 +681,13 @@ router.get('/attendance', requireRole('Admin', 'HR'), async (req, res) => {
         }
       }
     }
-    // Don't await — send response immediately, geocode results will be available on next poll
-    // But try to resolve within 2 seconds if possible
-    Promise.race([
-      Promise.all(geocodeTasks),
-      new Promise(r => setTimeout(r, 2000)),
-    ]).catch(() => {});
+    // Wait up to 3 seconds for geocode results, then send response
+    if (geocodeTasks.length > 0) {
+      await Promise.race([
+        Promise.all(geocodeTasks),
+        new Promise(r => setTimeout(r, 3000)),
+      ]).catch(() => {});
+    }
 
     res.json({
       data: rows,
@@ -695,6 +696,50 @@ router.get('/attendance', requireRole('Admin', 'HR'), async (req, res) => {
   } catch (err) {
     console.error('attendance fetch error:', err.message);
     res.status(500).json({ error: 'Failed to fetch attendance.' });
+  }
+});
+
+// ─── EDIT ATTENDANCE (Admin only — manual adjustments) ──
+const ATTENDANCE_EDITABLE = ['clock_in', 'tea_1_minutes', 'tea_2_minutes', 'lunch_minutes'];
+router.patch('/attendance/:id', requireRole('Admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const setClauses = [];
+    const values = [];
+    let idx = 1;
+
+    for (const key of ATTENDANCE_EDITABLE) {
+      if (updates[key] !== undefined) {
+        setClauses.push(`${key} = $${idx}`);
+        values.push(updates[key]);
+        idx++;
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update. Allowed: clock_in, tea_1_minutes, tea_2_minutes, lunch_minutes.' });
+    }
+
+    // Add updated_at
+    setClauses.push(`updated_at = NOW()`);
+
+    // Add id as last param
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE attendance SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Attendance record not found.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('edit attendance error:', err.message);
+    res.status(500).json({ error: 'Failed to update attendance.' });
   }
 });
 
