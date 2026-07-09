@@ -53,7 +53,7 @@ function AppRoutes() {
   const { user } = useAuth();
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+      <Route path="/login" element={user ? <Navigate to={user?.role === 'Admin' ? '/' : '/time'} /> : <Login />} />
       <Route path="/" element={<ProtectedLayout>{user?.role === 'Admin' ? <Dashboard /> : <Navigate to="/time" replace />}</ProtectedLayout>} />
       <Route path="/employees" element={<ProtectedLayout><Employees /></ProtectedLayout>} />
       <Route path="/applications" element={<ProtectedLayout><Applications /></ProtectedLayout>} />

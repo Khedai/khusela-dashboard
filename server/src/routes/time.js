@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { reverseGeocode } = require('../utils/geocode');
+const { saToday, saNowHM, saIsPast, saTimestampToday } = require('../utils/saTime');
 
 router.use(verifyToken);
 
@@ -13,7 +14,6 @@ const LATE_CLOCK_IN_HOUR = 8; // 8:00 AM threshold for late marking
 const LATE_CLOCK_IN_MIN = 30; // Clock-in after 08:30 = late
 const TEA1_WINDOW_CLOSE_HOUR = 10; // Tea 1 only available 10:00-10:30 SA time
 const TEA1_WINDOW_CLOSE_MIN = 30;
-const SA_TIMEZONE_OFFSET = 2; // SAST = UTC+2
 const GRACE_MINUTES = 6; // 6-minute padding: clock-in recorded 6 min earlier, timer starts at 00:06:00
 
 function getLunchDuration(date) {
@@ -23,17 +23,16 @@ function getLunchDuration(date) {
 }
 
 function isLateClockIn(date) {
-  const h = date.getHours();
-  const m = date.getMinutes();
+  // Always evaluate using SAST (UTC+2)
+  const saOffsetMs = 2 * 60 * 60 * 1000;
+  const sa = new Date(date.getTime() + saOffsetMs);
+  const h = sa.getUTCHours();
+  const m = sa.getUTCMinutes();
   return (h > LATE_CLOCK_IN_HOUR) || (h === LATE_CLOCK_IN_HOUR && m >= LATE_CLOCK_IN_MIN);
 }
 
 function isTea1WindowClosed() {
-  // Check current SA time (UTC+2)
-  const now = new Date();
-  const saHour = (now.getUTCHours() + SA_TIMEZONE_OFFSET + 24) % 24;
-  const saMin = now.getUTCMinutes();
-  return (saHour > TEA1_WINDOW_CLOSE_HOUR) || (saHour === TEA1_WINDOW_CLOSE_HOUR && saMin >= TEA1_WINDOW_CLOSE_MIN);
+  return saIsPast(TEA1_WINDOW_CLOSE_HOUR, TEA1_WINDOW_CLOSE_MIN);
 }
 
 // ─── Middleware: block monitoring-only admins from clocking ───
@@ -58,7 +57,7 @@ router.post('/clock-in', blockMonitoringAdmin, async (req, res) => {
     const employeeId = await getEmployeeId(req.user.id);
     if (!employeeId) return res.status(400).json({ error: 'No active employee record linked to your account.' });
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = saToday();
 
     // Check if already clocked in today
     const existing = await pool.query(
@@ -451,7 +450,7 @@ router.get('/today', async (req, res) => {
 
     if (row) {
       shiftDateStr = new Date(row.date).toISOString().split('T')[0];
-      const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = saToday();
 
       // If the active shift is from yesterday (or earlier), auto-close it at 17:10
       if (shiftDateStr < todayStr) {
@@ -543,7 +542,7 @@ router.get('/today', async (req, res) => {
       // Active shift from today — use it directly (shiftDateStr already set)
     } else {
       // No active today shift — check today's record
-      shiftDateStr = new Date().toISOString().split('T')[0];
+      shiftDateStr = saToday();
       const todayRes = await pool.query(
         'SELECT * FROM attendance WHERE employee_id = $1 AND date = $2',
         [employeeId, shiftDateStr]
@@ -782,8 +781,8 @@ router.get('/my-history', async (req, res) => {
 // ─── MARK ABSENT + AUTO-CLOCK-OUT (Admin/HR) ───────────
 router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
   try {
-    const today = req.body.date || new Date().toISOString().split('T')[0];
-    const isCurrentDay = today === new Date().toISOString().split('T')[0];
+    const today = req.body.date || saToday();
+    const isCurrentDay = today === saToday();
     let now = new Date();
     if (!isCurrentDay) {
       now = new Date(`${today}T17:00:00`);
@@ -918,7 +917,7 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
 // Auto-clock-out all employees who forgot to clock out on past dates
 router.post('/cleanup', requireRole('Admin', 'HR'), async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = saToday();
 
     // Find all open shifts on dates before today
     const stragglers = await pool.query(

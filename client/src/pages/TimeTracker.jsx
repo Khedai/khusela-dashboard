@@ -6,7 +6,12 @@ import Spinner from '../components/Spinner';
 function fmtTime(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isNaN(d.getTime())) return '—';
+  // Always display in SAST (UTC+2) regardless of browser timezone
+  const sa = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+  const h = String(sa.getUTCHours()).padStart(2, '0');
+  const m = String(sa.getUTCMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
 }
 
 function fmtDuration(minutes) {
@@ -52,7 +57,11 @@ function toTimeInput(isoStr) {
   if (!isoStr) return '';
   const d = new Date(isoStr);
   if (isNaN(d.getTime())) return '';
-  return d.toTimeString().slice(0, 5); // HH:MM
+  // Always render in SAST (UTC+2) regardless of browser timezone
+  const sa = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+  const h = String(sa.getUTCHours()).padStart(2, '0');
+  const m = String(sa.getUTCMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
 }
 
 function AdminView({ user }) {
@@ -62,7 +71,11 @@ function AdminView({ user }) {
   const [success, setSuccess] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  // Admin date filter: always use SAST today
+  const [dateFilter, setDateFilter] = useState(() => {
+    const sa = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    return sa.toISOString().split('T')[0];
+  });
   const [statusFilter, setStatusFilter] = useState('');
   const [absentLoading, setAbsentLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -105,7 +118,9 @@ function AdminView({ user }) {
       if (editValues.clock_in && editValues.clock_in !== toTimeInput(row.clock_in)) {
         // Reconstruct ISO datetime from the existing date + new time
         const dateStr = new Date(row.date).toISOString().split('T')[0];
-        payload.clock_in = new Date(`${dateStr}T${editValues.clock_in}:00`).toISOString();
+        // Build the date-time as SAST (UTC+2) so the server receives the correct timestamp
+        const saDateTime = new Date(`${dateStr}T${editValues.clock_in}:00+02:00`);
+        payload.clock_in = saDateTime.toISOString();
       }
       if (editValues.tea_1_minutes !== '' && Number(editValues.tea_1_minutes) !== Math.round(row.tea_1_minutes || 0)) {
         payload.tea_1_minutes = Number(editValues.tea_1_minutes);
@@ -291,10 +306,12 @@ function sendNotification(title, body) {
 }
 
 function getBreakReminder(completedBreaks) {
+  // Always use SAST (UTC+2) regardless of browser timezone
   const now = new Date();
-  const h = now.getHours();
-  const m = now.getMinutes();
-  const day = now.getDay();
+  const saTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const h = saTime.getUTCHours();
+  const m = saTime.getUTCMinutes();
+  const day = saTime.getUTCDay();
 
   // Tea 1: remind from 9:30–10:00 and during window 10:00–10:30
   if (!completedBreaks.includes('tea_1')) {
