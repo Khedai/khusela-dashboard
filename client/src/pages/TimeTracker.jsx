@@ -42,6 +42,7 @@ function getLunchLabel() {
 const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: getLunchLabel() };
 const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
 const MONITORING_ONLY = ['ayabonga', 'ayabulela', 'admin'];
+const MOBILE_CLOCK_IN_WHITELIST = ['ayabongait', 'curwins', 'luqmaanc'];
 
 export default function TimeTracker() {
   const { user } = useAuth();
@@ -602,7 +603,7 @@ function EmployeeView() {
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}><p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Actions</p></div>
         <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {!isClockedIn ? (
-            isMobile ? <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', textAlign: 'center' }}>
+            isMobile && !MOBILE_CLOCK_IN_WHITELIST.includes((user?.username || '').toLowerCase()) ? <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', textAlign: 'center' }}>
               <p style={{ margin: 0, fontSize: '13px', color: '#1e40af', fontWeight: '600' }}>Clock in from your work computer</p>
               <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#3b82f6' }}>Mobile clock-in is disabled to ensure you're at your workstation.</p>
             </div>
