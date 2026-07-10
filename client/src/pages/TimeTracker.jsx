@@ -299,12 +299,71 @@ function requestNotificationPermission() {
   }
 }
 
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    // Pleasant two-tone chime
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch { /* audio not available */ }
+}
+
+let _titleFlashInterval = null;
+function startTitleFlash(message) {
+  if (_titleFlashInterval) clearInterval(_titleFlashInterval);
+  const original = document.title;
+  let toggle = false;
+  _titleFlashInterval = setInterval(() => {
+    document.title = toggle ? message : original;
+    toggle = !toggle;
+  }, 800);
+  // Stop after 30 seconds max
+  setTimeout(() => {
+    if (_titleFlashInterval) { clearInterval(_titleFlashInterval); _titleFlashInterval = null; }
+    document.title = original;
+  }, 30000);
+}
+
+function stopTitleFlash() {
+  if (_titleFlashInterval) { clearInterval(_titleFlashInterval); _titleFlashInterval = null; }
+}
+
 function sendNotification(title, body) {
+  playNotificationSound();
+  startTitleFlash(title);
   if (!('Notification' in window)) return;
   if (Notification.permission === 'granted') {
     new Notification(title, { body, icon: '/favicon.ico', badge: '/favicon.ico' });
   }
 }
+
+// ── Return-from-break timer ref ────────────────────
+let _breakReturnTimer = null;
+function scheduleBreakReturnReminder(breakType, durationMin) {
+  if (_breakReturnTimer) clearTimeout(_breakReturnTimer);
+  const label = breakType === 'tea_1' ? 'Tea 1' : breakType === 'tea_2' ? 'Tea 2' : 'Lunch';
+  const ms = (durationMin - 1) * 60 * 1000; // remind 1 min before break ends
+  if (ms > 0) {
+    _breakReturnTimer = setTimeout(() => {
+      sendNotification(`⏰ ${label} Almost Over`, `Your ${label.toLowerCase()} break ends soon — clock back in!`);
+    }, ms);
+  }
+}
+
+function cancelBreakReturnReminder() {
+  if (_breakReturnTimer) { clearTimeout(_breakReturnTimer); _breakReturnTimer = null; }
+}
+
+const BREAK_DURATIONS = { tea_1: 15, tea_2: 15, lunch: (() => new Date().getDay() === 5 ? 60 : 30)() };
 
 function getBreakReminder(completedBreaks) {
   // Always use SAST (UTC+2) regardless of browser timezone
@@ -456,7 +515,7 @@ function EmployeeView() {
   const handleStartBreak = async (breakType) => {
     if (!window.confirm(`Start ${BREAK_LABELS[breakType]} break now?`)) return;
     setError(''); setSuccess(''); setActionLoading(breakType);
-    try { await api.post('/time/break/start', { break_type: breakType }); await fetchStatus(); }
+    try { await api.post('/time/break/start', { break_type: breakType }); scheduleBreakReturnReminder(breakType, BREAK_DURATIONS[breakType]); await fetchStatus(); }
     catch (err) { setError(err.response?.data?.error || 'Failed to start break.'); }
     finally { setActionLoading(''); }
   };
@@ -464,6 +523,7 @@ function EmployeeView() {
   const handleEndBreak = async () => {
     if (!window.confirm('End your current break and resume work?')) return;
     setError(''); setSuccess(''); setActionLoading('break-end');
+    cancelBreakReturnReminder();
     try { await api.post('/time/break/end'); breakStartRef.current = null; setDisplayBreakSeconds(0); await fetchStatus(); }
     catch (err) { setError(err.response?.data?.error || 'Failed to end break.'); }
     finally { setActionLoading(''); }
@@ -494,9 +554,19 @@ function EmployeeView() {
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
       {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
 
+      <style>{`
+        @keyframes bannerPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+          50% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
+        }
+        @keyframes iconBounce {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.2); }
+        }
+      `}</style>
       {/* Break reminder banner */}
       {activeReminder && (
-        <div style={{ padding: '14px 18px', borderRadius: '12px', background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '1px solid #93c5fd', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ padding: '14px 18px', borderRadius: '12px', background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '2px solid #60a5fa', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', animation: 'bannerPulse 2s ease-in-out infinite' }}>
           <span style={{ fontSize: '28px', flexShrink: 0 }}>{activeReminder.title.match(/^[^\s]+/)?.[0] || '⏰'}</span>
           <div>
             <p style={{ margin: 0, fontSize: '14px', fontWeight: '700', color: '#1e40af' }}>{activeReminder.title.replace(/^[^\s]+\s/, '')}</p>
