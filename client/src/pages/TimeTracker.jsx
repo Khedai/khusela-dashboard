@@ -252,55 +252,6 @@ function AdminView({ user }) {
         <StatCard label="Absent" value={absentCount} color="#dc2626" bg="#fef2f2" />
         <StatCard label="Total" value={data.length} color="#0f172a" bg="#f1f5f9" />
       </div>
-      {/* Not Yet Clocked In */}
-      {!nciLoading && notClockedIn.length > 0 && (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setShowNci(!showNci)}>
-            <div>
-              <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#92400e' }}>
-                Not Yet Clocked In — {notClockedIn.length} employee{notClockedIn.length !== 1 ? 's' : ''}
-              </p>
-              <p style={{ margin: '2px 0 0', color: '#a16207', fontSize: '11px' }}>
-                These employees have not clocked in today. You can remind them.
-              </p>
-            </div>
-            <span style={{ color: '#92400e', fontSize: '18px', transition: 'transform 0.2s', transform: showNci ? 'rotate(180deg)' : 'none' }}>&#9660;</span>
-          </div>
-          {showNci && (
-            <div style={{ padding: '8px 0' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    {['Employee', 'Job Title', 'Branch', 'Contact'].map(h => <th key={h} style={{ padding: '8px 16px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {notClockedIn.map(e => (
-                      <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px 16px', color: '#334155', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>{e.first_name} {e.last_name}</td>
-                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px' }}>{e.job_title || '—'}</td>
-                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px' }}>{e.franchise_name || '—'}</td>
-                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                          {e.cell ? <a href={`tel:${e.cell}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.cell}</a> : e.email ? <a href={`mailto:${e.email}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.email}</a> : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {nciLoading && (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 20px', marginBottom: '16px', textAlign: 'center' }}>
-          <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Loading not-clocked-in list...</p>
-        </div>
-      )}
-      {!nciLoading && notClockedIn.length === 0 && (
-        <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '14px 20px', marginBottom: '16px', border: '1px solid #bbf7d0' }}>
-          <p style={{ margin: 0, fontSize: '13px', color: '#16a34a', fontWeight: '600' }}>Everyone has clocked in today!</p>
-        </div>
-      )}
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 20px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div><label style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</label><input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }} /></div>
         <div><label style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}><option value="">All</option><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option></select></div>
@@ -436,7 +387,57 @@ function AdminView({ user }) {
               <button key={p} onClick={() => setPage(p)} style={{ padding: '5px 12px', borderRadius: '6px', border: p === page ? '1px solid #6366f1' : '1px solid #e2e8f0', background: p === page ? '#eef2ff' : 'white', color: p === page ? '#4f46e5' : '#64748b', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>{p}</button>
             ))}
           </div>}
-        </div>}
+          </div>}
+
+      {/* Not Yet Clocked In — placed after attendance table */}
+      {!nciLoading && notClockedIn.length > 0 && (
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '16px' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setShowNci(!showNci)}>
+            <div>
+              <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#92400e' }}>
+                Not Yet Clocked In — {notClockedIn.length} employee{notClockedIn.length !== 1 ? 's' : ''}
+              </p>
+              <p style={{ margin: '2px 0 0', color: '#a16207', fontSize: '11px' }}>
+                These employees have not clocked in today — they can be reminded to clock in.
+              </p>
+            </div>
+            <span style={{ color: '#92400e', fontSize: '18px', transition: 'transform 0.2s', transform: showNci ? 'rotate(180deg)' : 'none' }}>&#9660;</span>
+          </div>
+          {showNci && (
+            <div style={{ padding: '8px 0' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    {['Employee', 'Job Title', 'Branch', 'Contact'].map(h => <th key={h} style={{ padding: '8px 16px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {notClockedIn.map(e => (
+                      <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 16px', color: '#334155', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>{e.first_name} {e.last_name}</td>
+                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px' }}>{e.job_title || '—'}</td>
+                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px' }}>{e.franchise_name || '—'}</td>
+                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {e.cell ? <a href={`tel:${e.cell}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.cell}</a> : e.email ? <a href={`mailto:${e.email}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.email}</a> : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {nciLoading && (
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 20px', marginTop: '16px', textAlign: 'center' }}>
+          <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Loading not-clocked-in list...</p>
+        </div>
+      )}
+      {!nciLoading && notClockedIn.length === 0 && (
+        <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '14px 20px', marginTop: '16px', border: '1px solid #bbf7d0' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: '#16a34a', fontWeight: '600' }}>Everyone has clocked in today!</p>
+        </div>
+      )}
     </div>
   );
 }
