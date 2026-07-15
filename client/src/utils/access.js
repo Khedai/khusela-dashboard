@@ -17,7 +17,7 @@ export const can = (user, action) => {
     'employees.uploadDocs':      ['Admin', 'HR'],
 
     // Leave
-    'leave.apply':               ['HR', 'Consultant'],
+    'leave.apply':               ['Admin', 'HR', 'Consultant'],
     'leave.approve':             ['Admin'],
     'leave.viewAll':             ['Admin'],
 

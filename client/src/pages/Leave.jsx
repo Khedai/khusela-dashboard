@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
+import { can } from '../utils/access';
 import Spinner from '../components/Spinner';
 import Pagination from '../components/Pagination';
 import EmptyState from '../components/EmptyState';
@@ -372,6 +373,9 @@ export default function Leave() {
         <div>
           <h2 style={S.pageTitle}>Leave Management</h2>
         </div>
+        {can(user, 'leave.apply') && myEmployee && !showForm && (
+          <button onClick={() => setShowForm(true)} style={S.primaryBtn}>+ Apply for Leave</button>
+        )}
       </div>
 
       {error && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13.5px', marginBottom: '16px' }}>{error}</div>}
