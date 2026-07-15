@@ -154,7 +154,7 @@ export default function Leave() {
       fetchData(page);
       try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {}
       try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {}
-    } catch { setError('Failed to update request.'); }
+    } catch (err) { setError(err.response?.data?.error || 'Failed to update request.'); }
     finally { setActioning(a => { const n = { ...a }; delete n[id]; return n; }); }
   };
 
@@ -288,9 +288,9 @@ export default function Leave() {
           <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', padding: '20px', marginBottom: '16px' }}>
             <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 12px' }}>Action Request</p>
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={async (e) => { e.stopPropagation(); await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Approved' }); setSelectedRequest(prev => ({ ...prev, status: 'Approved' })); fetchData(page); try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {} try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {} }}
+              <button onClick={async (e) => { e.stopPropagation(); try { await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Approved' }); setSelectedRequest(prev => ({ ...prev, status: 'Approved' })); fetchData(page); try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {} try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {} } catch (err) { setError(err.response?.data?.error || 'Failed to approve.'); } }}
                 style={{ flex: 1, padding: '11px 20px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontSize: '13px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer', boxShadow: '0 2px 8px rgba(22,163,74,0.25)' }}>Approve</button>
-              <button onClick={async (e) => { e.stopPropagation(); const reason = window.prompt('Reason for rejection (optional):'); await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Rejected', rejection_reason: reason || '' }); setSelectedRequest(prev => ({ ...prev, status: 'Rejected', rejection_reason: reason })); fetchData(page); try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {} try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {} }}
+              <button onClick={async (e) => { e.stopPropagation(); const reason = window.prompt('Reason for rejection (optional):'); if (reason === null) return; try { await api.patch(`/leave/request/${selectedRequest.id}`, { status: 'Rejected', rejection_reason: reason || '' }); setSelectedRequest(prev => ({ ...prev, status: 'Rejected', rejection_reason: reason })); fetchData(page); try { window.dispatchEvent(new Event('refreshNotifications')); } catch (e) {} try { window.dispatchEvent(new Event('refreshPendingCount')); } catch (e) {} } catch (err) { setError(err.response?.data?.error || 'Failed to reject.'); } }}
                 style={{ flex: 1, padding: '11px 20px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg,#dc2626,#b91c1c)', color: 'white', fontSize: '13px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer', boxShadow: '0 2px 8px rgba(220,38,38,0.25)' }}>Reject</button>
             </div>
           </div>
