@@ -458,3 +458,279 @@ export async function generateApplicationForm(application, creditors) {
 
   doc.save(name);
 }
+
+// ─── ATTENDANCE REPORT ────────────────────────────────────
+
+function fmtTime(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  const sa = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+  const h = String(sa.getUTCHours()).padStart(2, '0');
+  const m = String(sa.getUTCMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function fmtHours(minutes) {
+  if (!minutes && minutes !== 0) return '—';
+  const m = Math.max(0, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  return `${h}h ${min.toString().padStart(2, '0')}m`;
+}
+
+function fmtDecimalHours(minutes) {
+  if (!minutes && minutes !== 0) return '0.0';
+  return (Math.round(minutes) / 60).toFixed(1);
+}
+
+/**
+ * Generate a branded PDF attendance report.
+ * @param {Object} data - Report data from GET /time/report
+ * @param {string} [employeeName] - If provided, generates individual detailed report
+ */
+export async function generateAttendanceReport(data, employeeName) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const { period, start_date, end_date, summary, employees } = data;
+  const periodLabel = period === 'monthly' ? 'Monthly' : 'Weekly';
+
+  const reportTitle = employeeName
+    ? `${periodLabel} Attendance — ${employeeName}`
+    : `${periodLabel} Attendance Report`;
+
+  await addHeader(doc, reportTitle, `${start_date} to ${end_date}`);
+
+  let y = 28;
+
+  if (!employeeName) {
+    // ═════════ OVERALL REPORT ═════════
+
+    // Summary cards
+    y = addSectionTitle(doc, 'Summary', y);
+
+    const summaryItems = [
+      { label: 'Employees', value: String(summary.total_employees) },
+      { label: 'Present Days', value: String(summary.total_present_days) },
+      { label: 'Late Days', value: String(summary.total_late_days) },
+      { label: 'Absent Days', value: String(summary.total_absent_days) },
+      { label: 'Total Work Hours', value: summary.total_work_hours },
+      { label: 'Avg Hours / Day', value: summary.avg_work_hours_per_day },
+    ];
+
+    const cardWidth = 61;
+    const cardHeight = 16;
+    const startX = 12;
+    const gapX = 5;
+    const gapY = 4;
+
+    summaryItems.forEach((item, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const cx = startX + col * (cardWidth + gapX);
+      const cy = y + row * (cardHeight + gapY);
+
+      doc.setFillColor(...LIGHT);
+      doc.setDrawColor(...LINE);
+      doc.roundedRect(cx, cy, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+      doc.setTextColor(...MID);
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(item.label, cx + 3, cy + 5);
+
+      doc.setTextColor(...DARK);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(item.value, cx + 3, cy + 12);
+    });
+    y += 2 * (cardHeight + gapY) + 6;
+
+    // Employee table
+    if (y > 240) {
+      addFooter(doc, doc.internal.pages.length - 1);
+      doc.addPage();
+      await addHeader(doc, reportTitle, `${start_date} to ${end_date}`);
+      y = 28;
+    }
+
+    y = addSectionTitle(doc, 'Employee Breakdown', y);
+
+    // Table header
+    doc.setFillColor(...BRAND_BLUE);
+    doc.rect(12, y, 185, 7, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Employee', 14, y + 5);
+    doc.text('Branch', 64, y + 5);
+    doc.text('Present', 100, y + 5);
+    doc.text('Late', 113, y + 5);
+    doc.text('Absent', 126, y + 5);
+    doc.text('Hours', 142, y + 5);
+    doc.text('Avg/Day', 159, y + 5);
+    doc.text('T1/T2/L', 176, y + 5);
+    y += 7;
+
+    employees.forEach((emp, i) => {
+      if (y > 272) {
+        addFooter(doc, doc.internal.pages.length - 1);
+        doc.addPage();
+        addHeader(doc, reportTitle, `${start_date} to ${end_date}`);
+        y = 28;
+      }
+
+      const bg = i % 2 === 0 ? WHITE : LIGHT;
+      doc.setFillColor(...bg);
+      doc.rect(12, y, 185, 7, 'F');
+      doc.setDrawColor(...LINE);
+      doc.rect(12, y, 185, 7);
+
+      const workingDays = emp.days_present;
+      const avgH = workingDays > 0
+        ? (emp.total_work_minutes / workingDays / 60).toFixed(1)
+        : '0.0';
+      const breaks = `${emp.total_tea_1}/${emp.total_tea_2}/${emp.total_lunch}`;
+
+      doc.setTextColor(...DARK);
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${emp.first_name} ${emp.last_name}`, 14, y + 5);
+      doc.text(emp.franchise_name, 64, y + 5);
+      doc.text(String(emp.days_present), 102, y + 5);
+      doc.text(String(emp.days_late), 115, y + 5);
+      doc.text(String(emp.days_absent), 128, y + 5);
+      doc.text(fmtDecimalHours(emp.total_work_minutes), 144, y + 5);
+      doc.text(avgH, 161, y + 5);
+      doc.setFontSize(6.5);
+      doc.text(breaks, 178, y + 5);
+      y += 7;
+    });
+
+  } else {
+    // ═════════ INDIVIDUAL REPORT ═════════
+
+    if (employees.length === 0) {
+      doc.setTextColor(...MID);
+      doc.setFontSize(10);
+      doc.text('No attendance records found for this period.', 12, y);
+      addFooter(doc, 1);
+      doc.save(`Attendance_${period || 'weekly'}_${employeeName.replace(/\s+/g, '_')}.pdf`);
+      return;
+    }
+
+    const emp = employees[0];
+
+    // Summary cards
+    y = addSectionTitle(doc, 'Summary', y);
+
+    const items = [
+      { label: 'Present Days', value: String(emp.days_present) },
+      { label: 'Late Days', value: String(emp.days_late) },
+      { label: 'Absent Days', value: String(emp.days_absent) },
+      { label: 'Total Work', value: fmtHours(emp.total_work_minutes) },
+      { label: 'Avg / Day', value: emp.days_present > 0 ? fmtHours(emp.total_work_minutes / emp.days_present) : '—' },
+      { label: 'Branch', value: emp.franchise_name },
+    ];
+
+    const cw = 61;
+    const ch = 14;
+    items.forEach((item, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const cx = 12 + col * (cw + 5);
+      const cy = y + row * (ch + 4);
+
+      doc.setFillColor(...LIGHT);
+      doc.setDrawColor(...LINE);
+      doc.roundedRect(cx, cy, cw, ch, 1.5, 1.5, 'FD');
+
+      doc.setTextColor(...MID);
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(item.label, cx + 3, cy + 4.5);
+
+      doc.setTextColor(...DARK);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(item.value, cx + 3, cy + 11);
+    });
+    y += 2 * (ch + 4) + 8;
+
+    // Daily breakdown table
+    if (y > 245) {
+      addFooter(doc, doc.internal.pages.length - 1);
+      doc.addPage();
+      await addHeader(doc, reportTitle, `${start_date} to ${end_date}`);
+      y = 28;
+    }
+
+    y = addSectionTitle(doc, 'Daily Breakdown', y);
+
+    // Table header
+    doc.setFillColor(...BRAND_BLUE);
+    doc.rect(12, y, 185, 7, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Date', 14, y + 5);
+    doc.text('Status', 40, y + 5);
+    doc.text('In', 62, y + 5);
+    doc.text('Out', 78, y + 5);
+    doc.text('Work', 94, y + 5);
+    doc.text('Tea 1', 118, y + 5);
+    doc.text('Tea 2', 134, y + 5);
+    doc.text('Lunch', 150, y + 5);
+    doc.text('Location', 166, y + 5);
+    y += 7;
+
+    emp.daily.forEach((day, i) => {
+      if (y > 272) {
+        addFooter(doc, doc.internal.pages.length - 1);
+        doc.addPage();
+        addHeader(doc, reportTitle, `${start_date} to ${end_date}`);
+        y = 28;
+      }
+
+      const bg = i % 2 === 0 ? WHITE : LIGHT;
+      doc.setFillColor(...bg);
+      doc.rect(12, y, 185, 7, 'F');
+      doc.setDrawColor(...LINE);
+      doc.rect(12, y, 185, 7);
+
+      // Status color
+      let statusColor = DARK;
+      if (day.status === 'late') statusColor = [217, 119, 6];
+      else if (day.status === 'absent') statusColor = [220, 38, 38];
+      else if (day.status === 'present') statusColor = [22, 163, 74];
+
+      doc.setTextColor(...statusColor);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      const dateFormatted = new Date(day.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+      doc.text(dateFormatted, 14, y + 5);
+
+      doc.text(day.status.charAt(0).toUpperCase() + day.status.slice(1), 40, y + 5);
+
+      doc.setTextColor(...DARK);
+      doc.setFont('helvetica', 'normal');
+      doc.text(fmtTime(day.clock_in), 62, y + 5);
+      doc.text(fmtTime(day.clock_out), 78, y + 5);
+      doc.text(fmtHours(day.work_minutes), 94, y + 5);
+      doc.text(fmtHours(day.tea_1_minutes), 118, y + 5);
+      doc.text(fmtHours(day.tea_2_minutes), 134, y + 5);
+      doc.text(fmtHours(day.lunch_minutes), 150, y + 5);
+
+      doc.setFontSize(6);
+      doc.text(day.location_name || '—', 166, y + 5);
+      y += 7;
+    });
+  }
+
+  addFooter(doc, doc.internal.pages.length - 1);
+
+  const scope = employeeName
+    ? employeeName.replace(/\s+/g, '_')
+    : 'Overall';
+  const safePeriod = period || 'weekly';
+  doc.save(`Attendance_${safePeriod}_${scope}_${start_date}_to_${end_date}.pdf`);
+}

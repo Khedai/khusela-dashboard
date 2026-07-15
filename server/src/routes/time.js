@@ -1030,4 +1030,190 @@ router.post('/cleanup', requireRole('Admin', 'HR'), async (req, res) => {
   }
 });
 
+// ─── GET NOT-CLOCKED-IN EMPLOYEES (Admin/HR) ────────────
+router.get('/not-clocked-in', requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const today = saToday();
+    const franchiseId = req.user.role !== 'Admin' ? req.user.franchise_id : null;
+    const params = [today];
+    const conditions = [
+      'e.terminated_at IS NULL',
+      'NOT EXISTS (SELECT 1 FROM attendance a WHERE a.employee_id = e.id AND a.date = $1)',
+      'NOT EXISTS (SELECT 1 FROM leave_requests lr WHERE lr.employee_id = e.id AND lr.status = \'Approved\' AND $1::date BETWEEN lr.start_date AND lr.end_date)',
+      'e.user_id IS NOT NULL',
+      'EXISTS (SELECT 1 FROM users u WHERE u.id = e.user_id AND u.is_active = true)',
+    ];
+    if (franchiseId) {
+      params.push(franchiseId);
+      conditions.push(`e.franchise_id = $${params.length}`);
+    }
+    const result = await pool.query(
+      `SELECT e.id, e.first_name, e.last_name, e.job_title, e.cell, e.email,
+              f.franchise_name
+       FROM employees e
+       LEFT JOIN franchises f ON e.franchise_id = f.id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY e.first_name, e.last_name`,
+      params
+    );
+    res.json({ date: today, count: result.rows.length, employees: result.rows });
+  } catch (err) {
+    console.error('not-clocked-in error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch not-clocked-in list.' });
+  }
+});
+
+// ─── GET ATTENDANCE REPORT (Admin/HR) ──────────────────
+// period=weekly|monthly, employee_id (optional for individual),
+// start_date & end_date (optional overrides)
+router.get('/report', requireRole('Admin', 'HR'), async (req, res) => {
+  try {
+    const { period, employee_id, start_date, end_date } = req.query;
+    let sd, ed;
+
+    const today = saToday();
+    if (start_date && end_date) {
+      sd = start_date;
+      ed = end_date;
+    } else if (period === 'weekly') {
+      // Last Monday to Sunday
+      const d = new Date(today + 'T00:00:00+02:00');
+      const dayOfWeek = d.getUTCDay(); // 0=Sun, 1=Mon, ...
+      const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const monday = new Date(d);
+      monday.setUTCDate(monday.getUTCDate() - daysSinceMonday);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(sunday.getUTCDate() + 6);
+      sd = monday.toISOString().split('T')[0];
+      ed = sunday.toISOString().split('T')[0];
+    } else if (period === 'monthly') {
+      // 1st to last day of current month
+      const d = new Date(today + 'T00:00:00+02:00');
+      const firstDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+      const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+      sd = firstDay.toISOString().split('T')[0];
+      ed = lastDay.toISOString().split('T')[0];
+    } else {
+      // Default: current week
+      const d = new Date(today + 'T00:00:00+02:00');
+      const dayOfWeek = d.getUTCDay();
+      const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const monday = new Date(d);
+      monday.setUTCDate(monday.getUTCDate() - daysSinceMonday);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(sunday.getUTCDate() + 6);
+      sd = monday.toISOString().split('T')[0];
+      ed = sunday.toISOString().split('T')[0];
+    }
+
+    const params = [sd, ed];
+    let employeeFilter = '';
+
+    if (employee_id) {
+      employeeFilter = `AND a.employee_id = $${params.length + 1}`;
+      params.push(employee_id);
+    }
+
+    // For HR role, restrict to their franchise
+    let franchiseFilter = '';
+    if (req.user.role === 'HR' && req.user.franchise_id) {
+      franchiseFilter = `AND e.franchise_id = $${params.length + 1}`;
+      params.push(req.user.franchise_id);
+    }
+
+    // Get daily attendance for the period
+    const result = await pool.query(
+      `SELECT a.*, e.first_name, e.last_name, f.franchise_name
+       FROM attendance a
+       JOIN employees e ON a.employee_id = e.id
+       LEFT JOIN franchises f ON e.franchise_id = f.id
+       WHERE a.date >= $1 AND a.date <= $2
+       ${employeeFilter}
+       ${franchiseFilter}
+       ORDER BY e.first_name, e.last_name, a.date`,
+      params
+    );
+
+    const rows = result.rows;
+
+    // Group by employee
+    const employeeMap = new Map();
+    for (const row of rows) {
+      if (!employeeMap.has(row.employee_id)) {
+        employeeMap.set(row.employee_id, {
+          employee_id: row.employee_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          franchise_name: row.franchise_name || '—',
+          days_present: 0,
+          days_late: 0,
+          days_absent: 0,
+          total_work_minutes: 0,
+          total_tea_1: 0,
+          total_tea_2: 0,
+          total_lunch: 0,
+          daily: [],
+        });
+      }
+      const emp = employeeMap.get(row.employee_id);
+      if (row.status === 'absent') {
+        emp.days_absent++;
+      } else if (row.status === 'late') {
+        emp.days_late++;
+        emp.days_present++;
+      } else if (row.status === 'present') {
+        emp.days_present++;
+      }
+      emp.total_work_minutes += Math.round(row.total_work_minutes || 0);
+      emp.total_tea_1 += Math.round(row.tea_1_minutes || 0);
+      emp.total_tea_2 += Math.round(row.tea_2_minutes || 0);
+      emp.total_lunch += Math.round(row.lunch_minutes || 0);
+
+      emp.daily.push({
+        date: new Date(row.date).toISOString().split('T')[0],
+        status: row.status,
+        clock_in: row.clock_in,
+        clock_out: row.clock_out,
+        work_minutes: Math.round(row.total_work_minutes || 0),
+        tea_1_minutes: Math.round(row.tea_1_minutes || 0),
+        tea_2_minutes: Math.round(row.tea_2_minutes || 0),
+        lunch_minutes: Math.round(row.lunch_minutes || 0),
+        location_name: row.location_name || null,
+        latitude: row.latitude,
+        longitude: row.longitude,
+      });
+    }
+
+    const employees = Array.from(employeeMap.values());
+
+    // Summary
+    const totalEmployees = employees.length;
+    const totalLateDays = employees.reduce((s, e) => s + e.days_late, 0);
+    const totalAbsentDays = employees.reduce((s, e) => s + e.days_absent, 0);
+    const totalPresentDays = employees.reduce((s, e) => s + e.days_present, 0);
+    const totalWorkMinutes = employees.reduce((s, e) => s + e.total_work_minutes, 0);
+    const avgWorkHours = totalEmployees > 0 && totalPresentDays > 0
+      ? (totalWorkMinutes / totalPresentDays / 60).toFixed(1)
+      : '0.0';
+
+    res.json({
+      period: period || 'weekly',
+      start_date: sd,
+      end_date: ed,
+      summary: {
+        total_employees: totalEmployees,
+        total_present_days: totalPresentDays,
+        total_late_days: totalLateDays,
+        total_absent_days: totalAbsentDays,
+        total_work_hours: (totalWorkMinutes / 60).toFixed(1),
+        avg_work_hours_per_day: avgWorkHours,
+      },
+      employees,
+    });
+  } catch (err) {
+    console.error('report error:', err.message);
+    res.status(500).json({ error: 'Failed to generate report.' });
+  }
+});
+
 module.exports = router;

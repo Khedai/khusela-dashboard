@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import Spinner from '../components/Spinner';
+import { generateAttendanceReport } from '../utils/pdfGenerator';
+import { generateAttendanceCSV } from '../utils/csvGenerator';
 
 function fmtTime(dateStr) {
   if (!dateStr) return '—';
@@ -47,7 +49,8 @@ const MOBILE_CLOCK_IN_WHITELIST = ['ayabongait', 'curwins', 'luqmaanc'];
 export default function TimeTracker() {
   const { user } = useAuth();
   const username = (user?.username || '').toLowerCase();
-  if (MONITORING_ONLY.includes(username)) return <AdminView user={user} />;
+  const isAdmin = user?.role === 'Admin';
+  if (MONITORING_ONLY.includes(username) || isAdmin) return <AdminView user={user} />;
   return <EmployeeView />;
 }
 
@@ -79,9 +82,18 @@ function AdminView({ user }) {
   });
   const [statusFilter, setStatusFilter] = useState('');
   const [absentLoading, setAbsentLoading] = useState(false);
+  const [notClockedIn, setNotClockedIn] = useState([]);
+  const [nciLoading, setNciLoading] = useState(true);
+  const [showNci, setShowNci] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [editValues, setEditValues] = useState({});
   const [savingId, setSavingId] = useState(null);
+  // Report download state
+  const [reportPeriod, setReportPeriod] = useState('weekly');
+  const [reportScope, setReportScope] = useState('overall');
+  const [reportEmployeeId, setReportEmployeeId] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [employeeList, setEmployeeList] = useState([]);
   const LIMIT = 25;
 
   const fetchData = async (p = page) => {
@@ -99,6 +111,63 @@ function AdminView({ user }) {
 
   useEffect(() => { setPage(1); fetchData(1); }, [dateFilter, statusFilter]);
   useEffect(() => { fetchData(page); }, [page]);
+
+  const fetchNotClockedIn = async () => {
+    setNciLoading(true);
+    try {
+      const res = await api.get('/time/not-clocked-in');
+      setNotClockedIn(res.data.employees || []);
+    } catch { /* ignore */ }
+    finally { setNciLoading(false); }
+  };
+  useEffect(() => { fetchNotClockedIn(); }, [dateFilter]);
+
+  // Fetch employee list for report download
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await api.get('/employees?limit=1000');
+        const list = Array.isArray(res.data) ? res.data : (res.data.data || []);
+        setEmployeeList(list);
+      } catch { /* ignore */ }
+    };
+    fetchEmployees();
+  }, []);
+
+  // ─── Report download handlers ─────────────────────────
+  const handleDownloadPDF = async () => {
+    setReportLoading(true); setError('');
+    try {
+      const params = new URLSearchParams();
+      params.append('period', reportPeriod);
+      if (reportScope === 'individual' && reportEmployeeId) {
+        params.append('employee_id', reportEmployeeId);
+      }
+      const res = await api.get(`/time/report?${params.toString()}`);
+      const employeeName = reportScope === 'individual'
+        ? employeeList.find(e => String(e.id) === String(reportEmployeeId))?.first_name + ' ' + employeeList.find(e => String(e.id) === String(reportEmployeeId))?.last_name
+        : null;
+      await generateAttendanceReport(res.data, employeeName);
+    } catch (err) { setError('Failed to download PDF report.'); }
+    finally { setReportLoading(false); }
+  };
+
+  const handleDownloadCSV = async () => {
+    setReportLoading(true); setError('');
+    try {
+      const params = new URLSearchParams();
+      params.append('period', reportPeriod);
+      if (reportScope === 'individual' && reportEmployeeId) {
+        params.append('employee_id', reportEmployeeId);
+      }
+      const res = await api.get(`/time/report?${params.toString()}`);
+      const employeeName = reportScope === 'individual'
+        ? employeeList.find(e => String(e.id) === String(reportEmployeeId))?.first_name + ' ' + employeeList.find(e => String(e.id) === String(reportEmployeeId))?.last_name
+        : null;
+      generateAttendanceCSV(res.data, employeeName);
+    } catch (err) { setError('Failed to download CSV report.'); }
+    finally { setReportLoading(false); }
+  };
 
   const startEdit = (row) => {
     setEditingId(row.id);
@@ -183,12 +252,101 @@ function AdminView({ user }) {
         <StatCard label="Absent" value={absentCount} color="#dc2626" bg="#fef2f2" />
         <StatCard label="Total" value={data.length} color="#0f172a" bg="#f1f5f9" />
       </div>
+      {/* Not Yet Clocked In */}
+      {!nciLoading && notClockedIn.length > 0 && (
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setShowNci(!showNci)}>
+            <div>
+              <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#92400e' }}>
+                Not Yet Clocked In — {notClockedIn.length} employee{notClockedIn.length !== 1 ? 's' : ''}
+              </p>
+              <p style={{ margin: '2px 0 0', color: '#a16207', fontSize: '11px' }}>
+                These employees have not clocked in today. You can remind them.
+              </p>
+            </div>
+            <span style={{ color: '#92400e', fontSize: '18px', transition: 'transform 0.2s', transform: showNci ? 'rotate(180deg)' : 'none' }}>&#9660;</span>
+          </div>
+          {showNci && (
+            <div style={{ padding: '8px 0' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    {['Employee', 'Job Title', 'Branch', 'Contact'].map(h => <th key={h} style={{ padding: '8px 16px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {notClockedIn.map(e => (
+                      <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 16px', color: '#334155', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>{e.first_name} {e.last_name}</td>
+                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px' }}>{e.job_title || '—'}</td>
+                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px' }}>{e.franchise_name || '—'}</td>
+                        <td style={{ padding: '10px 16px', color: '#64748b', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {e.cell ? <a href={`tel:${e.cell}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.cell}</a> : e.email ? <a href={`mailto:${e.email}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.email}</a> : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {nciLoading && (
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 20px', marginBottom: '16px', textAlign: 'center' }}>
+          <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Loading not-clocked-in list...</p>
+        </div>
+      )}
+      {!nciLoading && notClockedIn.length === 0 && (
+        <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '14px 20px', marginBottom: '16px', border: '1px solid #bbf7d0' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: '#16a34a', fontWeight: '600' }}>Everyone has clocked in today!</p>
+        </div>
+      )}
       <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 20px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div><label style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</label><input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }} /></div>
         <div><label style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}><option value="">All</option><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option></select></div>
         <div style={{ flex: 1 }} />
         <button onClick={handleMarkAbsent} disabled={absentLoading} style={{ padding: '10px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: absentLoading ? 'not-allowed' : 'pointer', opacity: absentLoading ? 0.7 : 1 }}>{absentLoading ? 'Marking...' : 'Mark All Absent'}</button>
       </div>
+
+      {/* ─── Download Reports ─────────────────────────── */}
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 20px', marginBottom: '16px' }}>
+        <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a', margin: '0 0 10px' }}>Download Reports</p>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Period</label>
+            <select value={reportPeriod} onChange={e => setReportPeriod(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Scope</label>
+            <select value={reportScope} onChange={e => { setReportScope(e.target.value); setReportEmployeeId(''); }} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}>
+              <option value="overall">Overall</option>
+              <option value="individual">Individual</option>
+            </select>
+          </div>
+          {reportScope === 'individual' && (
+            <div>
+              <label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Employee</label>
+              <select value={reportEmployeeId} onChange={e => setReportEmployeeId(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', minWidth: '180px' }}>
+                <option value="">Select employee...</option>
+                {employeeList.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}{emp.franchise_name ? ` (${emp.franchise_name})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div style={{ flex: 1 }} />
+          <button onClick={handleDownloadPDF} disabled={reportLoading || (reportScope === 'individual' && !reportEmployeeId)} style={{ padding: '9px 14px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: reportLoading || (reportScope === 'individual' && !reportEmployeeId) ? 'not-allowed' : 'pointer', opacity: reportLoading ? 0.6 : (reportScope === 'individual' && !reportEmployeeId) ? 0.5 : 1 }}>
+            {reportLoading ? 'Loading...' : 'Download PDF'}
+          </button>
+          <button onClick={handleDownloadCSV} disabled={reportLoading || (reportScope === 'individual' && !reportEmployeeId)} style={{ padding: '9px 14px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: reportLoading || (reportScope === 'individual' && !reportEmployeeId) ? 'not-allowed' : 'pointer', opacity: reportLoading ? 0.6 : (reportScope === 'individual' && !reportEmployeeId) ? 0.5 : 1 }}>
+            {reportLoading ? 'Loading...' : 'Download CSV'}
+          </button>
+        </div>
+      </div>
+
       {loading ? <Spinner size="lg" dark label="Loading attendance..." />
       : data.length === 0 ? <div style={{ background: 'white', borderRadius: '12px', padding: '40px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>No attendance records for the selected filters.</p></div>
       : <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
