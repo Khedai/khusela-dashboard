@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { can } from '../utils/access';
 import api from '../utils/api';
 import Spinner from '../components/Spinner';
 import { generateAttendanceReport } from '../utils/pdfGenerator';
@@ -43,14 +44,12 @@ function getLunchLabel() {
 }
 const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: getLunchLabel() };
 const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
-const MONITORING_ONLY = ['ayabonga', 'ayabulela', 'admin'];
 const MOBILE_CLOCK_IN_WHITELIST = ['ayabongait', 'curwins', 'luqmaanc'];
 
 export default function TimeTracker() {
   const { user } = useAuth();
-  const username = (user?.username || '').toLowerCase();
-  const isAdmin = user?.role === 'Admin';
-  if (MONITORING_ONLY.includes(username) || isAdmin) return <AdminView user={user} />;
+  // Admin & HR get monitoring view; Consultants get clock-in/out view
+  if (can(user, 'time.viewAll')) return <AdminView user={user} />;
   return <EmployeeView />;
 }
 
