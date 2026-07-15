@@ -36,8 +36,8 @@ export const can = (user, action) => {
 
     // Time Tracking
     'time.clockSelf':            ['HR', 'Consultant'],
-    'time.viewAll':              ['Admin', 'HR'],
-    'time.manageAttendance':     ['Admin', 'HR'],
+    'time.viewAll':              ['Admin'],
+    'time.manageAttendance':     ['Admin'],
 
     // Dashboard
     'dashboard.viewAll':         ['Admin'],

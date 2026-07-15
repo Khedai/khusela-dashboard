@@ -603,7 +603,7 @@ router.get('/today', async (req, res) => {
 });
 
 // ─── GET ATTENDANCE (Admin/HR) ─────────────────────────
-router.get('/attendance', requireRole('Admin', 'HR'), async (req, res) => {
+router.get('/attendance', requireRole('Admin'), async (req, res) => {
   try {
     const { employee_id, date, start_date, end_date, status, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -779,7 +779,7 @@ router.get('/my-history', async (req, res) => {
 });
 
 // ─── MARK ABSENT + AUTO-CLOCK-OUT (Admin/HR) ───────────
-router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
+router.post('/absent/run', requireRole('Admin'), async (req, res) => {
   try {
     const today = req.body.date || saToday();
     const isCurrentDay = today === saToday();
@@ -915,7 +915,7 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
 
 // ─── CLEANUP PAST OPEN SHIFTS (Admin/HR) ────────────
 // Auto-clock-out all employees who forgot to clock out on past dates
-router.post('/cleanup', requireRole('Admin', 'HR'), async (req, res) => {
+router.post('/cleanup', requireRole('Admin'), async (req, res) => {
   try {
     const today = saToday();
 
@@ -1031,7 +1031,7 @@ router.post('/cleanup', requireRole('Admin', 'HR'), async (req, res) => {
 });
 
 // ─── GET NOT-CLOCKED-IN EMPLOYEES (Admin/HR) ────────────
-router.get('/not-clocked-in', requireRole('Admin', 'HR'), async (req, res) => {
+router.get('/not-clocked-in', requireRole('Admin'), async (req, res) => {
   try {
     const today = saToday();
     const franchiseId = req.user.role !== 'Admin' ? req.user.franchise_id : null;
@@ -1066,7 +1066,7 @@ router.get('/not-clocked-in', requireRole('Admin', 'HR'), async (req, res) => {
 // ─── GET ATTENDANCE REPORT (Admin/HR) ──────────────────
 // period=weekly|monthly, employee_id (optional for individual),
 // start_date & end_date (optional overrides)
-router.get('/report', requireRole('Admin', 'HR'), async (req, res) => {
+router.get('/report', requireRole('Admin'), async (req, res) => {
   try {
     const { period, employee_id, start_date, end_date } = req.query;
     let sd, ed;
