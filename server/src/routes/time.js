@@ -452,9 +452,9 @@ router.get('/today', async (req, res) => {
       shiftDateStr = new Date(row.date).toISOString().split('T')[0];
         const todayStr = saToday();
 
-      // If the active shift is from yesterday (or earlier), auto-close it at 17:10
+      // If the active shift is from yesterday (or earlier), auto-close it at 17:10 SAST
       if (shiftDateStr < todayStr) {
-        const closeTime = new Date(`${shiftDateStr}T17:10:00`);
+        const closeTime = new Date(`${shiftDateStr}T17:10:00+02:00`);
         console.log(`[today] Auto-closing stale shift for employee ${employeeId}: date=${shiftDateStr}, closing at ${closeTime.toISOString()}`);
 
         // End any active break
@@ -785,7 +785,7 @@ router.post('/absent/run', requireRole('Admin', 'HR'), async (req, res) => {
     const isCurrentDay = today === saToday();
     let now = new Date();
     if (!isCurrentDay) {
-      now = new Date(`${today}T17:00:00`);
+      now = new Date(`${today}T17:00:00+02:00`);
       if (isNaN(now.getTime())) {
         now = new Date();
       }
@@ -933,7 +933,7 @@ router.post('/cleanup', requireRole('Admin', 'HR'), async (req, res) => {
     for (const row of stragglers.rows) {
       const employeeId = row.employee_id;
       const shiftDate = new Date(row.date).toISOString().split('T')[0];
-      const closeTime = new Date(`${shiftDate}T17:00:00`); // 5 PM on shift date
+      const closeTime = new Date(`${shiftDate}T17:00:00+02:00`); // 5 PM SAST on shift date
 
       // End any active break
       const activeBreak = await pool.query(
