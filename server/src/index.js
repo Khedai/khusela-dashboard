@@ -336,7 +336,7 @@ async function runDailyCleanup() {
     for (const row of stragglers.rows) {
       const employeeId = row.employee_id;
       const shiftDate = new Date(row.date).toISOString().split('T')[0];
-      const closeTime = new Date(`${shiftDate}T17:10:00`); // 5:10 PM on shift date
+      const closeTime = new Date(`${shiftDate}T17:10:00+02:00`); // 5:10 PM SAST on shift date
 
       // End any active break
       const activeBreak = await pool.query(
@@ -418,6 +418,32 @@ async function runDailyCleanup() {
     }
 
     console.log(`[cleanup] Auto-clocked out ${cleaned} shift(s).`);
+
+    // ─── Also mark absent employees who never clocked in ───
+    if (!isStartupRun) {
+      // Only do this for today's date (not startup catch-up)
+      const absentResult = await pool.query(`
+        INSERT INTO attendance (employee_id, date, status, notes)
+        SELECT e.id, $1::date, 'absent', 'Auto marked absent (daily cleanup 17:10)'
+        FROM employees e
+        WHERE e.terminated_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM attendance a
+            WHERE a.employee_id = e.id AND a.date = $1::date
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM leave_requests lr
+            WHERE lr.employee_id = e.id
+              AND lr.status = 'Approved'
+              AND $1::date BETWEEN lr.start_date AND lr.end_date
+          )
+        ON CONFLICT (employee_id, date) DO NOTHING
+        RETURNING employee_id
+      `, [todayStr]);
+      if (absentResult.rows.length > 0) {
+        console.log(`[cleanup] Marked ${absentResult.rows.length} employee(s) as absent for ${todayStr}.`);
+      }
+    }
   } catch (err) {
     console.error('[cleanup] Error during daily cleanup:', err.message);
   }
