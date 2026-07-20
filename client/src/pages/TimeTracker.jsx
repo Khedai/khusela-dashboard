@@ -46,10 +46,17 @@ const BREAK_LABELS = { tea_1: 'Tea 1 (15 min)', tea_2: 'Tea 2 (15 min)', lunch: 
 const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
 const MOBILE_CLOCK_IN_WHITELIST = ['ayabongait', 'curwins', 'luqmaanc'];
 
+// Admins who are ALSO employees — they get both clock-in + monitoring
+const ADMIN_CLOCK_IN_WHITELIST = ['nishaat'];
+
 export default function TimeTracker() {
   const { user } = useAuth();
-  // Admin & HR get monitoring view; Consultants get clock-in/out view
+  const username = (user?.username || '').toLowerCase();
+  // Whitelisted admins get hybrid view (clock-in + monitoring)
+  if (can(user, 'time.viewAll') && ADMIN_CLOCK_IN_WHITELIST.includes(username)) return <HybridView user={user} />;
+  // Other admins get monitoring-only view
   if (can(user, 'time.viewAll')) return <AdminView user={user} />;
+  // Non-admins get standard employee clock-in/out view
   return <EmployeeView />;
 }
 
@@ -437,6 +444,515 @@ function AdminView({ user }) {
           <p style={{ margin: 0, fontSize: '13px', color: '#16a34a', fontWeight: '600' }}>Everyone has clocked in today!</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  HYBRID VIEW — Admin who can also clock in (Nishaat)
+// ════════════════════════════════════════════════════
+function HybridView({ user }) {
+  // ─── Personal clock-in state (from EmployeeView) ───
+  const [empLoading, setEmpLoading] = useState(true);
+  const [empError, setEmpError] = useState('');
+  const [empSuccess, setEmpSuccess] = useState('');
+  const [empStatus, setEmpStatus] = useState(null);
+  const [liveSeconds, setLiveSeconds] = useState(0);
+  const [actionLoading, setActionLoading] = useState('');
+  const [displayBreakSeconds, setDisplayBreakSeconds] = useState(0);
+  const timerRef = useRef(null);
+  const breakStartRef = useRef(null);
+  const notifSentRef = useRef({});
+  const notifIntervalRef = useRef(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
+  // ─── Admin monitoring state (from AdminView) ───
+  const [data, setData] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(true);
+  const [adminError, setAdminError] = useState('');
+  const [adminSuccess, setAdminSuccess] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [dateFilter, setDateFilter] = useState(() => {
+    const sa = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    return sa.toISOString().split('T')[0];
+  });
+  const [statusFilter, setStatusFilter] = useState('');
+  const [absentLoading, setAbsentLoading] = useState(false);
+  const [notClockedIn, setNotClockedIn] = useState([]);
+  const [nciLoading, setNciLoading] = useState(true);
+  const [showNci, setShowNci] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [editValues, setEditValues] = useState({});
+  const [savingId, setSavingId] = useState(null);
+  const [reportPeriod, setReportPeriod] = useState('weekly');
+  const [reportScope, setReportScope] = useState('overall');
+  const [reportEmployeeId, setReportEmployeeId] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [employeeList, setEmployeeList] = useState([]);
+  const LIMIT = 25;
+
+  // ─── Timer helpers ──────────────────────────────
+  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+  const startTimer = () => {
+    stopTimer();
+    timerRef.current = setInterval(() => {
+      setLiveSeconds(prev => prev + 1);
+      if (breakStartRef.current) {
+        setDisplayBreakSeconds(Math.floor((Date.now() - breakStartRef.current) / 1000));
+      }
+    }, 1000);
+  };
+
+  // ─── Fetch personal status ──────────────────────
+  const fetchEmpStatus = useCallback(async () => {
+    try {
+      const res = await api.get('/time/today');
+      setEmpStatus(res.data);
+      if (res.data.attendance?.clock_in && !res.data.attendance?.clock_out) {
+        setLiveSeconds(Math.floor((Date.now() - new Date(res.data.attendance.clock_in).getTime()) / 1000));
+        startTimer();
+      } else { stopTimer(); setLiveSeconds(0); }
+      if (res.data.activeBreak?.startedAt) {
+        breakStartRef.current = new Date(res.data.activeBreak.startedAt).getTime();
+      } else {
+        breakStartRef.current = null;
+      }
+      setHistoryRefreshKey(k => k + 1);
+    } catch (err) { console.error('hybrid fetch status error:', err); }
+    finally { setEmpLoading(false); }
+  }, []);
+
+  // ─── Fetch admin attendance table ───────────────
+  const fetchAdminData = async (p = page) => {
+    setAdminLoading(true);
+    try {
+      const params = [`page=${p}`, `limit=${LIMIT}`];
+      if (dateFilter) params.push(`date=${dateFilter}`);
+      if (statusFilter) params.push(`status=${statusFilter}`);
+      const res = await api.get(`/time/attendance?${params.join('&')}`);
+      setData(res.data.data || []);
+      setPagination(res.data.pagination);
+    } catch { setAdminError('Failed to load attendance data.'); }
+    finally { setAdminLoading(false); }
+  };
+
+  // ─── Fetch not-clocked-in ───────────────────────
+  const fetchNotClockedIn = async () => {
+    setNciLoading(true);
+    try {
+      const res = await api.get('/time/not-clocked-in');
+      setNotClockedIn(res.data.employees || []);
+    } catch { /* ignore */ }
+    finally { setNciLoading(false); }
+  };
+
+  // ─── Effects ────────────────────────────────────
+  useEffect(() => { fetchEmpStatus(); return () => { stopTimer(); if (notifIntervalRef.current) clearInterval(notifIntervalRef.current); }; }, [fetchEmpStatus]);
+  useEffect(() => { requestNotificationPermission(); }, []);
+  useEffect(() => { setPage(1); fetchAdminData(1); }, [dateFilter, statusFilter]);
+  useEffect(() => { fetchAdminData(page); }, [page]);
+  useEffect(() => { fetchNotClockedIn(); }, [dateFilter]);
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await api.get('/employees?limit=1000');
+        const list = Array.isArray(res.data) ? res.data : (res.data.data || []);
+        setEmployeeList(list);
+      } catch { /* ignore */ }
+    };
+    fetchEmployees();
+  }, []);
+
+  // ─── Derived personal status ────────────────────
+  const isClockedIn = empStatus?.attendance?.clock_in && !empStatus?.attendance?.clock_out;
+  const isClockedOut = empStatus?.attendance?.clock_out;
+  const activeBreak = empStatus?.activeBreak;
+  const completedBreaks = empStatus?.completedBreaks || [];
+  const completedBreakMinutes = (empStatus?.attendance?.tea_1_minutes || 0) + (empStatus?.attendance?.tea_2_minutes || 0) + (empStatus?.attendance?.lunch_minutes || 0);
+  const displayWorkSeconds = Math.max(0, liveSeconds - (activeBreak ? displayBreakSeconds : 0) - (completedBreakMinutes * 60));
+  const tea1ExpiredGlobal = !completedBreaks.includes('tea_1') && isTea1WindowClosed();
+  const nextAvailableBreak = BREAK_ORDER.find(b => { if (b === 'tea_1' && tea1ExpiredGlobal) return false; return !completedBreaks.includes(b); });
+
+  // ─── Break reminder notifications ───────────────
+  useEffect(() => {
+    if (!isClockedIn || activeBreak) {
+      if (notifIntervalRef.current) { clearInterval(notifIntervalRef.current); notifIntervalRef.current = null; }
+      return;
+    }
+    const checkAndNotify = () => {
+      const reminder = getBreakReminder(completedBreaks);
+      if (reminder) {
+        const key = `${reminder.title}`;
+        const now = Date.now();
+        if (!notifSentRef.current[key] || (now - notifSentRef.current[key] > 20 * 60 * 1000)) {
+          notifSentRef.current[key] = now;
+          sendNotification(reminder.title, reminder.body);
+        }
+      }
+    };
+    checkAndNotify();
+    notifIntervalRef.current = setInterval(checkAndNotify, 15 * 60 * 1000);
+    return () => { if (notifIntervalRef.current) { clearInterval(notifIntervalRef.current); notifIntervalRef.current = null; } };
+  }, [isClockedIn, activeBreak, completedBreaks]);
+
+  // ─── Clock-in/out handlers ──────────────────────
+  const handleClockIn = async () => {
+    setEmpError(''); setEmpSuccess(''); setActionLoading('clock-in');
+    try {
+      let lat = null, lng = null;
+      if ('geolocation' in navigator) {
+        try { const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })); lat = pos.coords.latitude; lng = pos.coords.longitude; } catch {}
+      }
+      const res = await api.post('/time/clock-in', { latitude: lat, longitude: lng });
+      setEmpSuccess(`Clocked in at ${fmtTime(res.data.clock_in)}`);
+      await fetchEmpStatus();
+      fetchAdminData(page);
+    } catch (err) { setEmpError(err.response?.data?.error || 'Failed to clock in.'); }
+    finally { setActionLoading(''); }
+  };
+
+  const handleClockOut = async () => {
+    if (!window.confirm('Clock out for the day?')) return;
+    setEmpError(''); setEmpSuccess(''); setActionLoading('clock-out');
+    try {
+      const res = await api.post('/time/clock-out');
+      setEmpSuccess(`Clocked out at ${fmtTime(res.data.clock_out)}. Total work: ${fmtDuration(res.data.total_work_minutes)}`);
+      stopTimer(); breakStartRef.current = null; setLiveSeconds(0); setDisplayBreakSeconds(0);
+      if (notifIntervalRef.current) { clearInterval(notifIntervalRef.current); notifIntervalRef.current = null; }
+      await fetchEmpStatus();
+      fetchAdminData(page);
+    } catch (err) { setEmpError(err.response?.data?.error || 'Failed to clock out.'); }
+    finally { setActionLoading(''); }
+  };
+
+  const handleStartBreak = async (breakType) => {
+    if (!window.confirm(`Start ${BREAK_LABELS[breakType]} break now?`)) return;
+    setEmpError(''); setEmpSuccess(''); setActionLoading(breakType);
+    try { await api.post('/time/break/start', { break_type: breakType }); scheduleBreakReturnReminder(breakType, BREAK_DURATIONS[breakType]); await fetchEmpStatus(); }
+    catch (err) { setEmpError(err.response?.data?.error || 'Failed to start break.'); }
+    finally { setActionLoading(''); }
+  };
+
+  const handleEndBreak = async () => {
+    if (!window.confirm('End your current break and resume work?')) return;
+    setEmpError(''); setEmpSuccess(''); setActionLoading('break-end');
+    cancelBreakReturnReminder();
+    try { await api.post('/time/break/end'); breakStartRef.current = null; setDisplayBreakSeconds(0); await fetchEmpStatus(); }
+    catch (err) { setEmpError(err.response?.data?.error || 'Failed to end break.'); }
+    finally { setActionLoading(''); }
+  };
+
+  // ─── Admin edit handlers ────────────────────────
+  const startEdit = (row) => {
+    setEditingId(row.id);
+    setEditValues({
+      clock_in: toTimeInput(row.clock_in),
+      tea_1_minutes: row.tea_1_minutes != null ? String(Math.round(row.tea_1_minutes)) : '',
+      tea_2_minutes: row.tea_2_minutes != null ? String(Math.round(row.tea_2_minutes)) : '',
+      lunch_minutes: row.lunch_minutes != null ? String(Math.round(row.lunch_minutes)) : '',
+    });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditValues({}); };
+  const saveEdit = async (row) => {
+    setSavingId(row.id); setAdminError(''); setAdminSuccess('');
+    try {
+      const payload = {};
+      if (editValues.clock_in && editValues.clock_in !== toTimeInput(row.clock_in)) {
+        const dateStr = new Date(row.date).toISOString().split('T')[0];
+        const saDateTime = new Date(`${dateStr}T${editValues.clock_in}:00+02:00`);
+        payload.clock_in = saDateTime.toISOString();
+      }
+      if (editValues.tea_1_minutes !== '' && Number(editValues.tea_1_minutes) !== Math.round(row.tea_1_minutes || 0)) payload.tea_1_minutes = Number(editValues.tea_1_minutes);
+      if (editValues.tea_2_minutes !== '' && Number(editValues.tea_2_minutes) !== Math.round(row.tea_2_minutes || 0)) payload.tea_2_minutes = Number(editValues.tea_2_minutes);
+      if (editValues.lunch_minutes !== '' && Number(editValues.lunch_minutes) !== Math.round(row.lunch_minutes || 0)) payload.lunch_minutes = Number(editValues.lunch_minutes);
+      if (Object.keys(payload).length === 0) { cancelEdit(); return; }
+      await api.patch(`/time/attendance/${row.id}`, payload);
+      setAdminSuccess('Attendance updated.');
+      setEditingId(null); setEditValues({});
+      fetchAdminData(page);
+    } catch (err) { setAdminError(err.response?.data?.error || 'Failed to update.'); }
+    finally { setSavingId(null); }
+  };
+  const editableStyle = (isEditing) => ({ padding: '10px 12px', color: '#334155', fontSize: '13px', cursor: isEditing ? 'default' : 'pointer', background: isEditing ? '#eff6ff' : undefined });
+
+  const handleMarkAbsent = async () => {
+    if (!window.confirm(`Mark all unclocked employees as absent for ${dateFilter}?`)) return;
+    setAbsentLoading(true); setAdminError(''); setAdminSuccess('');
+    try { const res = await api.post('/time/absent/run', { date: dateFilter }); setAdminSuccess(res.data.message); fetchAdminData(page); }
+    catch { setAdminError('Failed to mark absent.'); }
+    finally { setAbsentLoading(false); }
+  };
+
+  const handleDownloadPDF = async () => {
+    setReportLoading(true); setAdminError('');
+    try {
+      const params = new URLSearchParams();
+      params.append('period', reportPeriod);
+      if (reportScope === 'individual' && reportEmployeeId) params.append('employee_id', reportEmployeeId);
+      const res = await api.get(`/time/report?${params.toString()}`);
+      const employeeName = reportScope === 'individual' ? employeeList.find(e => String(e.id) === String(reportEmployeeId))?.first_name + ' ' + employeeList.find(e => String(e.id) === String(reportEmployeeId))?.last_name : null;
+      await generateAttendanceReport(res.data, employeeName);
+    } catch (err) { setAdminError('Failed to download PDF report.'); }
+    finally { setReportLoading(false); }
+  };
+
+  const handleDownloadCSV = async () => {
+    setReportLoading(true); setAdminError('');
+    try {
+      const params = new URLSearchParams();
+      params.append('period', reportPeriod);
+      if (reportScope === 'individual' && reportEmployeeId) params.append('employee_id', reportEmployeeId);
+      const res = await api.get(`/time/report?${params.toString()}`);
+      const employeeName = reportScope === 'individual' ? employeeList.find(e => String(e.id) === String(reportEmployeeId))?.first_name + ' ' + employeeList.find(e => String(e.id) === String(reportEmployeeId))?.last_name : null;
+      generateAttendanceCSV(res.data, employeeName);
+    } catch (err) { setAdminError('Failed to download CSV report.'); }
+    finally { setReportLoading(false); }
+  };
+
+  // ─── Counts ────────────────────────────────────
+  const presentCount = data.filter(d => (d.status === 'present' || d.status === 'late') && !d.clock_out).length;
+  const lateCount = data.filter(d => d.status === 'late' && !d.clock_out).length;
+  const clockedOutCount = data.filter(d => (d.status === 'present' || d.status === 'late') && d.clock_out).length;
+  const absentCount = data.filter(d => d.status === 'absent').length;
+  const todayStr = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+  const activeReminder = isClockedIn && !activeBreak ? getBreakReminder(completedBreaks) : null;
+
+  if (empLoading) return <Spinner size="lg" dark label="Loading time tracker..." />;
+
+  return (
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '24px' }}>
+        <h2 style={{ fontFamily: 'Sora', fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>Time Tracker — My Clock & Monitoring</h2>
+        <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>{todayStr}</p>
+      </div>
+      {empError && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '8px' }}>{empError}</div>}
+      {empSuccess && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '8px' }}>{empSuccess}</div>}
+
+      <style>{`
+        @keyframes bannerPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+          50% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
+        }
+      `}</style>
+
+      {/* ─── SECTION 1: Personal clock-in card ─────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
+        {/* Clock-in status + actions */}
+        <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '12px', fontWeight: '700', color: '#0f172a' }}>My Status</p>
+            <StatusBadge isClockedIn={isClockedIn} isClockedOut={isClockedOut} statusData={empStatus} />
+          </div>
+          <div style={{ padding: '14px 18px' }}>
+            {isClockedIn ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <StatusRow label="Clocked In" value={fmtTime(empStatus?.attendance?.clock_in)} />
+                <style>{`@keyframes glowPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.7; } }`}</style>
+                <div style={{ background: '#0f172a', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '2px 0', position: 'relative', overflow: 'hidden', boxShadow: activeBreak ? '0 0 30px rgba(245,158,11,0.2)' : '0 0 30px rgba(74,222,128,0.2)', transition: 'box-shadow 0.6s ease' }}>
+                  <div style={{ position: 'absolute', inset: 0, background: activeBreak ? 'radial-gradient(ellipse at center, rgba(245,158,11,0.1) 0%, transparent 70%)' : 'radial-gradient(ellipse at center, rgba(74,222,128,0.1) 0%, transparent 70%)', animation: 'glowPulse 2.5s ease-in-out infinite', pointerEvents: 'none', transition: 'background 0.6s ease' }} />
+                  <div style={{ fontFamily: '"Courier New", monospace', fontSize: '28px', fontWeight: '700', color: activeBreak ? '#fbbf24' : '#4ade80', letterSpacing: '2px', lineHeight: 1, position: 'relative', zIndex: 1, transition: 'color 0.6s ease' }}>{formatLiveTime(displayWorkSeconds)}</div>
+                  <div style={{ color: '#64748b', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', position: 'relative', zIndex: 1 }}>{activeBreak ? 'break' : 'work'}</div>
+                </div>
+                {activeBreak && (
+                  <div style={{ padding: '6px 10px', borderRadius: '7px', background: '#fffbeb', border: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#92400e', fontWeight: '600' }}>{activeBreak.type === 'tea_1' ? 'Tea 1' : activeBreak.type === 'tea_2' ? 'Tea 2' : 'Lunch'}</span>
+                    <span style={{ fontSize: '13px', color: '#92400e', fontWeight: '700', fontFamily: '"Courier New", monospace' }}>{formatLiveTime(displayBreakSeconds)}</span>
+                  </div>
+                )}
+              </div>
+            ) : isClockedOut ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <StatusRow label="Clocked In" value={fmtTime(empStatus?.attendance?.clock_in)} />
+                <StatusRow label="Clocked Out" value={fmtTime(empStatus?.attendance?.clock_out)} />
+                <StatusRow label="Work" value={fmtDuration(empStatus?.attendance?.total_work_minutes)} highlight />
+              </div>
+            ) : (
+              <div style={{ padding: '10px 12px', borderRadius: '7px', background: '#fff7ed', border: '1px solid #fed7aa' }}>
+                <p style={{ margin: 0, fontSize: '13px', color: '#c2410c', fontWeight: '700' }}>Not clocked in yet</p>
+              </div>
+            )}
+          </div>
+          {!isClockedOut && (
+            <div style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {!isClockedIn ? (
+                <button onClick={handleClockIn} disabled={!!actionLoading} style={{ width: '100%', padding: '11px 14px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '700', fontFamily: 'DM Sans', cursor: actionLoading ? 'wait' : 'pointer', opacity: actionLoading ? 0.6 : 1, boxShadow: '0 2px 10px rgba(22,163,74,0.25)' }}>{actionLoading === 'clock-in' ? 'Clocking in...' : '⏰ Clock In'}</button>
+              ) : (
+                <>
+                  <button onClick={handleClockOut} disabled={!!actionLoading} style={{ width: '100%', padding: '11px 14px', background: 'linear-gradient(135deg, #64748b, #475569)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '700', fontFamily: 'DM Sans', cursor: actionLoading ? 'wait' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>{actionLoading === 'clock-out' ? 'Clocking out...' : 'Clock Out'}</button>
+                  {activeBreak ? (
+                    <button onClick={handleEndBreak} disabled={actionLoading === 'break-end'} style={{ width: '100%', padding: '10px 14px', background: 'linear-gradient(135deg, #d97706, #b45309)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '700', fontFamily: 'DM Sans', cursor: actionLoading === 'break-end' ? 'wait' : 'pointer', opacity: actionLoading === 'break-end' ? 0.6 : 1 }}>{actionLoading === 'break-end' ? 'Ending...' : `▶ End Break`}</button>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      {BREAK_ORDER.map(b => {
+                        const done = completedBreaks.includes(b);
+                        const tea1Expired = b === 'tea_1' && !done && isTea1WindowClosed();
+                        const available = b === nextAvailableBreak && !done && !tea1Expired;
+                        const blocked = !available || done || tea1Expired;
+                        return <button key={b} onClick={() => handleStartBreak(b)} disabled={blocked || !!actionLoading}
+                          style={{ width: '100%', padding: '8px 14px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: blocked ? 'not-allowed' : actionLoading ? 'wait' : 'pointer', opacity: blocked ? 0.35 : actionLoading ? 0.6 : 1 }}>
+                          {actionLoading === b ? 'Starting...' : BREAK_LABELS[b]}{done ? ' ✓' : ''}{tea1Expired ? ' (expired)' : ''}
+                        </button>;
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Quick stats summary */}
+        <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '12px', fontWeight: '700', color: '#0f172a' }}>Today's Overview</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px' }}>
+            <StatCard label="Working" value={presentCount} color="#16a34a" bg="#f0fdf4" />
+            <StatCard label="Late" value={lateCount} color="#d97706" bg="#fff7ed" />
+            <StatCard label="Done" value={clockedOutCount} color="#64748b" bg="#f8fafc" />
+            <StatCard label="Absent" value={absentCount} color="#dc2626" bg="#fef2f2" />
+          </div>
+          {activeReminder && (
+            <div style={{ padding: '10px 14px', borderRadius: '10px', background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '2px solid #60a5fa', display: 'flex', alignItems: 'center', gap: '10px', animation: 'bannerPulse 2s ease-in-out infinite' }}>
+              <span style={{ fontSize: '22px', flexShrink: 0 }}>{activeReminder.title.match(/^[^\s]+/)?.[0] || '⏰'}</span>
+              <div>
+                <p style={{ margin: 0, fontSize: '12px', fontWeight: '700', color: '#1e40af' }}>{activeReminder.title.replace(/^[^\s]+\s/, '')}</p>
+                <p style={{ margin: '1px 0 0', fontSize: '11px', color: '#3b82f6' }}>{activeReminder.body}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── SECTION 2: Admin monitoring ──────────────────────── */}
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 18px', marginBottom: '12px' }}>
+        <p style={{ fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px' }}>Monitoring — All Employees</p>
+      </div>
+
+      {adminError && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '12px' }}>{adminError}</div>}
+      {adminSuccess && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '12px' }}>{adminSuccess}</div>}
+
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 18px', marginBottom: '12px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div><label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</label><input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }} /></div>
+        <div><label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}><option value="">All</option><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option></select></div>
+        <div style={{ flex: 1 }} />
+        <button onClick={handleMarkAbsent} disabled={absentLoading} style={{ padding: '9px 14px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: absentLoading ? 'not-allowed' : 'pointer', opacity: absentLoading ? 0.7 : 1 }}>{absentLoading ? 'Marking...' : 'Mark All Absent'}</button>
+      </div>
+
+      {/* Download Reports */}
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 18px', marginBottom: '12px' }}>
+        <p style={{ fontFamily: 'Sora', fontSize: '12px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px' }}>Download Reports</p>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div><label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Period</label><select value={reportPeriod} onChange={e => setReportPeriod(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></div>
+          <div><label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Scope</label><select value={reportScope} onChange={e => { setReportScope(e.target.value); setReportEmployeeId(''); }} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}><option value="overall">Overall</option><option value="individual">Individual</option></select></div>
+          {reportScope === 'individual' && <div><label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Employee</label><select value={reportEmployeeId} onChange={e => setReportEmployeeId(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', minWidth: '160px' }}><option value="">Select employee...</option>{employeeList.map(emp => (<option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}{emp.franchise_name ? ` (${emp.franchise_name})` : ''}</option>))}</select></div>}
+          <div style={{ flex: 1 }} />
+          <button onClick={handleDownloadPDF} disabled={reportLoading || (reportScope === 'individual' && !reportEmployeeId)} style={{ padding: '8px 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', fontFamily: 'DM Sans', cursor: reportLoading ? 'not-allowed' : 'pointer', opacity: reportLoading || (reportScope === 'individual' && !reportEmployeeId) ? 0.5 : 1 }}>{reportLoading ? 'Loading...' : 'PDF'}</button>
+          <button onClick={handleDownloadCSV} disabled={reportLoading || (reportScope === 'individual' && !reportEmployeeId)} style={{ padding: '8px 12px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', fontFamily: 'DM Sans', cursor: reportLoading ? 'not-allowed' : 'pointer', opacity: reportLoading || (reportScope === 'individual' && !reportEmployeeId) ? 0.5 : 1 }}>{reportLoading ? 'Loading...' : 'CSV'}</button>
+        </div>
+      </div>
+
+      {/* Attendance table */}
+      {adminLoading ? <Spinner size="md" dark label="Loading attendance..." />
+      : data.length === 0 ? <div style={{ background: 'white', borderRadius: '12px', padding: '32px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}><p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>No attendance records for the selected filters.</p></div>
+      : <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                {['Employee','Branch','Date','Status','Clock In','Live Work','Clock Out','Work','Tea 1','Tea 2','Lunch','Location',''].map(h => <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', background: '#f8fafc' }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {data.map(row => {
+                  const isEditing = editingId === row.id;
+                  return (
+                  <tr key={row.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px', fontWeight: '500', whiteSpace: 'nowrap' }}>{row.first_name} {row.last_name}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{row.franchise_name || '—'}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px', whiteSpace: 'nowrap' }}>{new Date(row.date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</td>
+                    <td style={{ padding: '8px 10px' }}>
+                      {(() => {
+                        if (row.status === 'absent') return <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#fef2f2', color: '#dc2626' }}>Absent</span>;
+                        if (row.clock_out) return <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#f1f5f9', color: '#64748b' }}>Done</span>;
+                        if (row.active_break_type) {
+                          const bm = { tea_1: 'Tea 1', tea_2: 'Tea 2', lunch: 'Lunch' };
+                          return <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#fffbeb', color: '#d97706' }}>{bm[row.active_break_type] || 'On Break'}</span>;
+                        }
+                        if (row.status === 'late') return <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#fff7ed', color: '#c2410c' }}>Late</span>;
+                        return <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', background: '#f0fdf4', color: '#16a34a' }}>Working</span>;
+                      })()}
+                    </td>
+                    <td style={editableStyle(isEditing)} onClick={() => row.clock_in && !isEditing && startEdit(row)}>
+                      {isEditing ? <input type="time" value={editValues.clock_in} onChange={e => setEditValues(v => ({ ...v, clock_in: e.target.value }))} style={{ width: '90px', padding: '3px 5px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '11px', fontFamily: 'DM Sans' }} /> : fmtTime(row.clock_in)}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: '#0f172a', fontSize: '13px', fontWeight: '700', fontFamily: '"Courier New", monospace' }}>
+                      {!row.clock_out && row.clock_in ? formatLiveTime(Math.floor((Date.now() - new Date(row.clock_in).getTime()) / 1000)) : '—'}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtTime(row.clock_out)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '12px' }}>{fmtDuration(row.total_work_minutes)}</td>
+                    <td style={editableStyle(isEditing)} onClick={() => !isEditing && startEdit(row)}>{isEditing ? <input type="number" min="0" value={editValues.tea_1_minutes} onChange={e => setEditValues(v => ({ ...v, tea_1_minutes: e.target.value }))} style={{ width: '50px', padding: '3px 5px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '11px', fontFamily: 'DM Sans' }} /> : fmtDuration(row.tea_1_minutes)}</td>
+                    <td style={editableStyle(isEditing)} onClick={() => !isEditing && startEdit(row)}>{isEditing ? <input type="number" min="0" value={editValues.tea_2_minutes} onChange={e => setEditValues(v => ({ ...v, tea_2_minutes: e.target.value }))} style={{ width: '50px', padding: '3px 5px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '11px', fontFamily: 'DM Sans' }} /> : fmtDuration(row.tea_2_minutes)}</td>
+                    <td style={editableStyle(isEditing)} onClick={() => !isEditing && startEdit(row)}>{isEditing ? <input type="number" min="0" value={editValues.lunch_minutes} onChange={e => setEditValues(v => ({ ...v, lunch_minutes: e.target.value }))} style={{ width: '50px', padding: '3px 5px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '11px', fontFamily: 'DM Sans' }} /> : fmtDuration(row.lunch_minutes)}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155', fontSize: '10px' }}>{row.location_name || (row.latitude ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}` : '—')}</td>
+                    <td style={{ padding: '4px 6px', whiteSpace: 'nowrap' }}>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', gap: '3px' }}>
+                          <button onClick={() => saveEdit(row)} disabled={savingId === row.id} style={{ padding: '3px 8px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', opacity: savingId === row.id ? 0.6 : 1 }}>{savingId === row.id ? '...' : 'Save'}</button>
+                          <button onClick={cancelEdit} style={{ padding: '3px 8px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>Cancel</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => startEdit(row)} style={{ padding: '3px 7px', background: 'none', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '9px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#6366f1' }}>Edit</button>
+                      )}
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+          {pagination && pagination.pages > 1 && <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center', gap: '4px', flexWrap: 'wrap' }}>
+            {Array.from({ length: pagination.pages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => setPage(p)} style={{ padding: '4px 10px', borderRadius: '5px', border: p === page ? '1px solid #6366f1' : '1px solid #e2e8f0', background: p === page ? '#eef2ff' : 'white', color: p === page ? '#4f46e5' : '#64748b', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>{p}</button>
+            ))}
+          </div>}
+        </div>}
+
+      {/* Not Yet Clocked In */}
+      {!nciLoading && notClockedIn.length > 0 && (
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', marginTop: '12px' }}>
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setShowNci(!showNci)}>
+            <div>
+              <p style={{ margin: 0, fontFamily: 'Sora', fontSize: '12px', fontWeight: '700', color: '#92400e' }}>Not Yet Clocked In — {notClockedIn.length} employee{notClockedIn.length !== 1 ? 's' : ''}</p>
+              <p style={{ margin: '1px 0 0', color: '#a16207', fontSize: '10px' }}>These employees have not clocked in today.</p>
+            </div>
+            <span style={{ color: '#92400e', fontSize: '16px', transition: 'transform 0.2s', transform: showNci ? 'rotate(180deg)' : 'none' }}>&#9660;</span>
+          </div>
+          {showNci && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead><tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  {['Employee', 'Job Title', 'Branch', 'Contact'].map(h => <th key={h} style={{ padding: '7px 14px', textAlign: 'left', color: '#64748b', fontWeight: '700', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {notClockedIn.map(e => (
+                    <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '8px 14px', color: '#334155', fontSize: '12px', fontWeight: '500', whiteSpace: 'nowrap' }}>{e.first_name} {e.last_name}</td>
+                      <td style={{ padding: '8px 14px', color: '#64748b', fontSize: '11px' }}>{e.job_title || '—'}</td>
+                      <td style={{ padding: '8px 14px', color: '#64748b', fontSize: '11px' }}>{e.franchise_name || '—'}</td>
+                      <td style={{ padding: '8px 14px', color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap' }}>{e.cell ? <a href={`tel:${e.cell}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.cell}</a> : e.email ? <a href={`mailto:${e.email}`} style={{ color: '#6366f1', textDecoration: 'none' }}>{e.email}</a> : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+      {nciLoading && <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '12px 18px', marginTop: '12px', textAlign: 'center' }}><p style={{ color: '#94a3b8', fontSize: '11px', margin: 0 }}>Loading not-clocked-in list...</p></div>}
+      {!nciLoading && notClockedIn.length === 0 && (
+        <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '12px 18px', marginTop: '12px', border: '1px solid #bbf7d0' }}>
+          <p style={{ margin: 0, fontSize: '12px', color: '#16a34a', fontWeight: '600' }}>Everyone has clocked in today!</p>
+        </div>
+      )}
+
+      <MyHistory refreshKey={historyRefreshKey} />
     </div>
   );
 }
