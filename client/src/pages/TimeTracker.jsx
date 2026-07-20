@@ -47,7 +47,7 @@ const BREAK_ORDER = ['tea_1', 'lunch', 'tea_2'];
 const MOBILE_CLOCK_IN_WHITELIST = ['ayabongait', 'curwins', 'luqmaanc'];
 
 // Admins who are ALSO employees — they get both clock-in + monitoring
-const ADMIN_CLOCK_IN_WHITELIST = ['nishaat'];
+const ADMIN_CLOCK_IN_WHITELIST = ['ni-shaat'];
 
 export default function TimeTracker() {
   const { user } = useAuth();
