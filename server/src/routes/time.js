@@ -1244,20 +1244,8 @@ router.post('/undo-clock-out', requireRole('Admin'), async (req, res) => {
       [employee_id, normalizedDate]
     );
     if (clockOutLog.rows[0]?.id) {
-      await pool.query(
-        "DELETE FROM time_logs WHERE id = $1",
-        [clockOutLog.rows[0].id]
-      );
+      await pool.query('DELETE FROM time_logs WHERE id = $1', [clockOutLog.rows[0].id]);
     }
-
-    // Re-open idle events that were closed at clock-out time (set idle_end back to NULL, clear duration)
-    await pool.query(
-      `UPDATE idle_events SET idle_end = NULL, duration_minutes = NULL
-       WHERE employee_id = $1 AND date = $2 AND idle_end IS NOT NULL
-         AND idle_end >= (SELECT clock_out FROM attendance WHERE id = $3)
-       ORDER BY idle_end DESC LIMIT 1`,
-      [employee_id, normalizedDate, row.id]
-    );
 
     // Clear clock_out and recalculated fields — shift resumes normally
     const result = await pool.query(
@@ -1268,7 +1256,7 @@ router.post('/undo-clock-out', requireRole('Admin'), async (req, res) => {
          tea_2_minutes = 0,
          lunch_minutes = 0,
          idle_minutes = 0,
-         notes = CONCAT(notes, ' [Undo clock-out by admin]'),
+         notes = TRIM(CONCAT(notes, ' [Undo clock-out by admin]')),
          updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -1278,7 +1266,7 @@ router.post('/undo-clock-out', requireRole('Admin'), async (req, res) => {
     res.json({ message: 'Clock-out undone. Employee is now clocked-in again.', attendance: result.rows[0] });
   } catch (err) {
     console.error('undo-clock-out error:', err.message);
-    res.status(500).json({ error: 'Failed to undo clock-out.' });
+    res.status(500).json({ error: 'Failed to undo clock-out. ' + err.message });
   }
 });
 
