@@ -1238,11 +1238,17 @@ router.post('/undo-clock-out', requireRole('Admin'), async (req, res) => {
 
     const row = attendance.rows[0];
 
-    // Remove the clock_out time_log entry
-    await pool.query(
-      "DELETE FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'clock_out' AND id = (SELECT MAX(id) FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'clock_out')",
+    // Remove the clock_out time_log entry (two-step to avoid self-referencing subquery in DELETE)
+    const clockOutLog = await pool.query(
+      "SELECT MAX(id) AS id FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'clock_out'",
       [employee_id, normalizedDate]
     );
+    if (clockOutLog.rows[0]?.id) {
+      await pool.query(
+        "DELETE FROM time_logs WHERE id = $1",
+        [clockOutLog.rows[0].id]
+      );
+    }
 
     // Re-open idle events that were closed at clock-out time (set idle_end back to NULL, clear duration)
     await pool.query(
