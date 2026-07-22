@@ -1216,4 +1216,61 @@ router.get('/report', requireRole('Admin'), async (req, res) => {
   }
 });
 
+// ─── UNDO CLOCK-OUT (Admin only — for mistaken clock-outs) ─
+router.post('/undo-clock-out', requireRole('Admin'), async (req, res) => {
+  try {
+    const { employee_id, date } = req.body;
+    if (!employee_id || !date) {
+      return res.status(400).json({ error: 'employee_id and date are required.' });
+    }
+
+    // Find the attendance record for this employee and date
+    const attendance = await pool.query(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND date = $2 AND clock_out IS NOT NULL',
+      [employee_id, date]
+    );
+    if (attendance.rows.length === 0) {
+      return res.status(404).json({ error: 'No clocked-out attendance record found for this employee on that date.' });
+    }
+
+    const row = attendance.rows[0];
+
+    // Remove the clock_out time_log entry
+    await pool.query(
+      "DELETE FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'clock_out' AND id = (SELECT MAX(id) FROM time_logs WHERE employee_id = $1 AND date = $2 AND type = 'clock_out')",
+      [employee_id, date]
+    );
+
+    // Re-open idle events that were closed at clock-out time (set idle_end back to NULL, clear duration)
+    await pool.query(
+      `UPDATE idle_events SET idle_end = NULL, duration_minutes = NULL
+       WHERE employee_id = $1 AND date = $2 AND idle_end IS NOT NULL
+         AND idle_end >= (SELECT clock_out FROM attendance WHERE id = $3)
+       ORDER BY idle_end DESC LIMIT 1`,
+      [employee_id, date, row.id]
+    );
+
+    // Clear clock_out and recalculated fields — shift resumes normally
+    const result = await pool.query(
+      `UPDATE attendance SET
+         clock_out = NULL,
+         total_work_minutes = NULL,
+         tea_1_minutes = 0,
+         tea_2_minutes = 0,
+         lunch_minutes = 0,
+         idle_minutes = 0,
+         notes = COALESCE(notes, '') || ' [Undo clock-out by admin]',
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [row.id]
+    );
+
+    res.json({ message: 'Clock-out undone. Employee is now clocked-in again.', attendance: result.rows[0] });
+  } catch (err) {
+    console.error('undo-clock-out error:', err.message);
+    res.status(500).json({ error: 'Failed to undo clock-out.' });
+  }
+});
+
 module.exports = router;

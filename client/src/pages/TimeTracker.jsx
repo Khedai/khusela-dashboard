@@ -226,6 +226,16 @@ function AdminView({ user }) {
     background: isEditing ? '#eff6ff' : undefined,
   });
 
+  const handleUndoClockOut = async (row) => {
+    if (!window.confirm(`Undo clock-out for ${row.first_name} ${row.last_name}? They will be clocked-in again.`)) return;
+    setError(''); setSuccess('');
+    try {
+      await api.post('/time/undo-clock-out', { employee_id: row.employee_id, date: row.date });
+      setSuccess(`Clock-out undone for ${row.first_name} ${row.last_name}.`);
+      fetchData(page);
+    } catch (err) { setError(err.response?.data?.error || 'Failed to undo clock-out.'); }
+  };
+
   const handleMarkAbsent = async () => {
     if (!window.confirm(`Mark all unclocked employees as absent for ${dateFilter}?`)) return;
     setAbsentLoading(true); setError(''); setSuccess('');
@@ -377,10 +387,18 @@ function AdminView({ user }) {
                           </button>
                         </div>
                       ) : (
-                        <button onClick={() => startEdit(row)}
-                          style={{ padding: '4px 8px', background: 'none', border: '1px solid #e2e8f0', borderRadius: '5px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#6366f1' }}>
-                          Edit
-                        </button>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <button onClick={() => startEdit(row)}
+                            style={{ padding: '4px 8px', background: 'none', border: '1px solid #e2e8f0', borderRadius: '5px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#6366f1' }}>
+                            Edit
+                          </button>
+                          {row.clock_out && (
+                            <button onClick={() => handleUndoClockOut(row)}
+                              style={{ padding: '4px 8px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '5px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#d97706' }}>
+                              Undo
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -676,6 +694,16 @@ function HybridView({ user }) {
   };
   const editableStyle = (isEditing) => ({ padding: '10px 12px', color: '#334155', fontSize: '13px', cursor: isEditing ? 'default' : 'pointer', background: isEditing ? '#eff6ff' : undefined });
 
+  const handleUndoClockOutHybrid = async (row) => {
+    if (!window.confirm(`Undo clock-out for ${row.first_name} ${row.last_name}? They will be clocked-in again.`)) return;
+    setAdminError(''); setAdminSuccess('');
+    try {
+      await api.post('/time/undo-clock-out', { employee_id: row.employee_id, date: row.date });
+      setAdminSuccess(`Clock-out undone for ${row.first_name} ${row.last_name}.`);
+      fetchAdminData(page);
+    } catch (err) { setAdminError(err.response?.data?.error || 'Failed to undo clock-out.'); }
+  };
+
   const handleMarkAbsent = async () => {
     if (!window.confirm(`Mark all unclocked employees as absent for ${dateFilter}?`)) return;
     setAbsentLoading(true); setAdminError(''); setAdminSuccess('');
@@ -899,7 +927,15 @@ function HybridView({ user }) {
                           <button onClick={cancelEdit} style={{ padding: '3px 8px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '4px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans' }}>Cancel</button>
                         </div>
                       ) : (
-                        <button onClick={() => startEdit(row)} style={{ padding: '3px 7px', background: 'none', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '9px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#6366f1' }}>Edit</button>
+                        <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                          <button onClick={() => startEdit(row)} style={{ padding: '3px 7px', background: 'none', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '9px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#6366f1' }}>Edit</button>
+                          {row.clock_out && (
+                            <button onClick={() => handleUndoClockOutHybrid(row)}
+                              style={{ padding: '3px 7px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '4px', fontSize: '9px', fontWeight: '600', cursor: 'pointer', fontFamily: 'DM Sans', color: '#d97706' }}>
+                              Undo
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
