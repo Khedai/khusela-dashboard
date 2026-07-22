@@ -69,8 +69,6 @@ export default function Employees() {
   const [addingManualLeave, setAddingManualLeave] = useState(false);
   const [manualLeaveForm, setManualLeaveForm] = useState({ leave_type: 'Annual', days: '', description: '' });
   const [manualLeaveSubmitting, setManualLeaveSubmitting] = useState(false);
-  const [deletingEmployeeId, setDeletingEmployeeId] = useState(null);
-  const [confirmDeleteEmpId, setConfirmDeleteEmpId] = useState(null);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkUsers, setLinkUsers] = useState([]);
   const [selectedLinkUserId, setSelectedLinkUserId] = useState('');
@@ -89,6 +87,12 @@ export default function Employees() {
   const [newNote, setNewNote] = useState('');
   const [postingNote, setPostingNote] = useState(false);
   const [noteError, setNoteError] = useState('');
+
+  // ─── Termination ───
+  const [terminateModalOpen, setTerminateModalOpen] = useState(false);
+  const [terminateForm, setTerminateForm] = useState({ termination_type: 'Resignation', termination_reason: '', termination_notes: '' });
+  const [terminateSubmitting, setTerminateSubmitting] = useState(false);
+  const [terminateError, setTerminateError] = useState('');
 
   const EMPTY_ADD = { first_name: '', last_name: '', job_title: '', email: '', home_phone: '', birth_date: '', franchise_id: '' };
   const [addForm, setAddForm] = useState(EMPTY_ADD);
@@ -202,7 +206,23 @@ export default function Employees() {
   const handleAddManualLeave = async () => { if (!manualLeaveForm.days || parseFloat(manualLeaveForm.days) <= 0) return; setManualLeaveSubmitting(true); try { await api.post('/leave/manual', { employee_id: selected.id, leave_type: manualLeaveForm.leave_type, days: parseFloat(manualLeaveForm.days), description: manualLeaveForm.description, year: new Date().getFullYear() }); setManualLeaveForm({ leave_type: 'Annual', days: '', description: '' }); setAddingManualLeave(false); fetchManualLeaves(selected.id); fetchEmpLeave(selected.id); } catch { } finally { setManualLeaveSubmitting(false); } };
   const handleDeleteManualLeave = async (id) => { try { await api.delete(`/leave/manual/${id}`); setManualLeaves(prev => prev.filter(m => m.id !== id)); fetchEmpLeave(selected.id); } catch { } };
 
-  const handleDeleteEmployee = async (empId) => { setDeletingEmployeeId(empId); try { await api.delete(`/employees/${empId}`); setEmployees(prev => prev.filter(e => e.id !== empId)); setView('list'); setSelected(null); } catch (err) { setError(err.response?.data?.error || 'Failed to delete employee.'); } finally { setDeletingEmployeeId(null); setConfirmDeleteEmpId(null); } };
+  // ─── Termination ───
+  const handleTerminate = async () => {
+    if (!terminateForm.termination_reason.trim()) { setTerminateError('Reason is required.'); return; }
+    setTerminateSubmitting(true); setTerminateError('');
+    try {
+      await api.patch(`/employees/${selected.id}/terminate`, terminateForm);
+      setTerminateModalOpen(false);
+      setTerminateForm({ termination_type: 'Resignation', termination_reason: '', termination_notes: '' });
+      setSuccess(`${selected.first_name} ${selected.last_name} has been terminated.`);
+      setView('list');
+      setSelected(null);
+      fetchEmployees(page);
+      fetchPastEmployees();
+    } catch (err) {
+      setTerminateError(err.response?.data?.error || 'Failed to terminate employee.');
+    } finally { setTerminateSubmitting(false); }
+  };
 
   const handleFolderDocDelete = async (docId) => { if (!window.confirm('Delete this document?')) return; try { await api.delete(`/documents/folder/${docId}`); setFolderDocs(prev => prev.filter(d => d.id !== docId)); } catch { } };
   const getDocDownloadUrl = async (key) => { try { const res = await api.get(`/documents/download/${encodeURIComponent(key)}`); window.open(res.data.url, '_blank'); } catch { } };
@@ -361,11 +381,42 @@ export default function Employees() {
             <button onClick={async () => await generateEmployeeForm(selected)} style={S.ghostBtn}>PDF</button>
             {(user?.role === 'Admin' || selected?.user_id === user?.id) && <button onClick={() => openEdit(selected)} style={S.primaryBtn}>Edit Details</button>}
             {user?.role === 'Admin' && (<>{selected?.user_id ? (<><button onClick={handleUnlink} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'DM Sans', padding: 0 }}>Unlink Account</button><button onClick={handleOpenLink} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 14px', color: '#94a3b8', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Change Link</button></>) : <button onClick={handleOpenLink} style={S.primaryBtn}>Link Account</button>}</>)}
-            {user?.role === 'Admin' && (confirmDeleteEmpId === selected.id ? (<div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '7px 12px' }}><span style={{ fontSize: '12px', color: '#991b1b', fontWeight: '600' }}>Delete record?</span><button onClick={() => handleDeleteEmployee(selected.id)} disabled={deletingEmployeeId === selected.id} style={{ background: '#ef4444', border: 'none', borderRadius: '6px', padding: '4px 10px', color: 'white', fontSize: '12px', fontWeight: '700', fontFamily: 'DM Sans', cursor: 'pointer' }}>{deletingEmployeeId === selected.id ? '...' : 'Yes'}</button><button onClick={() => setConfirmDeleteEmpId(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Cancel</button></div>) : <button onClick={() => setConfirmDeleteEmpId(selected.id)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 14px', color: '#94a3b8', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Delete</button>)}
+            {user?.role === 'Admin' && <button onClick={() => { setTerminateModalOpen(true); setTerminateError(''); setTerminateForm({ termination_type: 'Resignation', termination_reason: '', termination_notes: '' }); }} style={{ background: 'none', border: '1px solid #fecaca', borderRadius: '8px', padding: '9px 14px', color: '#dc2626', fontSize: '13px', fontWeight: '600', fontFamily: 'DM Sans', cursor: 'pointer' }}>Terminate</button>}
           </div>
         </div>
         {success && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '16px' }}>{success}</div>}
         {linkModalOpen && (<div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', marginBottom: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}><p style={{ margin: '0 0 8px', fontWeight: '700' }}>Link user account</p>{linkError && <p style={{ color: '#dc2626', margin: '6px 0' }}>{linkError}</p>}<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}><select value={selectedLinkUserId} onChange={e => setSelectedLinkUserId(e.target.value)} style={{ ...S.input, flex: 1 }}><option value="">— Select user —</option>{linkUsers.map(u => (<option key={u.id} value={u.id}>@{u.username} {u.role ? `(${u.role})` : ''}</option>))}</select><button onClick={handleLinkUser} disabled={linkingUser} style={{ ...S.primaryBtn, opacity: linkingUser ? 0.7 : 1 }}>{linkingUser ? 'Linking...' : 'Link'}</button><button onClick={() => { setLinkModalOpen(false); setSelectedLinkUserId(''); }} style={S.ghostBtn}>Cancel</button></div></div>)}
+
+        {/* Terminate Modal */}
+        {terminateModalOpen && (
+          <div style={{ background: 'white', border: '1px solid #fecaca', borderRadius: '12px', padding: '16px 18px', marginBottom: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+            <p style={{ margin: '0 0 12px', fontWeight: '700', fontSize: '14px', color: '#991b1b' }}>
+              Terminate {selected?.first_name} {selected?.last_name}
+            </p>
+            {terminateError && <p style={{ color: '#dc2626', fontSize: '12px', margin: '0 0 10px', background: '#fef2f2', padding: '8px 10px', borderRadius: '6px' }}>{terminateError}</p>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '4px', fontWeight: '500' }}>Type</label>
+                <select value={terminateForm.termination_type} onChange={e => setTerminateForm(p => ({ ...p, termination_type: e.target.value }))} style={S.input}>
+                  <option value="Resignation">Resignation</option>
+                  <option value="Dismissal">Dismissal</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '4px', fontWeight: '500' }}>Reason *</label>
+                <textarea value={terminateForm.termination_reason} onChange={e => setTerminateForm(p => ({ ...p, termination_reason: e.target.value }))} placeholder="Describe the reason for leaving or dismissal..." rows={3} style={{ ...S.input, resize: 'vertical', lineHeight: '1.5' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', color: '#64748b', fontSize: '12px', marginBottom: '4px', fontWeight: '500' }}>Additional Notes (optional)</label>
+                <textarea value={terminateForm.termination_notes} onChange={e => setTerminateForm(p => ({ ...p, termination_notes: e.target.value }))} placeholder="Any additional context..." rows={2} style={{ ...S.input, resize: 'vertical', lineHeight: '1.5' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setTerminateModalOpen(false); setTerminateError(''); }} style={S.ghostBtn}>Cancel</button>
+              <button onClick={handleTerminate} disabled={terminateSubmitting || !terminateForm.termination_reason.trim()} style={{ ...S.primaryBtn, background: 'linear-gradient(135deg,#dc2626,#991b1b)', boxShadow: '0 2px 8px rgba(220,38,38,0.25)', opacity: (terminateSubmitting || !terminateForm.termination_reason.trim()) ? 0.6 : 1 }}>{terminateSubmitting ? 'Terminating...' : 'Confirm Termination'}</button>
+            </div>
+          </div>
+        )}
 
         {/* Tab bar */}
         <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '10px', padding: '3px', gap: '2px', marginBottom: '16px', flexWrap: 'wrap' }}>
@@ -492,7 +543,7 @@ export default function Employees() {
       </div>}
 
       {/* Past Employees */}
-      {can(user, 'employees.view') && (<div style={{ marginTop: '32px' }}><button onClick={() => setShowPast(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#64748b', padding: '0 0 12px' }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '4px', background: '#f1f5f9', fontSize: '10px', transition: 'transform 0.15s', transform: showPast ? 'rotate(90deg)' : 'none' }}>{'>'}</span>Past Employees{pastEmployees.length > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '10px', fontSize: '11px', fontWeight: '600', padding: '1px 8px' }}>{pastEmployees.length}</span>}</button>{showPast && (<div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #f1f5f9' }}>{pastLoading ? <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading...</p> : pastEmployees.length === 0 ? <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0, fontStyle: 'italic' }}>No past employees on record.</p> : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}><thead><tr style={{ background: '#f8fafc' }}>{['Name', 'Position', 'Franchise', 'Terminated'].map(h => <th key={h} style={{ padding: '10px 22px', textAlign: 'left', color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>)}</tr></thead><tbody>{pastEmployees.map((emp, i) => (<tr key={emp.id} style={{ borderTop: '1px solid #f1f5f9', opacity: 0.75 }}><td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>{emp.first_name} {emp.last_name}</td><td style={{ padding: '12px 22px', color: '#64748b' }}>{emp.job_title || '—'}</td><td style={{ padding: '12px 22px', color: '#64748b' }}>{emp.franchise_name || '—'}</td><td style={{ padding: '12px 22px' }}><span style={{ background: '#fef2f2', color: '#dc2626', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>{fmtDate(emp.terminated_at)}</span></td></tr>))}</tbody></table>}</div>)}</div>)}
+      {can(user, 'employees.view') && (<div style={{ marginTop: '32px' }}><button onClick={() => setShowPast(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Sora', fontSize: '13px', fontWeight: '700', color: '#64748b', padding: '0 0 12px' }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '4px', background: '#f1f5f9', fontSize: '10px', transition: 'transform 0.15s', transform: showPast ? 'rotate(90deg)' : 'none' }}>{'>'}</span>Past Employees{pastEmployees.length > 0 && <span style={{ background: '#f1f5f9', color: '#64748b', borderRadius: '10px', fontSize: '11px', fontWeight: '600', padding: '1px 8px' }}>{pastEmployees.length}</span>}</button>{showPast && (<div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #f1f5f9' }}>{pastLoading ? <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading...</p> : pastEmployees.length === 0 ? <p style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', margin: 0, fontStyle: 'italic' }}>No past employees on record.</p> : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}><thead><tr style={{ background: '#f8fafc' }}>{['Name', 'Position', 'Franchise', 'Type', 'Date', 'Reason'].map(h => <th key={h} style={{ padding: '10px 22px', textAlign: 'left', color: '#94a3b8', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>)}</tr></thead><tbody>{pastEmployees.map((emp, i) => (<tr key={emp.id} style={{ borderTop: '1px solid #f1f5f9', opacity: 0.75 }}><td style={{ padding: '12px 22px', fontWeight: '500', color: '#0f172a' }}>{emp.first_name} {emp.last_name}</td><td style={{ padding: '12px 22px', color: '#64748b' }}>{emp.job_title || '—'}</td><td style={{ padding: '12px 22px', color: '#64748b' }}>{emp.franchise_name || '—'}</td><td style={{ padding: '12px 22px' }}>{emp.termination_type ? <span style={{ background: emp.termination_type === 'Resignation' ? '#fffbeb' : '#fef2f2', color: emp.termination_type === 'Resignation' ? '#d97706' : '#dc2626', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>{emp.termination_type}</span> : '—'}</td><td style={{ padding: '12px 22px', color: '#94a3b8', fontSize: '12px' }}>{fmtDate(emp.terminated_at)}</td><td style={{ padding: '12px 22px', color: '#64748b', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={emp.termination_reason}>{emp.termination_reason || '—'}</td></tr>))}</tbody></table>}</div>)}</div>)}
     </div>
   );
 }

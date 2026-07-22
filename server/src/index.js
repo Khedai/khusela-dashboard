@@ -21,6 +21,9 @@ pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_relationship VARC
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_primary_phone VARCHAR(20)').catch(() => {});
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_alternate_phone VARCHAR(20)').catch(() => {});
 pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS sec_address TEXT').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_type VARCHAR(20)').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_reason TEXT').catch(() => {});
+pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_notes TEXT').catch(() => {});
 
 // Drop legacy CHECK constraint on documents.doc_type — UI allows arbitrary names (SARS, etc.)
 pool.query('ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_doc_type_check').catch(() => {});

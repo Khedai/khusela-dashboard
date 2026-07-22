@@ -541,4 +541,35 @@ router.delete('/:id/warnings/:warnId', requireRole('Admin'), async (req, res) =>
   }
 });
 
+// ─── TERMINATE EMPLOYEE (resignation / dismissal) ─────────
+router.patch('/:id/terminate', requireRole('Admin'), async (req, res) => {
+  const { termination_type, termination_reason, termination_notes } = req.body;
+  if (!termination_type || !['Resignation', 'Dismissal'].includes(termination_type)) {
+    return res.status(400).json({ error: 'termination_type must be "Resignation" or "Dismissal".' });
+  }
+  if (!termination_reason || !termination_reason.trim()) {
+    return res.status(400).json({ error: 'Termination reason is required.' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE employees
+       SET terminated_at = NOW(),
+           user_id = NULL,
+           termination_type = $1,
+           termination_reason = $2,
+           termination_notes = $3
+       WHERE id = $4
+       RETURNING *`,
+      [termination_type, sanitize(termination_reason), termination_notes?.trim() ? sanitize(termination_notes) : null, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found.' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Terminate employee error:', err.message);
+    res.status(500).json({ error: 'Failed to terminate employee.' });
+  }
+});
+
 module.exports = router;
