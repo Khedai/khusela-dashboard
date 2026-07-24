@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useIsMobile } from '../utils/useIsMobile';
 import api from '../utils/api';
@@ -28,6 +28,51 @@ function formatDate(ts) {
   return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// ── PWA / Browser notification helpers ─────────────
+function notifyAnnouncement(title, body) {
+  // Sound: short chime
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch { /* audio not available */ }
+
+  // Title flash
+  const origTitle = document.title;
+  let toggle = false;
+  const flash = setInterval(() => {
+    document.title = toggle ? '📢 New Announcement!' : origTitle;
+    toggle = !toggle;
+  }, 800);
+  setTimeout(() => { clearInterval(flash); document.title = origTitle; }, 8000);
+
+  // Browser Notification API
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, {
+      body,
+      icon: '/android-chrome-192x192.png',
+      badge: '/android-chrome-192x192.png',
+      tag: 'announcement',
+    });
+  }
+}
+
+function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
 export default function Announcements() {
   const { user, franchise } = useAuth();
   const isMobile = useIsMobile();
@@ -38,7 +83,14 @@ export default function Announcements() {
   const [editing, setEditing] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [selectedFranchiseId, setSelectedFranchiseId] = useState('');
+  // Default to "Khusela" franchise for admins
+  const [selectedFranchiseId, setSelectedFranchiseId] = useState(() => {
+    return localStorage.getItem('announcementsFilterFranchiseId') || '';
+  });
+
+  // Track which announcement IDs we've already seen (for new-arrival notifications)
+  const knownIdsRef = useRef(new Set());
+  const userIdRef = useRef(user?.id);
 
   // Form state
   const [formTitle, setFormTitle] = useState('');
@@ -58,18 +110,50 @@ export default function Announcements() {
         params.franchise_id = fid;
       }
       const res = await api.get('/announcements', { params });
-      setAnnouncements(res.data);
+      const newList = res.data;
+      setAnnouncements(newList);
+
+      // Detect genuinely new announcements (not from self)
+      const freshIds = new Set(newList.map(a => a.id));
+      for (const ann of newList) {
+        if (!knownIdsRef.current.has(ann.id)) {
+          // Brand new announcement — notify if NOT created by self
+          const authorUsername = (ann.author_name || '').toLowerCase();
+          const myUsername = (user?.username || '').toLowerCase();
+          if (authorUsername !== myUsername) {
+            const franchiseLabel = ann.franchise_name ? ` [${ann.franchise_name}]` : '';
+            notifyAnnouncement(
+              `📢 ${ann.title}`,
+              `${ann.message.substring(0, 150)}${ann.message.length > 150 ? '...' : ''}${franchiseLabel}`
+            );
+          }
+        }
+      }
+      knownIdsRef.current = freshIds;
     } catch (e) {
       console.error('Failed to fetch announcements:', e);
     }
     setLoading(false);
-  }, [user?.role]);
+  }, [user?.role, user?.username]);
 
   const fetchFranchises = useCallback(async () => {
     if (user?.role !== 'Admin') return;
     try {
       const res = await api.get('/franchises');
-      setFranchises(res.data);
+      const list = res.data || [];
+      setFranchises(list);
+
+      // Auto-select Khusela if no saved filter and Khusela exists
+      const savedFilter = localStorage.getItem('announcementsFilterFranchiseId');
+      if (!savedFilter) {
+        const khusela = list.find(f =>
+          f.franchise_name?.toLowerCase().includes('khusela')
+        );
+        if (khusela) {
+          setSelectedFranchiseId(khusela.id);
+          localStorage.setItem('announcementsFilterFranchiseId', khusela.id);
+        }
+      }
     } catch {}
   }, [user?.role]);
 
@@ -79,14 +163,24 @@ export default function Announcements() {
 
   useEffect(() => {
     fetchFranchises();
+    requestNotificationPermission();
   }, [fetchFranchises]);
+
+  // ─── Poll for new announcements every 20 seconds ───
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAnnouncements(selectedFranchiseId);
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [selectedFranchiseId, fetchAnnouncements]);
 
   const openCreate = () => {
     setEditing(null);
     setError('');
     setFormTitle('');
     setFormMessage('');
-    setFormFranchiseId(franchise?.id || '');
+    // Default to currently selected franchise for admins, or user's franchise
+    setFormFranchiseId(selectedFranchiseId || franchise?.id || '');
     setFormPinned(false);
     setShowModal(true);
   };
@@ -154,6 +248,11 @@ export default function Announcements() {
     } catch {}
   };
 
+  const handleFilterChange = (fid) => {
+    setSelectedFranchiseId(fid);
+    localStorage.setItem('announcementsFilterFranchiseId', fid);
+  };
+
   if (loading) {
     return (
       <div>
@@ -167,42 +266,31 @@ export default function Announcements() {
     <div>
       {/* Header */}
       <div style={pageHeader(isMobile)}>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <h1 style={pageTitle}>Announcements</h1>
-          {user?.role === 'Admin' && franchises.length > 1 && (
-            <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setSelectedFranchiseId('')}
-                style={{
-                  ...ghostBtn,
-                  padding: '6px 14px',
-                  fontSize: '12px',
-                  fontWeight: selectedFranchiseId === '' ? '700' : '500',
-                  color: selectedFranchiseId === '' ? C.primary : C.textSub,
-                  background: selectedFranchiseId === '' ? C.primaryLight : '#f1f4fb',
-                  border: selectedFranchiseId === '' ? `1px solid ${C.primary}` : `1px solid ${C.border}`,
-                }}
-              >
-                All
-              </button>
+          {/* Franchise dropdown (Admin only) */}
+          {user?.role === 'Admin' && franchises.length > 0 && (
+            <select
+              value={selectedFranchiseId}
+              onChange={e => handleFilterChange(e.target.value)}
+              style={{
+                padding: '8px 14px',
+                border: `1px solid ${C.primary}`,
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: C.primary,
+                fontFamily: 'DM Sans',
+                outline: 'none',
+                background: C.primaryLight,
+                cursor: 'pointer',
+              }}
+            >
+              <option value="">All Franchises</option>
               {franchises.map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setSelectedFranchiseId(f.id)}
-                  style={{
-                    ...ghostBtn,
-                    padding: '6px 14px',
-                    fontSize: '12px',
-                    fontWeight: selectedFranchiseId === f.id ? '700' : '500',
-                    color: selectedFranchiseId === f.id ? C.primary : C.textSub,
-                    background: selectedFranchiseId === f.id ? C.primaryLight : '#f1f4fb',
-                    border: selectedFranchiseId === f.id ? `1px solid ${C.primary}` : `1px solid ${C.border}`,
-                  }}
-                >
-                  {f.franchise_name}
-                </button>
+                <option key={f.id} value={f.id}>{f.franchise_name}</option>
               ))}
-            </div>
+            </select>
           )}
         </div>
         {canCreate && (
