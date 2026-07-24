@@ -1120,6 +1120,8 @@ function EmployeeView() {
   const activeBreakTypeRef = useRef(null);
   const [actionLoading, setActionLoading] = useState('');
   const [displayBreakSeconds, setDisplayBreakSeconds] = useState(0);
+  const [pausedAt, setPausedAt] = useState(null);
+  const [totalPauseMinutes, setTotalPauseMinutes] = useState(0);
   const notifSentRef = useRef({});
   const notifIntervalRef = useRef(null);
 
@@ -1236,6 +1238,30 @@ function EmployeeView() {
     cancelBreakReturnReminder();
     try { await api.post('/time/break/end'); breakStartRef.current = null; setDisplayBreakSeconds(0); await fetchStatus(); }
     catch (err) { setError(err.response?.data?.error || 'Failed to end break.'); }
+    finally { setActionLoading(''); }
+  };
+
+  const handlePause = async () => {
+    if (!window.confirm('Pause your work timer? You can resume when ready.')) return;
+    setError(''); setSuccess(''); setActionLoading('pause');
+    try {
+      const res = await api.post('/time/pause');
+      setPausedAt(res.data.paused_at);
+      setSuccess('Timer paused. Click Resume when ready.');
+      await fetchStatus();
+    } catch (err) { setError(err.response?.data?.error || 'Failed to pause.'); }
+    finally { setActionLoading(''); }
+  };
+
+  const handleResume = async () => {
+    setError(''); setSuccess(''); setActionLoading('resume');
+    try {
+      const res = await api.post('/time/resume');
+      setPausedAt(null);
+      setTotalPauseMinutes(prev => prev + (res.data.pause_minutes_added || 0));
+      setSuccess('Timer resumed!');
+      await fetchStatus();
+    } catch (err) { setError(err.response?.data?.error || 'Failed to resume.'); }
     finally { setActionLoading(''); }
   };
 
@@ -1413,6 +1439,34 @@ function EmployeeView() {
             }}>
               {actionLoading === 'clock-out' ? 'Clocking out...' : 'Clock Out'}
             </button>
+            {/* Pause / Resume */}
+            {!activeBreak && (
+              status?.attendance?.paused_at ? (
+                <button onClick={handleResume} disabled={actionLoading === 'resume'} style={{
+                  width: '100%', padding: '14px 16px',
+                  background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                  color: 'white', border: 'none', borderRadius: '10px',
+                  fontSize: '15px', fontWeight: '700', fontFamily: 'DM Sans',
+                  cursor: actionLoading === 'resume' ? 'wait' : 'pointer',
+                  opacity: actionLoading === 'resume' ? 0.6 : 1,
+                  boxShadow: '0 3px 12px rgba(22,163,74,0.3)',
+                }}>
+                  {actionLoading === 'resume' ? 'Resuming...' : '▶ Resume Timer'}
+                </button>
+              ) : (
+                <button onClick={handlePause} disabled={actionLoading === 'pause'} style={{
+                  width: '100%', padding: '14px 16px',
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  color: 'white', border: 'none', borderRadius: '10px',
+                  fontSize: '15px', fontWeight: '700', fontFamily: 'DM Sans',
+                  cursor: actionLoading === 'pause' ? 'wait' : 'pointer',
+                  opacity: actionLoading === 'pause' ? 0.6 : 1,
+                  boxShadow: '0 3px 12px rgba(245,158,11,0.3)',
+                }}>
+                  {actionLoading === 'pause' ? 'Pausing...' : '⏸️ Pause Timer'}
+                </button>
+              )
+            )}
             {activeBreak ? <button onClick={handleEndBreak} disabled={actionLoading === 'break-end'} style={{
               width: '100%', padding: '12px 16px',
               background: 'linear-gradient(135deg, #d97706, #b45309)',

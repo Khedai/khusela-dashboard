@@ -42,6 +42,12 @@ export const can = (user, action) => {
     // Dashboard
     'dashboard.viewAll':         ['Admin'],
     'dashboard.employeeCount':   ['Admin', 'HR'],
+
+    // Announcements
+    'announcements.view':        ['Admin', 'HR', 'Consultant'],
+    'announcements.create':      ['Admin', 'HR'],
+    'announcements.edit':        ['Admin'],
+    'announcements.delete':      ['Admin'],
   };
 
   return rules[action]?.includes(role) ?? false;

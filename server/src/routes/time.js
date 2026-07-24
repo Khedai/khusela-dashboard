@@ -421,6 +421,90 @@ router.post('/idle', blockMonitoringAdmin, async (req, res) => {
   }
 });
 
+// ─── PAUSE WORK TIMER ──────────────────────────────────
+router.post('/pause', blockMonitoringAdmin, async (req, res) => {
+  try {
+    const employeeId = await getEmployeeId(req.user.id);
+    if (!employeeId) return res.status(400).json({ error: 'No active employee record linked to your account.' });
+
+    const attendance = await pool.query(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date DESC LIMIT 1',
+      [employeeId]
+    );
+    if (attendance.rows.length === 0) {
+      return res.status(400).json({ error: 'Must be clocked in to pause.' });
+    }
+
+    const row = attendance.rows[0];
+    if (row.paused_at) {
+      return res.status(400).json({ error: 'Timer is already paused.' });
+    }
+
+    // Check if on an active break — can't pause during breaks (breaks already stop the work timer)
+    const shiftDateStr = new Date(row.date).toISOString().split('T')[0];
+    const activeBreak = await pool.query(
+      `SELECT type FROM time_logs
+       WHERE employee_id = $1 AND date = $2
+         AND type IN ('tea_1_start','tea_2_start','lunch_start')
+         AND id > COALESCE(
+           (SELECT MAX(id) FROM time_logs WHERE employee_id = $1 AND date = $2 AND type IN ('tea_1_end','tea_2_end','lunch_end')),
+           0
+         )
+       LIMIT 1`,
+      [employeeId, shiftDateStr]
+    );
+    if (activeBreak.rows.length > 0) {
+      return res.status(400).json({ error: 'Cannot pause while on a break. End your break first.' });
+    }
+
+    const now = new Date();
+    await pool.query(
+      `UPDATE attendance SET paused_at = $1, updated_at = NOW() WHERE id = $2`,
+      [now, row.id]
+    );
+
+    res.json({ message: 'Timer paused.', paused_at: now });
+  } catch (err) {
+    console.error('pause error:', err.message);
+    res.status(500).json({ error: 'Failed to pause timer.' });
+  }
+});
+
+// ─── RESUME WORK TIMER ─────────────────────────────────
+router.post('/resume', blockMonitoringAdmin, async (req, res) => {
+  try {
+    const employeeId = await getEmployeeId(req.user.id);
+    if (!employeeId) return res.status(400).json({ error: 'No active employee record linked to your account.' });
+
+    const attendance = await pool.query(
+      'SELECT * FROM attendance WHERE employee_id = $1 AND clock_in IS NOT NULL AND clock_out IS NULL ORDER BY date DESC LIMIT 1',
+      [employeeId]
+    );
+    if (attendance.rows.length === 0) {
+      return res.status(400).json({ error: 'Must be clocked in to resume.' });
+    }
+
+    const row = attendance.rows[0];
+    if (!row.paused_at) {
+      return res.status(400).json({ error: 'Timer is not paused.' });
+    }
+
+    const now = new Date();
+    const pauseMinutes = Math.round((now - new Date(row.paused_at)) / 60000);
+    const newTotalPause = (row.total_pause_minutes || 0) + pauseMinutes;
+
+    await pool.query(
+      `UPDATE attendance SET paused_at = NULL, total_pause_minutes = $1, updated_at = NOW() WHERE id = $2`,
+      [newTotalPause, row.id]
+    );
+
+    res.json({ message: 'Timer resumed.', pause_minutes_added: pauseMinutes, total_pause_minutes: newTotalPause });
+  } catch (err) {
+    console.error('resume error:', err.message);
+    res.status(500).json({ error: 'Failed to resume timer.' });
+  }
+});
+
 // ─── GET TODAY'S STATUS (self) ─────────────────────────
 router.get('/today', async (req, res) => {
   try {
