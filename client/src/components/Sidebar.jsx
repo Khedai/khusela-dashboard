@@ -94,7 +94,7 @@ function NavItem({ to, label, end, onNavigate, badge }) {
 }
 
 function SidebarContent({ user, onNavigate }) {
-  const { logout, franchise, darkMode, toggleDarkMode } = useAuth();
+  const { logout, franchise } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -189,23 +189,11 @@ function SidebarContent({ user, onNavigate }) {
             </span>
           </div>
         </div>
-        <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
-          <button
-            onClick={toggleDarkMode}
-            title="Toggle Light/Dark Theme"
-            style={{
-              padding: '9px 12px', borderRadius: '8px',
-              border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-              color: '#a5b4fc', fontSize: '12px', cursor: 'pointer',
-              fontFamily: 'DM Sans', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px'
-            }}
-          >
-            {darkMode ? '☀️ Light' : '🌙 Dark'}
-          </button>
+        <div style={{ marginTop: '10px' }}>
           <button
             onClick={handleLogout}
             style={{
-              flex: 1, padding: '9px 12px', borderRadius: '8px',
+              width: '100%', padding: '9px 12px', borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.06)', background: 'transparent',
               color: '#94a3b8', fontSize: '13px', cursor: 'pointer',
               fontFamily: 'DM Sans', fontWeight: '600', textAlign: 'left'
