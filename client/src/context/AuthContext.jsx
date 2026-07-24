@@ -12,6 +12,21 @@ export function AuthProvider({ children }) {
     try { return JSON.parse(localStorage.getItem('franchise')); } catch { return null; }
   });
   const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark-mode');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-mode');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  const toggleDarkMode = () => setDarkMode(prev => !prev);
 
   useEffect(() => {
     // Verify session cookie on every page load
@@ -80,7 +95,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, employeeId, franchise, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, employeeId, franchise, login, logout, loading, darkMode, toggleDarkMode }}>
       {children}
     </AuthContext.Provider>
   );

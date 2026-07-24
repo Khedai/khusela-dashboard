@@ -1377,9 +1377,9 @@ export default function Applications() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
             <thead>
-              <tr>
+              <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                 {can(user, 'applications.viewAll') && (
-                  <th style={{ ...S.tableHeader, width: '36px', paddingLeft: '20px' }}>
+                  <th style={{ ...S.tableHeader, width: '36px', paddingLeft: '20px', background: '#f8fafc' }}>
                     <input
                       type="checkbox"
                       checked={filteredApps.length > 0 && filteredApps.every(a => selectedIds.has(a.id))}
@@ -1389,7 +1389,7 @@ export default function Applications() {
                   </th>
                 )}
                 {['Client', 'Date', 'Branch', 'Type', 'Nett Salary', 'Total Expenses', 'Status', ''].map(h => (
-                  <th key={h} style={{ ...S.tableHeader, textAlign: ['Nett Salary', 'Total Expenses'].includes(h) ? 'right' : 'left' }}>{h}</th>
+                  <th key={h} style={{ ...S.tableHeader, background: '#f8fafc', textAlign: ['Nett Salary', 'Total Expenses'].includes(h) ? 'right' : 'left' }}>{h}</th>
                 ))}
               </tr>
             </thead>

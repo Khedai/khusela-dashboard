@@ -23,7 +23,6 @@ const ICONS = {
   Inbox:             'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6',
   'User Management': 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M16 3.13a4 4 0 0 1 0 7.75 M21 15l-3-3 3-3',
   Franchises:        'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-  Announcements:     'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.73 21a2 2 0 0 1-3.46 0',
 };
 
 const NAV_ITEMS = [
@@ -33,7 +32,6 @@ const NAV_ITEMS = [
   { to: '/leave', label: 'Leave', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/time', label: 'Time Tracker', roles: ['Admin', 'HR', 'Consultant'] },
   { to: '/inbox', label: 'Inbox', roles: ['Admin', 'HR', 'Consultant'] },
-  { to: '/announcements', label: 'Announcements', roles: ['Admin', 'HR', 'Consultant'] },
 ];
 
 const ADMIN_ITEMS = [
@@ -92,11 +90,11 @@ function NavItem({ to, label, end, onNavigate, badge }) {
         </span>
       )}
     </NavLink>
-  );joi
+  );
 }
 
 function SidebarContent({ user, onNavigate }) {
-  const { logout, franchise } = useAuth();
+  const { logout, franchise, darkMode, toggleDarkMode } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -191,11 +189,23 @@ function SidebarContent({ user, onNavigate }) {
             </span>
           </div>
         </div>
-        <div style={{ marginTop: '10px' }}>
+        <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+          <button
+            onClick={toggleDarkMode}
+            title="Toggle Light/Dark Theme"
+            style={{
+              padding: '9px 12px', borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+              color: '#a5b4fc', fontSize: '12px', cursor: 'pointer',
+              fontFamily: 'DM Sans', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px'
+            }}
+          >
+            {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
           <button
             onClick={handleLogout}
             style={{
-              width: '100%', padding: '9px 12px', borderRadius: '8px',
+              flex: 1, padding: '9px 12px', borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.06)', background: 'transparent',
               color: '#94a3b8', fontSize: '13px', cursor: 'pointer',
               fontFamily: 'DM Sans', fontWeight: '600', textAlign: 'left'

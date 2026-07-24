@@ -200,24 +200,6 @@ pool.query(`
     AND user_id NOT IN (SELECT id FROM users)
 `).catch(() => {});
 
-// ─── Announcements Table ──────────────────────────────
-pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'`)
-  .then(res => {
-    const userIdType = res.rows[0]?.data_type === 'uuid' ? 'UUID' : 'INTEGER';
-    return pool.query(`
-      CREATE TABLE IF NOT EXISTS announcements (
-        id SERIAL PRIMARY KEY,
-        franchise_id UUID NOT NULL REFERENCES franchises(id) ON DELETE CASCADE,
-        author_id ${userIdType} REFERENCES users(id) ON DELETE SET NULL,
-        title VARCHAR(200) NOT NULL,
-        message TEXT NOT NULL,
-        is_pinned BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-  })
-  .catch(err => console.error('announcements migration error:', err.message));
-
 // ─── Time Tracking Tables ──────────────────────────────
 pool.query('ALTER TABLE attendance ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ').catch(() => {});
 pool.query('ALTER TABLE attendance ADD COLUMN IF NOT EXISTS total_pause_minutes INTEGER DEFAULT 0').catch(() => {});
@@ -485,7 +467,6 @@ app.use('/api/employee-documents', require('./routes/employeeDocuments'));
 app.use('/api/leave', require('./routes/leave'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/time', require('./routes/time'));
-app.use('/api/announcements', require('./routes/announcements'));
 
 
 

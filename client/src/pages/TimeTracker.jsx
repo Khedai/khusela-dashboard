@@ -804,7 +804,7 @@ function HybridView({ user }) {
           {!isClockedOut && (
             <div style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {!isClockedIn ? (
-                <button onClick={handleClockIn} disabled={!!actionLoading} style={{ width: '100%', padding: '11px 14px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '700', fontFamily: 'DM Sans', cursor: actionLoading ? 'wait' : 'pointer', opacity: actionLoading ? 0.6 : 1, boxShadow: '0 2px 10px rgba(22,163,74,0.25)' }}>{actionLoading === 'clock-in' ? 'Clocking in...' : '⏰ Clock In'}</button>
+                <button onClick={handleClockIn} disabled={!!actionLoading} style={{ width: '100%', padding: '11px 14px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '700', fontFamily: 'DM Sans', cursor: actionLoading ? 'wait' : 'pointer', opacity: actionLoading ? 0.6 : 1, boxShadow: '0 2px 10px rgba(22,163,74,0.25)' }}>{actionLoading === 'clock-in' ? 'Clocking in...' : <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: '6px' }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Clock In</>}</button>
               ) : (
                 <>
                   <button onClick={handleClockOut} disabled={!!actionLoading} style={{ width: '100%', padding: '11px 14px', background: 'linear-gradient(135deg, #64748b, #475569)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '700', fontFamily: 'DM Sans', cursor: actionLoading ? 'wait' : 'pointer', opacity: actionLoading ? 0.6 : 1 }}>{actionLoading === 'clock-out' ? 'Clocking out...' : 'Clock Out'}</button>
@@ -859,11 +859,46 @@ function HybridView({ user }) {
       {adminError && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', marginBottom: '12px' }}>{adminError}</div>}
       {adminSuccess && <div style={{ padding: '11px 14px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '13px', marginBottom: '12px' }}>{adminSuccess}</div>}
 
-      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 18px', marginBottom: '12px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div><label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</label><input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }} /></div>
-        <div><label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a' }}><option value="">All</option><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option></select></div>
+      {/* Quick Status Filter Pills & Date Picker */}
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '14px 18px', marginBottom: '12px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</label>
+          <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', fontFamily: 'DM Sans', color: '#0f172a', background: '#f8fafc' }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '10px', color: '#64748b', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status Filter</label>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {[
+              { id: '', label: 'All', color: '#0f172a' },
+              { id: 'present', label: 'Present', color: '#16a34a' },
+              { id: 'late', label: 'Late', color: '#d97706' },
+              { id: 'absent', label: 'Absent', color: '#dc2626' }
+            ].map(pill => {
+              const active = statusFilter === pill.id;
+              return (
+                <button
+                  key={pill.id}
+                  onClick={() => setStatusFilter(pill.id)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '20px',
+                    border: active ? `1px solid ${pill.color}` : '1px solid #e2e8f0',
+                    background: active ? `${pill.color}15` : '#fff',
+                    color: active ? pill.color : '#64748b',
+                    fontSize: '12px',
+                    fontWeight: active ? '700' : '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {pill.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div style={{ flex: 1 }} />
-        <button onClick={handleMarkAbsent} disabled={absentLoading} style={{ padding: '9px 14px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '600', fontFamily: 'DM Sans', cursor: absentLoading ? 'not-allowed' : 'pointer', opacity: absentLoading ? 0.7 : 1 }}>{absentLoading ? 'Marking...' : 'Mark All Absent'}</button>
+        <button onClick={handleMarkAbsent} disabled={absentLoading} style={{ padding: '9px 14px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', fontFamily: 'DM Sans', cursor: absentLoading ? 'not-allowed' : 'pointer', opacity: absentLoading ? 0.7 : 1, boxShadow: '0 2px 8px rgba(220,38,38,0.2)' }}>{absentLoading ? 'Marking...' : 'Mark All Absent'}</button>
       </div>
 
       {/* Download Reports */}
@@ -1384,7 +1419,7 @@ function EmployeeView() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ padding: '14px 16px', borderRadius: '8px', background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '20px' }}>⏰</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c2410c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 <div><p style={{ margin: 0, fontSize: '14px', color: '#c2410c', fontWeight: '700' }}>Don't forget to clock in!</p><p style={{ margin: '2px 0 0', fontSize: '12px', color: '#9a3412' }}>You need to clock in to start tracking your work hours for today.</p></div>
               </div>
             </div>
@@ -1425,7 +1460,7 @@ function EmployeeView() {
             }}
               onMouseEnter={e => { if (!actionLoading) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(22,163,74,0.35)'; } }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 3px 12px rgba(22,163,74,0.3)'; }}>
-              {actionLoading === 'clock-in' ? 'Clocking in...' : '⏰ Clock In'}
+              {actionLoading === 'clock-in' ? 'Clocking in...' : <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: '6px' }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Clock In</>}
             </button>
           ) : <>
             <button onClick={handleClockOut} disabled={!!actionLoading} style={{

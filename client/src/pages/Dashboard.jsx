@@ -201,49 +201,49 @@ export default function Dashboard() {
 
       {/* Stat Cards */}
       <WidgetSection title="Overview" visible={true}>
-        <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '12px' }}>
         {CARDS.map(card => (
           <div
             key={card.key}
+            className="card-hover"
             onClick={() => card.key !== 'total' && navigate(`/applications?status=${encodeURIComponent(card.label)}`)}
             style={{
-              background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '16px 18px',
+              background: 'white', borderRadius: '14px', padding: isMobile ? '16px' : '18px 20px',
               boxShadow: CARD_SHADOW,
-              border: '1px solid #f1f5f9',
+              border: '1px solid rgba(226, 232, 240, 0.8)',
               cursor: card.key !== 'total' ? 'pointer' : 'default',
-              transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s',
-            }}
-            onMouseEnter={e => {
-              if (card.key !== 'total') {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 12px 28px rgba(0,0,0,0.09), 0 4px 8px rgba(0,0,0,0.04)';
-                e.currentTarget.style.borderColor = card.color + '30';
-              }
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = 'none';
-                e.currentTarget.style.boxShadow = CARD_SHADOW;
-              e.currentTarget.style.borderColor = '#f1f5f9';
+              position: 'relative',
+              overflow: 'hidden',
             }}
           >
-            <p style={{ color: '#475569', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
+            <div style={{
+              position: 'absolute', top: 0, left: 0, width: '4px', height: '100%',
+              background: card.color, borderRadius: '4px 0 0 4px', opacity: 0.85
+            }} />
+            <p style={{ color: '#64748b', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 6px' }}>
               {card.label}
             </p>
-            <p style={{ color: '#0f172a', fontSize: isMobile ? '22px' : '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
+            <p style={{ color: '#0f172a', fontSize: isMobile ? '24px' : '28px', fontWeight: '800', fontFamily: 'Sora', margin: 0, lineHeight: 1, tracking: '-0.02em' }}>
               {stats[card.key]}
             </p>
           </div>
         ))}
         {user?.role !== 'Consultant' && (
-          <div style={{
-            background: 'white', borderRadius: '12px', padding: isMobile ? '14px' : '16px 18px',
+          <div className="card-hover" style={{
+            background: 'white', borderRadius: '14px', padding: isMobile ? '16px' : '18px 20px',
             boxShadow: CARD_SHADOW,
-            border: '1px solid #f1f5f9',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <p style={{ color: '#475569', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 5px' }}>
+            <div style={{
+              position: 'absolute', top: 0, left: 0, width: '4px', height: '100%',
+              background: '#6366f1', borderRadius: '4px 0 0 4px', opacity: 0.85
+            }} />
+            <p style={{ color: '#64748b', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 6px' }}>
               Employees
             </p>
-            <p style={{ color: '#0f172a', fontSize: isMobile ? '22px' : '26px', fontWeight: '700', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
+            <p style={{ color: '#0f172a', fontSize: isMobile ? '24px' : '28px', fontWeight: '800', fontFamily: 'Sora', margin: 0, lineHeight: 1 }}>
               {stats.employees}
             </p>
           </div>

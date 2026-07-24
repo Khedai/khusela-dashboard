@@ -13,7 +13,6 @@ import SessionWarning from './components/SessionWarning';
 import Inbox from './pages/Inbox';
 import Leave from './pages/Leave';
 import TimeTracker from './pages/TimeTracker';
-import Announcements from './pages/Announcements';
 
 
 function ProtectedLayout({ children }) {
@@ -37,7 +36,9 @@ function ProtectedLayout({ children }) {
         background: '#eef1f8',
         padding: isMobile ? '72px 16px 24px' : '32px 36px',
       }}>
-        {children}
+        <div key={window.location.pathname} className="animate-fade-in-up">
+          {children}
+        </div>
       </main>
       <SessionWarning />
     </div>
@@ -61,7 +62,6 @@ function AppRoutes() {
       <Route path="/leave" element={<ProtectedLayout><Leave /></ProtectedLayout>} />
       <Route path="/time" element={<ProtectedLayout><TimeTracker /></ProtectedLayout>} />
       <Route path="/inbox" element={<ProtectedLayout><Inbox /></ProtectedLayout>} />
-      <Route path="/announcements" element={<ProtectedLayout><Announcements /></ProtectedLayout>} />
       <Route path="/users" element={<ProtectedLayout><AdminOnly><Users /></AdminOnly></ProtectedLayout>} />
       <Route path="/franchises" element={<ProtectedLayout><AdminOnly><Franchises /></AdminOnly></ProtectedLayout>} />
       <Route path="*" element={<Navigate to="/" />} />
